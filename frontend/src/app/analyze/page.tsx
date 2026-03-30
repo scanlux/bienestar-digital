@@ -171,8 +171,8 @@ export default function AnalyzePage() {
     setResponseStatus(null);
 
     try {
-      console.log('Sending request to http://localhost:4000/api/analyze');
-      const res = await fetch('http://localhost:4000/api/analyze', {
+      console.log('Sending request to /api/analyze');
+      const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, selector }),
@@ -209,7 +209,7 @@ export default function AnalyzePage() {
 
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:4000/api/respond', {
+      const res = await fetch('/api/respond', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ comments: selectedComments }),

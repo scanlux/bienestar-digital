@@ -1,0 +1,64 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: bienestar_frontend_prod
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - bienestar_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: bienestar_backend_prod
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DB_HOST=mariadb
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_DATABASE}
+      - REDIS_HOST=redis
+      - FRONTEND_URL=http://143.47.104.153/
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      - mariadb
+      - redis
+    networks:
+      - bienestar_net
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: bienestar_db_prod
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - bienestar_net
+
+  redis:
+    image: redis:alpine
+    container_name: bienestar_redis_prod
+    restart: unless-stopped
+    networks:
+      - bienestar_net
+
+networks:
+  bienestar_net:
+    driver: bridge
+
+volumes:
+  db_data:

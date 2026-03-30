@@ -6,7 +6,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type']
 }));
@@ -23,6 +23,6 @@ app.get('/health', (req, res) => {
 const analyzeRoutes = require('./routes/analyze');
 app.use('/api', analyzeRoutes);
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Backend running on port ${port}`);
 });
