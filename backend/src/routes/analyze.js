@@ -1,3 +1,4 @@
+//C:\Users\Administrador\.gemini\antigravity\scratch\bienestar-digital\backend\src\routes\analyze.js
 const express = require('express');
 const router = express.Router();
 
