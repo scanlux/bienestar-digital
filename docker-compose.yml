@@ -27,8 +27,11 @@ services:
       - DB_NAME=${DB_DATABASE}
       - REDIS_HOST=redis
       - FRONTEND_URL=http://143.47.104.153/
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     ports:
       - "127.0.0.1:4000:4000"
+    volumes:
+      - ./backend/data:/app/data
     depends_on:
       - mariadb
       - redis

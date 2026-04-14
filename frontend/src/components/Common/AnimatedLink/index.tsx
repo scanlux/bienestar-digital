@@ -1,5 +1,4 @@
-'use client';
-import { useState } from 'react';
+import React, { useState, forwardRef } from 'react';
 import { Div, Word, Span, AbsoluteContainer } from './styles';
 
 type AnimationProps = {
@@ -57,12 +56,20 @@ const letterAnimationTwo = {
   },
 };
 
-const AnimatedLink = ({ title }: { title: string }) => {
+const AnimatedLink = forwardRef(({ title, ...props }: { title: string; [key: string]: any }, ref: any) => {
   const [isHovered, setIsHovered] = useState(false);
   return (
     <Div
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      ref={ref}
+      {...props}
+      onMouseEnter={(e: any) => {
+        setIsHovered(true);
+        if (props.onMouseEnter) props.onMouseEnter(e);
+      }}
+      onMouseLeave={(e: any) => {
+        setIsHovered(false);
+        if (props.onMouseLeave) props.onMouseLeave(e);
+      }}
     >
       <AnimatedWord
         title={title}
@@ -78,7 +85,9 @@ const AnimatedLink = ({ title }: { title: string }) => {
       </AbsoluteContainer>
     </Div>
   );
-};
+});
+
+AnimatedLink.displayName = 'AnimatedLink';
 
 export default AnimatedLink;
 

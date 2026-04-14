@@ -14,6 +14,7 @@ import raft_logo from '../../../../public/svgs/raft_logo.svg';
 import ic_bars from '../../../../public/svgs/ic_bars.svg';
 import { GetStartedButton } from '@/components';
 import AnimatedLink from '@/components/Common/AnimatedLink';
+import Link from 'next/link';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { links, menu } from './constants';
@@ -40,7 +41,9 @@ const Header = () => {
           ))}
         </Nav>
         <CallToActions className={isOpen ? 'active' : ''}>
-          <AnimatedLink title="Login" />
+          <Link href="/login">
+            <AnimatedLink title="Login" />
+          </Link>
           <GetStartedButton padding="0.5rem 0.75rem" />
         </CallToActions>
       </Inner>

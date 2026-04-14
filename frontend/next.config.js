@@ -5,6 +5,9 @@ const nextConfig = {
     images: {
         unoptimized: !isProd,
     },
+    compiler: {
+        styledComponents: true,
+    },
 }
 
 module.exports = nextConfig

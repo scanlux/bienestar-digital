@@ -1,28 +1,12 @@
 //C:\Users\Administrador\.gemini\antigravity\scratch\bienestar-digital\backend\src\routes\analyze.js
 const express = require('express');
 const router = express.Router();
-
-// Mock database of comments
-const MOCK_COMMENTS = [
-    { id: 1, text: "Hola, soy Carlos y necesito ayuda con mi pedido", selected: false },
-    { id: 2, text: "Excelente servicio, muy rápido", selected: false },
-    { id: 3, text: "¿Tienen envíos a Canarias?", selected: false },
-    { id: 4, text: "El producto llegó dañado, quiero una devolución", selected: false },
-    { id: 5, text: "Me encanta la nueva interfaz", selected: false },
-    { id: 6, text: "¿Cuál es el horario de atención?", selected: false },
-    { id: 7, text: "No puedo iniciar sesión en mi cuenta", selected: false },
-    { id: 8, text: "¿Cuándo reponen stock del modelo X?", selected: false },
-    { id: 9, text: "Gracias por la rápida respuesta", selected: false },
-    { id: 10, text: "El cupón de descuento no funciona", selected: false }
-];
-
 const { chromium } = require('playwright');
+const axios = require('axios');
 
-// POST /analyze
+// POST /analyze - Solo scraping
 router.post('/analyze', async (req, res) => {
     const { url, selector } = req.body;
-
-    console.log(`[Backend] Analyzing URL: ${url} with selector: ${selector}`);
 
     if (!url || !selector) {
         return res.status(400).json({ success: false, error: 'URL and selector are required' });
@@ -31,13 +15,8 @@ router.post('/analyze', async (req, res) => {
     let browser;
     try {
         browser = await chromium.launch();
-        const context = await browser.newContext();
-        const page = await context.newPage();
-
-        console.log(`[Backend] Navigating to ${url}...`);
+        const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-        console.log(`[Backend] Waiting for selector: ${selector}...`);
         await page.waitForSelector(selector, { timeout: 10000 });
 
         const comments = await page.$$eval(selector, (elements) => {
@@ -52,36 +31,74 @@ router.post('/analyze', async (req, res) => {
             });
         });
 
-        console.log(`[Backend] Extracted ${comments.length} comments`);
         res.json({ success: true, data: comments });
-
     } catch (error) {
-        console.error('[Backend] Error during scraping:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Error analyzing the page'
-        });
+        res.status(500).json({ success: false, error: error.message });
     } finally {
-        if (browser) {
-            await browser.close();
-        }
+        if (browser) await browser.close();
     }
 });
 
-// POST /respond
-router.post('/respond', (req, res) => {
-    const { comments } = req.body;
+// POST /full-analysis - Scraping + IA (Devuelve JSON unificado)
+router.post('/full-analysis', async (req, res) => {
+    const { url, selector } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
 
-    console.log(`[Backend] Responding to ${comments ? comments.length : 0} comments`);
+    if (!url || !selector) {
+        return res.status(400).json({ success: false, error: 'URL y selector son obligatorios' });
+    }
 
-    // Simulate processing delay
-    setTimeout(() => {
+    if (!apiKey) {
+        return res.status(500).json({ success: false, error: 'Configuración de IA faltante (API Key)' });
+    }
+
+    let browser;
+    try {
+        console.log(`[Full-Analysis] Iniciando extracción en: ${url}`);
+        browser = await chromium.launch();
+        const page = await browser.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForSelector(selector, { timeout: 10000 });
+
+        const comments = await page.$$eval(selector, (elements) => {
+            return elements.slice(0, 5).map((el, index) => { // Limitado a 5 para rapidez
+                const author = el.querySelector('.comment-top span.text-lead.font-bold')?.innerText || 'Anónimo';
+                const text = el.querySelector('.comment-message p')?.innerText || '';
+                return { author: author.trim(), text: text.trim() };
+            });
+        });
+
+        if (comments.length === 0) {
+            return res.status(404).json({ success: false, error: 'No se encontraron comentarios con ese selector' });
+        }
+
+        console.log(`[Full-Analysis] Extracción exitosa. Enviando a Gemini...`);
+
+        // Preparar prompt para Gemini
+        const commentsText = comments.map(c => `- ${c.author}: ${c.text}`).join('\n');
+        const prompt = `Analiza estos comentarios y devuelve un JSON unificado con el sentimiento general y una sugerencia de respuesta grupal:\n\n${commentsText}`;
+
+        const geminiResponse = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            { contents: [{ parts: [{ text: prompt }] }] }
+        );
+
+        const aiText = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Error en análisis';
+
         res.json({
             success: true,
-            message: "Respuestas enviadas correctamente",
-            respondedCount: comments ? comments.length : 0
+            url,
+            scrapedCount: comments.length,
+            analysis: aiText,
+            rawComments: comments
         });
-    }, 1000);
+
+    } catch (error) {
+        console.error('[Full-Analysis ERROR]', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        if (browser) await browser.close();
+    }
 });
 
 module.exports = router;

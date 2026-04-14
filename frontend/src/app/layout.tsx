@@ -1,10 +1,12 @@
-import Layout from '@/components/Layout';
 import './globals.css';
 import type { Metadata } from 'next';
+import { AuthProvider } from '@/context/AuthContext';
+import StyledComponentsRegistry from '../../libs/registry';
+import { GlobalStyles } from '@/components/Layout/GlobalStyles';
 
 export const metadata: Metadata = {
-  title: 'Raft',
-  description: 'Building the future of banking',
+  title: 'TrendyTech Marketplace',
+  description: 'Premium Food & Delivery Platform',
 };
 
 export default function RootLayout({
@@ -15,7 +17,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Layout>{children}</Layout>
+        <StyledComponentsRegistry>
+          <GlobalStyles />
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </StyledComponentsRegistry>
       </body>
     </html>
   );
