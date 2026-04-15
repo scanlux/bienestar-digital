@@ -26,7 +26,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_DATABASE}
       - REDIS_HOST=redis
-      - FRONTEND_URL=http://143.47.104.153/
+      - FRONTEND_URL=https://trendy.sytes.net
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     ports:
       - "127.0.0.1:4000:4000"
