@@ -54,11 +54,11 @@ router.get('/stats', async (req, res) => {
 
 // Crear una nueva marca
 router.post('/brands', async (req, res) => {
-  const { nombre, descripcion, logo_url, type, open_time, close_time, orden, status } = req.body;
+  const { nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status } = req.body;
   try {
     const [result] = await db.query(
-      'INSERT INTO brands (nombre, descripcion, logo_url, type, open_time, close_time, orden, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [nombre, descripcion, logo_url, type || 'horizontal', open_time, close_time, orden || 0, status || 'pending']
+      'INSERT INTO brands (nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type || 'horizontal', open_time, close_time, orden || 0, status || 'pending']
     );
     res.json({ id: result.insertId, message: 'Marca creada con éxito' });
   } catch (error) {
@@ -69,11 +69,11 @@ router.post('/brands', async (req, res) => {
 // Actualizar una marca
 router.put('/brands/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, descripcion, logo_url, type, open_time, close_time, orden, status } = req.body;
+  const { nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status } = req.body;
   try {
     await db.query(
-      'UPDATE brands SET nombre=?, descripcion=?, logo_url=?, type=?, open_time=?, close_time=?, orden=?, status=? WHERE id=?',
-      [nombre, descripcion, logo_url, type, open_time, close_time, orden, status, id]
+      'UPDATE brands SET nombre=?, nit=?, telefono=?, ciudad=?, direccion=?, descripcion=?, logo_url=?, type=?, open_time=?, close_time=?, orden=?, status=? WHERE id=?',
+      [nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status, id]
     );
     res.json({ message: 'Marca actualizada con éxito' });
   } catch (error) {
