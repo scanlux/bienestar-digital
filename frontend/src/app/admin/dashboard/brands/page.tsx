@@ -184,7 +184,7 @@ export default function BrandsManagementPage() {
           
           {filteredBrands.length === 0 && (
              <EmptyState>
-                 No se encontraron resultados para "{searchTerm}"
+                 No se encontraron resultados para &quot;{searchTerm}&quot;
              </EmptyState>
           )}
         </BrandsGrid>
