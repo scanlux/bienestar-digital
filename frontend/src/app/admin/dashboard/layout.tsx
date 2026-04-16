@@ -22,6 +22,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/login');
   };
 
+  const getPageTitle = (path: string) => {
+    if (path.includes('/brands/')) return 'Detalle de Marca';
+    if (path.endsWith('/brands')) return 'Catálogo de Marcas';
+    if (path.includes('/stores')) return 'Sedes / Sucursales';
+    return 'Panel de Administración';
+  };
+
   return (
     <LayoutContainer>
       <Sidebar>
@@ -60,9 +67,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <MainContent>
         <GlassHeader>
-          <HeaderText>Panel de Administracion</HeaderText>
+          <HeaderText>{getPageTitle(pathname)}</HeaderText>
+          <div id="header-portal-root" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }} />
         </GlassHeader>
-        <ContentWrapper>
+        <ContentWrapper id="admin-scroll-container">
           {children}
         </ContentWrapper>
       </MainContent>

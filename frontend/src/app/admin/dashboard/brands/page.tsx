@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import styled, { keyframes, css } from 'styled-components';
 import { useRouter } from 'next/navigation';
@@ -13,6 +14,11 @@ export default function BrandsManagementPage() {
   const [brands, setBrands] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  
+  useEffect(() => {
+    setPortalTarget(document.getElementById('header-portal-root'));
+  }, []);
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,6 +54,27 @@ export default function BrandsManagementPage() {
     }
   };
 
+  const scrollToTop = () => {
+    const container = document.getElementById('admin-scroll-container');
+    if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToBrand = (brandId: number) => {
+    setTimeout(() => {
+      const element = document.getElementById(`brand-card-${brandId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Efecto visual momentáneo para resaltar
+        element.style.borderColor = '#10b981';
+        element.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.3)';
+        setTimeout(() => {
+          element.style.borderColor = '';
+          element.style.boxShadow = '';
+        }, 2000);
+      }
+    }, 600);
+  };
+
   const handleOpenCreateModal = () => {
     setIsEditing(false);
     setCurrentBrandId(null);
@@ -62,6 +89,7 @@ export default function BrandsManagementPage() {
       type: 'horizontal' 
     });
     setIsModalOpen(true);
+    scrollToTop();
   };
 
   const handleOpenEditModal = (brand: any) => {
@@ -78,23 +106,33 @@ export default function BrandsManagementPage() {
       type: brand.type || 'horizontal' 
     });
     setIsModalOpen(true);
+    scrollToTop();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const token = document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1];
+      let savedBrandId = currentBrandId;
+      
       if (isEditing && currentBrandId) {
         await axios.put(`${API_URL}/api/manage/brands/${currentBrandId}`, formData, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
-        await axios.post(`${API_URL}/api/manage/brands`, formData, {
+        const res = await axios.post(`${API_URL}/api/manage/brands`, formData, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        // Si es creación, podríamos obtener el ID del response si el backend lo envía
+        if (res.data && res.data.id) savedBrandId = res.data.id;
       }
+      
       setIsModalOpen(false);
-      fetchBrands();
+      await fetchBrands();
+      
+      if (savedBrandId) {
+        scrollToBrand(savedBrandId);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -108,17 +146,13 @@ export default function BrandsManagementPage() {
 
   return (
     <PageContainer>
-      {/* Header Section */}
-      <HeaderSection>
-        <TitleContainer>
-          <MainTitle>Cátalogo de Marcas</MainTitle>
-        </TitleContainer>
-        
+      {/* Herramientas Inyectadas en el Layout via Portal */}
+      {portalTarget && createPortal(
         <ControlsRow>
           <SearchWrapper>
             <SearchInput 
               type="text" 
-              placeholder="Buscar por cualquier valor" 
+              placeholder="Busca por cualquier valor" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -130,9 +164,9 @@ export default function BrandsManagementPage() {
           <AddButton onClick={handleOpenCreateModal}>
             Agregar marca
           </AddButton>
-        </ControlsRow>
-        <Subtitle>Gestiona todos los negocios registrados en la plataforma.</Subtitle>
-      </HeaderSection>
+        </ControlsRow>,
+        portalTarget
+      )}
 
       {/* Grid Section */}
       {loading ? (
@@ -140,9 +174,9 @@ export default function BrandsManagementPage() {
           <Spinner />
         </LoadingWrapper>
       ) : (
-        <BrandsGrid>
+        <BrandsGrid style={{ marginTop: '1rem' }}>
           {filteredBrands.map((brand) => (
-            <BrandCard key={brand.id}>
+            <BrandCard key={brand.id} id={`brand-card-${brand.id}`}>
               <CardImageWrapper>
                 <BrandImage src={brand.logo_url || 'https://via.placeholder.com/300x200?text=Sin+Imagen'} alt={brand.nombre} />
                 <Badge>{brand.type}</Badge>
@@ -269,50 +303,45 @@ const PageContainer = styled.div`
 `;
 
 const HeaderSection = styled.div`
-  margin-bottom: 3rem;
-`;
-
-const TitleContainer = styled.div`
-  margin-bottom: 1.5rem;
-`;
-
-const MainTitle = styled.h1`
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -0.02em;
-  background: white;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  display: inline-block;
+  margin: -2rem -2rem 2rem -2rem; /* Negativo para pegar al borde del layout */
+  padding: 1.25rem 2.5rem;
+  position: sticky;
+  top: -2rem; /* Pegado justo debajo del GlassHeader */
+  background: var(--Background); /* Fondo sólido */
+  z-index: 100;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
 `;
 
 const ControlsRow = styled.div`
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  margin-bottom: 0.5rem;
-  
-  @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: stretch;
-  }
+  margin-right: 1rem;
+`;
+
+const SectionTitle = styled.h1`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
 `;
 
 const SearchWrapper = styled.div`
   position: relative;
   flex: 1;
-  max-width: 500px;
+  max-width: 700px;
 `;
 
 const SearchInput = styled.input`
   width: 100%;
   background: #fff;
   border: none;
-  padding: 0.85rem 1.25rem 0.85rem 3rem;
+  padding: 0.6rem 1.25rem 0.6rem 3rem;
   border-radius: 4px;
   color: #333;
-  font-size: 1rem;
+  font-size: 0.95rem;
   outline: none;
   
   &::placeholder {
@@ -333,11 +362,11 @@ const SearchIconIcon = styled.svg`
 const AddButton = styled.button`
   background: #10b981;
   color: #000;
-  padding: 0.85rem 2rem;
+  padding: 0.6rem 2rem;
   border-radius: 6px;
   border: none;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
@@ -523,21 +552,33 @@ const ModalOverlay = styled.div`
   background: rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(8px);
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: flex-start; /* Aliniado al inicio para coincidir con el auto-scroll */
+  padding: 5vh 2rem; /* Espaciado superior dinámico */
   z-index: 1000;
+  overflow-y: auto;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
 `;
 
 const ModalContent = styled.div`
   background: #121212;
   border: 1px solid rgba(255, 255, 255, 0.1);
   width: 100%;
-  max-width: 600px;
-  border-radius: 12px;
-  padding: 2rem;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-width: 650px;
+  border-radius: 16px;
+  padding: 2.5rem;
+  position: relative;
+  height: auto;
+  margin: 0 auto; /* Centrado solo horizontal, respeta el flex-start vertical */
   animation: ${fadeIn} 0.3s ease;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 `;
 
 const ModalHeader = styled.div`
