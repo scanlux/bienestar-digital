@@ -6,28 +6,28 @@ import { motion, AnimatePresence } from 'framer-motion';
 const API_URL = 'https://trendy.sytes.net';
 
 export default function ManagementView() {
-  const [brands, setBrands] = useState<any[]>([]);
-  const [selectedBrand, setSelectedBrand] = useState<any>(null);
+  const [commerces, setCommerces] = useState<any[]>([]);
+  const [selectedCommerce, setSelectedCommerce] = useState<any>(null);
   const [selectedStore, setSelectedStore] = useState<any>(null);
   const [stores, setStores] = useState<any[]>([]);
   const [menus, setMenus] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState<'brands' | 'stores' | 'content'>('brands');
+  const [view, setView] = useState<'commerces' | 'stores' | 'content'>('commerces');
 
-  // Fetch Brands
+  // Fetch Commerces
   useEffect(() => {
-    fetchBrands();
+    fetchCommerces();
   }, []);
 
-  const fetchBrands = async () => {
+  const fetchCommerces = async () => {
     setLoading(true);
     try {
       const token = document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1];
-      const res = await axios.get(`${API_URL}/api/manage/brands`, {
+      const res = await axios.get(`${API_URL}/api/manage/commerces`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setBrands(res.data);
+      setCommerces(res.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -35,11 +35,11 @@ export default function ManagementView() {
     }
   };
 
-  const fetchStores = async (brandId: number) => {
+  const fetchStores = async (commerceId: number) => {
     setLoading(true);
     try {
       const token = document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1];
-      const res = await axios.get(`${API_URL}/api/manage/stores/${brandId}`, {
+      const res = await axios.get(`${API_URL}/api/manage/stores/${commerceId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStores(res.data);
@@ -56,7 +56,7 @@ export default function ManagementView() {
       const token = document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1];
       const [menusRes, productsRes] = await Promise.all([
         axios.get(`${API_URL}/api/manage/menus/${storeId}`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API_URL}/api/manage/products?brandId=${selectedBrand?.id}`, { headers: { Authorization: `Bearer ${token}` } })
+        axios.get(`${API_URL}/api/manage/products?commerceId=${selectedCommerce?.id}`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
       setMenus(menusRes.data);
       setProducts(productsRes.data);
@@ -67,9 +67,9 @@ export default function ManagementView() {
     }
   };
 
-  const selectBrand = (brand: any) => {
-    setSelectedBrand(brand);
-    fetchStores(brand.id);
+  const selectCommerce = (commerce: any) => {
+    setSelectedCommerce(commerce);
+    fetchStores(commerce.id);
     setView('stores');
   };
 
@@ -83,11 +83,11 @@ export default function ManagementView() {
     <div className="space-y-6">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-sm text-white/40 mb-4">
-        <button onClick={() => setView('brands')} className="hover:text-white transition-colors">Negocios</button>
-        {selectedBrand && (
+        <button onClick={() => setView('commerces')} className="hover:text-white transition-colors">Comercios</button>
+        {selectedCommerce && (
           <>
             <span>/</span>
-            <button onClick={() => setView('stores')} className="hover:text-white transition-colors">{selectedBrand.nombre}</button>
+            <button onClick={() => setView('stores')} className="hover:text-white transition-colors">{selectedCommerce.nombre}</button>
           </>
         )}
         {selectedStore && (
@@ -99,30 +99,30 @@ export default function ManagementView() {
       </div>
 
       <AnimatePresence mode="wait">
-        {view === 'brands' && (
+        {view === 'commerces' && (
           <motion.div 
-            key="brands"
+            key="commerces"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            {brands.map((brand) => (
+            {commerces.map((commerce) => (
               <div 
-                key={brand.id} 
-                onClick={() => selectBrand(brand)}
+                key={commerce.id} 
+                onClick={() => selectCommerce(commerce)}
                 className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-green-500/50 transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-12 h-12 rounded-lg bg-white/5 overflow-hidden">
-                    <img src={brand.logo_url || 'https://via.placeholder.com/150'} alt={brand.nombre} className="w-full h-full object-cover" />
+                    <img src={commerce.logo_url || 'https://via.placeholder.com/150'} alt={commerce.nombre} className="w-full h-full object-cover" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg">{brand.nombre}</h3>
-                    <p className="text-white/40 text-xs">{brand.type}</p>
+                    <h3 className="font-bold text-lg">{commerce.nombre}</h3>
+                    <p className="text-white/40 text-xs">{commerce.type}</p>
                   </div>
                 </div>
-                <p className="text-sm text-white/60 line-clamp-2 mb-4">{brand.descripcion}</p>
+                <p className="text-sm text-white/60 line-clamp-2 mb-4">{commerce.descripcion}</p>
                 <div className="flex justify-between items-center text-xs text-white/40">
                   <span>Sedes: ...</span>
                   <span className="text-green-400 group-hover:translate-x-1 transition-transform">Gestionar →</span>
@@ -131,7 +131,7 @@ export default function ManagementView() {
             ))}
             <button className="p-6 rounded-2xl border-2 border-dashed border-white/5 hover:border-white/10 hover:bg-white/5 transition-all flex flex-col items-center justify-center text-white/40 gap-2">
               <span className="text-2xl">+</span>
-              <span className="text-sm">Nuevo Negocio</span>
+              <span className="text-sm">Nuevo Comercio</span>
             </button>
           </motion.div>
         )}

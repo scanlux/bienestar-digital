@@ -9,14 +9,14 @@ import Cookies from 'js-cookie';
 const API_URL = 'https://trendy.sytes.net/api/manage';
 
 interface Stats {
-  activeBrands: number;
+  activeCommerces: number;
   pendingRequests: number;
   totalStores: number;
   totalProducts: number;
   totalOrders: number;
 }
 
-interface BrandRequest {
+interface CommerceRequest {
   id: number;
   nombre: string;
   descripcion: string;
@@ -27,13 +27,13 @@ interface BrandRequest {
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats>({
-    activeBrands: 0,
+    activeCommerces: 0,
     pendingRequests: 0,
     totalStores: 0,
     totalProducts: 0,
     totalOrders: 0
   });
-  const [requests, setRequests] = useState<BrandRequest[]>([]);
+  const [requests, setRequests] = useState<CommerceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'requests' | 'activity'>('requests');
 
@@ -44,7 +44,7 @@ export default function AdminDashboard() {
       
       const [statsRes, requestsRes] = await Promise.all([
         axios.get(`${API_URL}/stats`, { headers }),
-        axios.get(`${API_URL}/brands?status=pending`, { headers })
+        axios.get(`${API_URL}/commerces?status=pending`, { headers })
       ]);
 
       setStats(statsRes.data);
@@ -63,7 +63,7 @@ export default function AdminDashboard() {
   const handleAction = async (id: number, status: 'active' | 'rejected') => {
     try {
       const token = Cookies.get('token');
-      await axios.patch(`${API_URL}/brands/${id}/status`, { status }, {
+      await axios.patch(`${API_URL}/commerces/${id}/status`, { status }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchData();
@@ -105,8 +105,8 @@ export default function AdminDashboard() {
         >
           <div className="icon">🏪</div>
           <div className="data">
-            <span className="label">Marcas Activas</span>
-            <span className="value">{stats.activeBrands}</span>
+            <span className="label">Comercios Activos</span>
+            <span className="value">{stats.activeCommerces}</span>
           </div>
           <div className="progress-bg"><div className="progress-bar" style={{ width: '75%' }} /></div>
         </KpiCard>

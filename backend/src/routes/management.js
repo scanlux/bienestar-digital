@@ -7,13 +7,13 @@ const { auth, adminOnly } = require('../middleware/auth');
 router.use(auth);
 router.use(adminOnly);
 
-// --- MARCAS (BRANDS) ---
+// --- COMERCIOS (COMMERCES) ---
 
-// Obtener todas las marcas (con filtro de status)
-router.get('/brands', async (req, res) => {
+// Obtener todos los comercios (con filtro de status)
+router.get('/commerces', async (req, res) => {
   const { status } = req.query;
   try {
-    let query = 'SELECT * FROM brands';
+    let query = 'SELECT * FROM commerces';
     const params = [];
     
     if (status) {
@@ -23,8 +23,8 @@ router.get('/brands', async (req, res) => {
     
     query += ' ORDER BY orden ASC';
     
-    const [brands] = await db.query(query, params);
-    res.json(brands);
+    const [commerces] = await db.query(query, params);
+    res.json(commerces);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -33,15 +33,15 @@ router.get('/brands', async (req, res) => {
 // Obtener estadísticas globales para el dashboard
 router.get('/stats', async (req, res) => {
   try {
-    const [[{ brandsCount }]] = await db.query("SELECT COUNT(*) as brandsCount FROM brands WHERE status = 'active'");
-    const [[{ pendingCount }]] = await db.query("SELECT COUNT(*) as pendingCount FROM brands WHERE status = 'pending'");
+    const [[{ commercesCount }]] = await db.query("SELECT COUNT(*) as commercesCount FROM commerces WHERE status = 'active'");
+    const [[{ pendingCount }]] = await db.query("SELECT COUNT(*) as pendingCount FROM commerces WHERE status = 'pending'");
     const [[{ storesCount }]] = await db.query("SELECT COUNT(*) as storesCount FROM stores");
     const [[{ productsCount }]] = await db.query("SELECT COUNT(*) as productsCount FROM products");
     // Mocking orders for now, will implement real count when table exists
     const ordersCount = 0; 
 
     res.json({
-      activeBrands: brandsCount,
+      activeCommerces: commercesCount,
       pendingRequests: pendingCount,
       totalStores: storesCount,
       totalProducts: productsCount,
@@ -52,45 +52,45 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// Crear una nueva marca
-router.post('/brands', async (req, res) => {
+// Crear un nuevo comercio
+router.post('/commerces', async (req, res) => {
   const { nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status } = req.body;
   try {
     const [result] = await db.query(
-      'INSERT INTO brands (nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO commerces (nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type || 'horizontal', open_time, close_time, orden || 0, status || 'pending']
     );
-    res.json({ id: result.insertId, message: 'Marca creada con éxito' });
+    res.json({ id: result.insertId, message: 'Comercio creado con éxito' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Actualizar una marca
-router.put('/brands/:id', async (req, res) => {
+// Actualizar un comercio
+router.put('/commerces/:id', async (req, res) => {
   const { id } = req.params;
   const { nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status } = req.body;
   try {
     await db.query(
-      'UPDATE brands SET nombre=?, nit=?, telefono=?, ciudad=?, direccion=?, descripcion=?, logo_url=?, type=?, open_time=?, close_time=?, orden=?, status=? WHERE id=?',
+      'UPDATE commerces SET nombre=?, nit=?, telefono=?, ciudad=?, direccion=?, descripcion=?, logo_url=?, type=?, open_time=?, close_time=?, orden=?, status=? WHERE id=?',
       [nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status, id]
     );
-    res.json({ message: 'Marca actualizada con éxito' });
+    res.json({ message: 'Comercio actualizado con éxito' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Actualizar solo el estado de una marca (Aprobación)
-router.patch('/brands/:id/status', async (req, res) => {
+// Actualizar solo el estado de un comercio (Aprobación)
+router.patch('/commerces/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   try {
     if (!['pending', 'active', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Estado no válido' });
     }
-    await db.query('UPDATE brands SET status = ? WHERE id = ?', [status, id]);
-    res.json({ message: `Marca actualizada a estado: ${status}` });
+    await db.query('UPDATE commerces SET status = ? WHERE id = ?', [status, id]);
+    res.json({ message: `Comercio actualizado a estado: ${status}` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -98,25 +98,53 @@ router.patch('/brands/:id/status', async (req, res) => {
 
 // --- SEDES (STORES) ---
 
-// Obtener sedes de una marca
-router.get('/stores/:brandId', async (req, res) => {
+// Obtener sedes de un comercio
+router.get('/stores/:commerceId', async (req, res) => {
   try {
-    const [stores] = await db.query('SELECT * FROM stores WHERE brand_id = ?', [req.params.brandId]);
+    const [stores] = await db.query('SELECT * FROM stores WHERE commerce_id = ?', [req.params.commerceId]);
     res.json(stores);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Crear una sede
+// Crear o actualizar una sede
 router.post('/stores', async (req, res) => {
-  const { brand_id, nombre_sucursal, direccion, latitud, longitud, horario_atencion, estado } = req.body;
+  const { id, commerce_id, nombre_sucursal, telefono, direccion, latitud, longitud, horario_atencion, estado, image_url, url_maps } = req.body;
   try {
-    const [result] = await db.query(
-      'INSERT INTO stores (brand_id, nombre_sucursal, direccion, latitud, longitud, horario_atencion, estado) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [brand_id, nombre_sucursal, direccion, latitud, longitud, horario_atencion, estado || 'abierto']
-    );
-    res.json({ id: result.insertId, message: 'Sede creada con Ã©xito' });
+    if (id) {
+      // Actualizar sede existente
+      await db.query(
+        'UPDATE stores SET nombre_sucursal=?, telefono=?, direccion=?, latitud=?, longitud=?, horario_atencion=?, estado=?, image_url=?, url_maps=? WHERE id=?',
+        [nombre_sucursal, telefono || null, direccion, latitud || null, longitud || null, horario_atencion, estado || 'abierto', image_url || null, url_maps || null, id]
+      );
+      res.json({ message: 'Sede actualizada con éxito' });
+    } else {
+      // Crear nueva sede
+      const [result] = await db.query(
+        'INSERT INTO stores (commerce_id, nombre_sucursal, telefono, direccion, latitud, longitud, horario_atencion, estado, image_url, url_maps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [commerce_id, nombre_sucursal, telefono || null, direccion, latitud || null, longitud || null, horario_atencion, estado || 'abierto', image_url || null, url_maps || null]
+      );
+      res.json({ id: result.insertId, message: 'Sede creada con éxito' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener detalle de una sola sede
+router.get('/store/:id', async (req, res) => {
+  try {
+    const [stores] = await db.query('SELECT s.*, c.nombre as commerce_nombre FROM stores s LEFT JOIN commerces c ON s.commerce_id = c.id WHERE s.id = ?', [req.params.id]);
+    if (stores.length === 0) return res.status(404).json({ error: 'Store not found' });
+    
+    // Obtener las cuentas bancarias asociadas a esta sede
+    const [accounts] = await db.query('SELECT * FROM store_accounts WHERE store_id = ?', [req.params.id]);
+    
+    const storeData = stores[0];
+    storeData.accounts = accounts;
+    
+    res.json(storeData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -124,7 +152,7 @@ router.post('/stores', async (req, res) => {
 
 // --- MENUS ---
 
-// Obtener menÃºs de una sede
+// Obtener menús de una sede
 router.get('/menus/:storeId', async (req, res) => {
   try {
     const [menus] = await db.query('SELECT * FROM menus WHERE store_id = ? ORDER BY orden ASC', [req.params.storeId]);
@@ -183,13 +211,13 @@ router.post('/categorias', async (req, res) => {
 
 // Obtener productos (opcionalmente filtrados por menÃº)
 router.get('/products', async (req, res) => {
-  const { brandId, menuId } = req.query;
+  const { commerceId, menuId } = req.query;
   let query = 'SELECT * FROM products WHERE 1=1';
   const params = [];
 
-  if (brandId) {
-    query += ' AND brand_id = ?';
-    params.push(brandId);
+  if (commerceId) {
+    query += ' AND commerce_id = ?';
+    params.push(commerceId);
   }
   if (menuId) {
     query += ' AND menu_id = ?';
@@ -206,10 +234,11 @@ router.get('/products', async (req, res) => {
 
 // Create or update product
 router.post('/products', async (req, res) => {
-  const { id, brand_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible, ingredientes } = req.body;
+  const { id, commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible, ingredientes } = req.body;
   
+  let connection;
   try {
-    const connection = await db.getConnection();
+    connection = await db.getConnection();
     await connection.beginTransaction();
 
     let productId = id;
@@ -223,8 +252,8 @@ router.post('/products', async (req, res) => {
     } else {
       // Create
       const [result] = await connection.query(
-        'INSERT INTO products (brand_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [brand_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible !== undefined ? disponible : true]
+        'INSERT INTO products (commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible !== undefined ? disponible : true]
       );
       productId = result.insertId;
     }
@@ -250,6 +279,7 @@ router.post('/products', async (req, res) => {
        connection.release();
     }
     res.status(500).json({ error: error.message });
+
   }
 });
 

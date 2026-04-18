@@ -7,7 +7,7 @@ async function migrate() {
         // 1. AÃ±adir columna status
         try {
             await db.query(`
-                ALTER TABLE brands 
+                ALTER TABLE commerces 
                 ADD COLUMN status ENUM('pending', 'active', 'rejected') DEFAULT 'pending'
             `);
             console.log('Columna status aÃ±adida (default pending).');
@@ -19,8 +19,8 @@ async function migrate() {
             }
         }
 
-        // 2. Marcar marcas actuales como 'active'
-        const [result] = await db.query("UPDATE brands SET status = 'active' WHERE status = 'pending'");
+        // 2. Marcar comercios actuales como 'active'
+        const [result] = await db.query("UPDATE commerces SET status = 'active' WHERE status = 'pending'");
         console.log(`Actualizadas ${result.affectedRows} marcas a estado 'active'.`);
 
         console.log('MigraciÃ³n completada exitosamente.');

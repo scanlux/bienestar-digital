@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const NAV_ITEMS = [
   { label: 'Inicio', path: '/admin/dashboard', icon: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z' },
-  { label: 'Marcas', path: '/admin/dashboard/brands', icon: 'M12 2L2 22h20L12 2zm0 3.83L18.17 19H5.83L12 5.83z' },
+  { label: 'Comercio', path: '/admin/dashboard/commerce', icon: 'M12 2L2 22h20L12 2zm0 3.83L18.17 19H5.83L12 5.83z' },
   { label: 'Sedes', path: '/admin/dashboard/stores', icon: 'M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z' }
 ];
 
@@ -23,8 +23,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const getPageTitle = (path: string) => {
-    if (path.includes('/brands/')) return 'Detalle de Marca';
-    if (path.endsWith('/brands')) return 'Catálogo de Marcas';
+    if (path.includes('/commerce/')) return 'Detalle del Comercio';
+    if (path.endsWith('/commerce')) return 'Catálogo de Comercios';
     if (path.includes('/stores')) return 'Sedes / Sucursales';
     return 'Panel de Administración';
   };
@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <MainContent>
         <GlassHeader>
           <HeaderText>{getPageTitle(pathname)}</HeaderText>
-          <div id="header-portal-root" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }} />
+          <div id="header-portal-root" style={{ display: 'flex', alignItems: 'center', marginLeft: '1rem' }} />
         </GlassHeader>
         <ContentWrapper id="admin-scroll-container">
           {children}

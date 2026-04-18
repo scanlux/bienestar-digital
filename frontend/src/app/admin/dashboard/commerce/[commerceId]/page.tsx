@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const API_URL = 'https://trendy.sytes.net';
 
-export default function StoresManagementPage({ params }: { params: { brandId: string } }) {
+export default function StoresManagementPage({ params }: { params: { commerceId: string } }) {
   const router = useRouter();
   const { user } = useAuth();
   const [stores, setStores] = useState<any[]>([]);
@@ -15,17 +15,17 @@ export default function StoresManagementPage({ params }: { params: { brandId: st
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ brand_id: params.brandId, nombre_sucursal: '', direccion: '', horario_atencion: '', estado: 'abierto' });
+  const [formData, setFormData] = useState({ commerce_id: params.commerceId, nombre_sucursal: '', direccion: '', horario_atencion: '', estado: 'abierto' });
 
   useEffect(() => {
     fetchStores();
-  }, [params.brandId]);
+  }, [params.commerceId]);
 
   const fetchStores = async () => {
     setLoading(true);
     try {
       const token = document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1];
-      const res = await axios.get(`${API_URL}/api/manage/stores/${params.brandId}`, {
+      const res = await axios.get(`${API_URL}/api/manage/stores/${params.commerceId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStores(res.data);
@@ -44,7 +44,7 @@ export default function StoresManagementPage({ params }: { params: { brandId: st
         headers: { Authorization: `Bearer ${token}` }
       });
       setIsModalOpen(false);
-      setFormData({ brand_id: params.brandId, nombre_sucursal: '', direccion: '', horario_atencion: '', estado: 'abierto' });
+      setFormData({ commerce_id: params.commerceId, nombre_sucursal: '', direccion: '', horario_atencion: '', estado: 'abierto' });
       fetchStores();
     } catch (e) {
       console.error(e);
@@ -60,13 +60,13 @@ export default function StoresManagementPage({ params }: { params: { brandId: st
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
           <button 
-            onClick={() => router.push('/admin/dashboard/brands')}
+            onClick={() => router.push('/admin/dashboard/commerce')}
             className="text-sm text-white/40 hover:text-white transition-colors flex items-center gap-2 mb-2"
           >
-            ← Volver a Marcas
+            ← Volver a Comercio
           </button>
           <h1 className="text-3xl font-light mb-1">Sedes Físicas <span className="font-medium text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-500">Activas</span></h1>
-          <p className="text-white/50 text-sm">Gestiona los locales comerciales para la marca seleccionada.</p>
+          <p className="text-white/50 text-sm">Gestiona los locales comerciales para el comercio seleccionado.</p>
         </div>
         
         <div className="flex items-center gap-4 w-full md:w-auto">
@@ -124,7 +124,7 @@ export default function StoresManagementPage({ params }: { params: { brandId: st
           
           {stores.length === 0 && (
              <div className="col-span-full py-20 text-center text-white/40 border border-dashed border-white/10 rounded-2xl">
-                 No hay sedes registradas para esta marca. <br/><span className="text-xs">Usa el botón superior para crear una sucursal.</span>
+                 No hay sedes registradas para este comercio. <br/><span className="text-xs">Usa el botón superior para crear una sucursal.</span>
              </div>
           )}
         </div>
