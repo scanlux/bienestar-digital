@@ -136,7 +136,7 @@ export default function ManagementView() {
           </motion.div>
         )}
 
-        {view === 'stores' && selectedBrand && (
+        {view === 'stores' && selectedCommerce && (
           <motion.div 
             key="stores"
             initial={{ opacity: 0, x: -20 }}
