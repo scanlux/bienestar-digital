@@ -6,6 +6,13 @@ import styled, { keyframes, css } from 'styled-components';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import MapPickerModal from '@/components/MapPickerModal';
+import GeoPermissionModal from '@/components/Common/GeoPermissionModal';
+import { useModalScroll } from '@/hooks/useModalScroll';
+import {
+  ModalOverlay, ModalContent, ModalHeader, ModalTitle, ModalSubtitle, CloseButton,
+  Form, FormGrid, InputGroup, Label, Input, Select, TextArea, SubmitButton, GeoButton
+} from '@/components/Common/ModalStyles';
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://trendy.sytes.net';
 
@@ -15,10 +22,12 @@ export default function CommerceManagementPage() {
   const [commerces, setCommerces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
+  const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
   
   useEffect(() => {
-    setPortalTarget(document.getElementById('header-portal-root'));
+    setHeaderTarget(document.getElementById('header-portal-root'));
+    setModalTarget(document.getElementById('modal-portal-root'));
   }, []);
   
   // Modal states
@@ -30,6 +39,7 @@ export default function CommerceManagementPage() {
   // Toast states
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [transitionLoading, setTransitionLoading] = useState(false);
   
   const showSuccess = (msg: string) => {
     setSuccessMessage(msg);
@@ -67,6 +77,15 @@ export default function CommerceManagementPage() {
     latitud: '',
     longitud: ''
   });
+  const [showGeoWarning, setShowGeoWarning] = useState(false);
+  const [geoStatus, setGeoStatus] = useState<'prompt' | 'denied' | 'default'>('default');
+
+  // Scroll inteligente para modales
+  useModalScroll(isModalOpen);
+  useModalScroll(sedesModalOpen);
+  useModalScroll(createSedeModalOpen);
+  useModalScroll(showMapPicker);
+  useModalScroll(showGeoWarning);
 
   useEffect(() => {
     fetchCommerces();
@@ -90,6 +109,40 @@ export default function CommerceManagementPage() {
   const scrollToTop = () => {
     const container = document.getElementById('admin-scroll-container');
     if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const closeMainModal = () => {
+    setTransitionLoading(true);
+    // Pequeño delay de 300ms para que el escudo cubra el modal antes de desmontarlo
+    setTimeout(() => {
+      setIsModalOpen(false);
+      if (currentCommerceId) {
+        scrollToCommerce(currentCommerceId);
+      }
+    }, 300);
+    setTimeout(() => setTransitionLoading(false), 1400);
+  };
+
+  const closeSedesModal = () => {
+    setTransitionLoading(true);
+    setTimeout(() => {
+      setSedesModalOpen(false);
+      if (selectedCommerce?.id) {
+        scrollToCommerce(selectedCommerce.id);
+      }
+    }, 300);
+    setTimeout(() => setTransitionLoading(false), 1400);
+  };
+
+  const closeCreateSedeModal = () => {
+    setTransitionLoading(true);
+    setTimeout(() => {
+      setCreateSedeModalOpen(false);
+      if (selectedCommerce?.id) {
+        scrollToCommerce(selectedCommerce.id);
+      }
+    }, 300);
+    setTimeout(() => setTransitionLoading(false), 1400);
   };
 
   const scrollToCommerce = (commerceId: number) => {
@@ -197,6 +250,9 @@ export default function CommerceManagementPage() {
         setIsEditingSede(false);
         setCreateSedeModalOpen(true);
         scrollToTop();
+      } else if (stores.length === 1) {
+        // Redirección directa para sedes únicas
+        router.push(`/admin/dashboard/stores/${stores[0].id}`);
       } else {
         setSedesDelComercio(stores);
         setSedesModalOpen(true);
@@ -219,9 +275,13 @@ export default function CommerceManagementPage() {
       });
       showSuccess(isEditingSede ? 'Sede actualizada con éxito' : 'Nueva sede creada con éxito');
       setCreateSedeModalOpen(false);
+      
       if (sedesModalOpen) {
-        // Refrescar lista de sedes
+        // Si veníamos del modal de lista de sedes, refrescar lista
         handleGestionarSedes(selectedCommerce);
+      } else {
+        // Si era creación directa, volver al comercio con scroll e iluminación
+        scrollToCommerce(selectedCommerce.id);
       }
     } catch (e) {
       console.error(e);
@@ -245,8 +305,48 @@ export default function CommerceManagementPage() {
     setCreateSedeModalOpen(true);
   };
 
-  const handleOpenMapPicker = () => {
-    setShowMapPicker(true);
+  const handleOpenMapPicker = async () => {
+    if (!navigator.geolocation) {
+      alert('Tu navegador no soporta geolocalización');
+      return;
+    }
+
+    try {
+      // @ts-ignore
+      const result = await navigator.permissions.query({ name: 'geolocation' });
+      
+      if (result.state === 'granted') {
+        setShowMapPicker(true);
+      } else {
+        setGeoStatus(result.state);
+        setShowGeoWarning(true);
+        // Intentar disparar el prompt del navegador al mismo tiempo
+        navigator.geolocation.getCurrentPosition(() => {}, () => {});
+      }
+    } catch (err) {
+      // Fallback si permissions API no está disponible
+      setShowGeoWarning(true);
+      navigator.geolocation.getCurrentPosition(() => {}, () => {});
+    }
+  };
+
+  const handleContinueGeoFlow = () => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        // Éxito: abrir mapa
+        setSedeFormData({
+          ...sedeFormData,
+          latitud: pos.coords.latitude.toString(),
+          longitud: pos.coords.longitude.toString()
+        });
+        setShowGeoWarning(false);
+        setShowMapPicker(true);
+      },
+      (err) => {
+        // Error o Denegado: simplemente cerrar modal (estado inicial)
+        setShowGeoWarning(false);
+      }
+    );
   };
 
   const handleConfirmCoords = (lat: number, lng: number) => {
@@ -260,10 +360,10 @@ export default function CommerceManagementPage() {
 
   return (
     <PageContainer>
-      {/* Herramientas Inyectadas en el Layout via Portal */}
-      {portalTarget && createPortal(
-        <ControlsRow>
-          <SearchWrapper>
+      {/* PORTALS AREA */}
+      {headerTarget && createPortal(
+        <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', width: '100%', paddingRight: '1rem' }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: '500px' }}>
             <SearchInput 
               type="text" 
               placeholder="Busca por cualquier valor" 
@@ -273,13 +373,12 @@ export default function CommerceManagementPage() {
             <SearchIconIcon viewBox="0 0 24 24">
               <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/>
             </SearchIconIcon>
-          </SearchWrapper>
-          
+          </div>
           <AddButton onClick={handleOpenCreateModal}>
             Agregar comercio
           </AddButton>
-        </ControlsRow>,
-        portalTarget
+        </div>,
+        headerTarget
       )}
 
       {/* Grid Section */}
@@ -346,12 +445,12 @@ export default function CommerceManagementPage() {
       )}
 
       {/* Modal Section */}
-      {isModalOpen && (
-        <ModalOverlay onClick={() => setIsModalOpen(false)}>
+      {modalTarget && isModalOpen && createPortal(
+        <ModalOverlay onClick={closeMainModal}>
           <ModalContent onClick={e => e.stopPropagation()}>
             <ModalHeader>
               <ModalTitle>{isEditing ? 'Editar Comercio' : 'Nuevo Comercio'}</ModalTitle>
-              <CloseButton onClick={() => setIsModalOpen(false)}>✕</CloseButton>
+              <CloseButton onClick={closeMainModal}>✕</CloseButton>
             </ModalHeader>
             
             <Form onSubmit={handleSubmit}>
@@ -402,19 +501,21 @@ export default function CommerceManagementPage() {
               </SubmitButton>
             </Form>
           </ModalContent>
-        </ModalOverlay>
+        </ModalOverlay>,
+        modalTarget
       )}
 
       {/* Modal: Seleccionar Sede (2+ sedes) */}
-      {sedesModalOpen && selectedCommerce && (
-        <ModalOverlay onClick={() => setSedesModalOpen(false)}>
-          <ModalContent onClick={e => e.stopPropagation()} style={{ maxWidth: '780px' }}>
+      {sedesModalOpen && selectedCommerce && modalTarget && createPortal(
+        <ModalOverlay onClick={closeSedesModal}>
+          <ModalContent onClick={e => e.stopPropagation()} $maxWidth="780px">
             <ModalHeader>
+
               <div>
                 <ModalTitle>Sedes de {selectedCommerce.nombre}</ModalTitle>
-                <SedeModalSubtitle>Selecciona una sede para administrarla</SedeModalSubtitle>
+                <ModalSubtitle>Selecciona una sede para administrarla</ModalSubtitle>
               </div>
-              <CloseButton onClick={() => setSedesModalOpen(false)}>x</CloseButton>
+              <CloseButton onClick={closeSedesModal}>✕</CloseButton>
             </ModalHeader>
 
             <SedesGrid>
@@ -457,30 +558,20 @@ export default function CommerceManagementPage() {
                 <div className="toast-text">{successMessage}</div>
               </SuccessToast>
             )}
-            
-            {portalTarget && highlightedCommerceId && createPortal(
-              showSuccessToast && (
-                <SuccessToast style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9000 }}>
-                  <div className="toast-icon">✓</div>
-                  <div className="toast-text">{successMessage}</div>
-                </SuccessToast>
-              ),
-              document.body
-            )}
           </ModalContent>
-        </ModalOverlay>
+        </ModalOverlay>,
+        modalTarget
       )}
 
       {/* Modal: Crear/Editar Sede (Estandarizado Ancho) */}
-      {createSedeModalOpen && selectedCommerce && (
-        <ModalOverlay onClick={() => setCreateSedeModalOpen(false)}>
-          <ModalContent onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+      {createSedeModalOpen && selectedCommerce && modalTarget && createPortal(
+        <ModalOverlay onClick={closeCreateSedeModal}>
+          <ModalContent onClick={e => e.stopPropagation()} $maxWidth="800px">
             <ModalHeader>
-              <div>
-                <ModalTitle>{isEditingSede ? 'Configurar Sede' : 'Crear Primera Sede'}</ModalTitle>
-                <SedeModalSubtitle>{selectedCommerce.nombre} - Gestión de Sucursal</SedeModalSubtitle>
-              </div>
-              <CloseButton onClick={() => setCreateSedeModalOpen(false)}>x</CloseButton>
+              <ModalTitle>
+                {isEditingSede ? 'Editar Sede' : `Añadir Sede a ${selectedCommerce.nombre}`}
+              </ModalTitle>
+              <CloseButton onClick={closeCreateSedeModal}>✕</CloseButton>
             </ModalHeader>
 
             <Form onSubmit={handleCrearOSedeAction}>
@@ -595,16 +686,38 @@ export default function CommerceManagementPage() {
               </SubmitButton>
             </Form>
           </ModalContent>
-        </ModalOverlay>
+        </ModalOverlay>,
+        modalTarget
       )}
+
       {/* Modal del Mapa */}
-      {showMapPicker && (
+      {showMapPicker && modalTarget && createPortal(
         <MapPickerModal 
           onClose={() => setShowMapPicker(false)} 
           onConfirm={handleConfirmCoords}
           initialLat={parseFloat(sedeFormData.latitud) || undefined}
           initialLng={parseFloat(sedeFormData.longitud) || undefined}
-        />
+        />,
+        modalTarget
+      )}
+
+      {/* Modal de Advertencia de Geolocalización */}
+      {showGeoWarning && modalTarget && createPortal(
+        <GeoPermissionModal 
+          status={geoStatus}
+          onContinue={handleContinueGeoFlow}
+          onClose={() => setShowGeoWarning(false)}
+        />,
+        modalTarget
+      )}
+
+      {/* Escudo de Transición Inteligente */}
+      {transitionLoading && modalTarget && createPortal(
+        <TransitionShield>
+          <Spinner />
+          <p style={{ marginTop: '1rem', color: '#10b981', fontWeight: 600 }}>Sincronizando posición...</p>
+        </TransitionShield>,
+        modalTarget
       )}
     </PageContainer>
   );
@@ -669,7 +782,9 @@ const SearchInput = styled.input`
   outline: none;
   
   &::placeholder {
-    color: #999;
+    color: #666;
+    font-size: 1.1rem;
+    font-weight: 500;
   }
 `;
 
@@ -868,157 +983,9 @@ const EmptyState = styled.div`
   border: 1px dashed rgba(255, 255, 255, 0.1);
 `;
 
-// Modal Styles
-const ModalOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start; /* Aliniado al inicio para coincidir con el auto-scroll */
-  padding: 5vh 2rem; /* Espaciado superior dinámico */
-  z-index: 1000;
-  overflow-y: auto;
-  
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-  }
-`;
+// Estilos de modal y formulario centralizados en @/components/Common/ModalStyles
 
-const ModalContent = styled.div`
-  background: #121212;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  width: 100%;
-  max-width: 650px;
-  border-radius: 16px;
-  padding: 2.5rem;
-  position: relative;
-  height: auto;
-  margin: 0 auto; /* Centrado solo horizontal, respeta el flex-start vertical */
-  animation: ${fadeIn} 0.3s ease;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-`;
-
-const ModalHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-`;
-
-const ModalTitle = styled.h2`
-  font-size: 1.5rem;
-  color: #fff;
-`;
-
-const CloseButton = styled.button`
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 1.5rem;
-  cursor: pointer;
-  
-  &:hover {
-    color: #fff;
-  }
-`;
-
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-`;
-
-const FormGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  
-  @media (max-width: 600px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
-const InputGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-`;
-
-const Label = styled.label`
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 500;
-`;
-
-const Input = styled.input`
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0.8rem 1rem;
-  border-radius: 6px;
-  color: #fff;
-  outline: none;
-  
-  &:focus {
-    border-color: #10b981;
-    background: rgba(16, 185, 129, 0.05);
-  }
-`;
-
-const TextArea = styled.textarea`
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0.8rem 1rem;
-  border-radius: 6px;
-  color: #fff;
-  height: 100px;
-  resize: none;
-  outline: none;
-  
-  &:focus {
-    border-color: #10b981;
-  }
-`;
-
-const Select = styled.select`
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0.8rem 1rem;
-  border-radius: 6px;
-  color: #fff;
-  outline: none;
-`;
-
-const SubmitButton = styled.button`
-  background: #10b981;
-  color: #000;
-  padding: 1rem;
-  border-radius: 6px;
-  border: none;
-  font-weight: 700;
-  font-size: 1rem;
-  cursor: pointer;
-  margin-top: 1rem;
-  
-  &:hover {
-    background: #059669;
-  }
-`;
-
-// --- Sedes Modal Styles ---
-const SedeModalSubtitle = styled.p`
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.85rem;
-  margin-top: 0.25rem;
-`;
+// ModalSubtitle centralizado en @/components/Common/ModalStyles
 
 const SedesGrid = styled.div`
   display: grid;
@@ -1190,31 +1157,7 @@ const SedeInfoIcon = styled.svg`
   color: rgba(255, 255, 255, 0.3);
 `;
 
-const GeoButton = styled.button`
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  color: #10b981;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
-
-  &:hover {
-    background: rgba(16, 185, 129, 0.2);
-    border-color: #10b981;
-    transform: translateY(-1px);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
+// GeoButton centralizado en @/components/Common/ModalStyles
 
 const SedeCardArrow = styled.span`
   font-size: 0.75rem;
@@ -1223,4 +1166,20 @@ const SedeCardArrow = styled.span`
   margin-top: auto;
   padding-top: 0.5rem;
   border-top: 1px solid rgba(255,255,255,0.05);
+`;
+
+const TransitionShield = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  animation: ${fadeIn} 0.3s ease-out;
 `;

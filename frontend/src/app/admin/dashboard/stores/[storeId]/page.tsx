@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -7,17 +7,25 @@ import { useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import Cookies from 'js-cookie';
 import MapPickerModal from '@/components/MapPickerModal';
+import GeoPermissionModal from '@/components/Common/GeoPermissionModal';
+import { useModalScroll } from '@/hooks/useModalScroll';
+import {
+  ModalOverlay, ModalContent, ModalHeader, ModalTitle, CloseButton,
+  Form, FormGrid, InputGroup, Label, Input, Select, TextArea, SubmitButton, CheckboxGroup, GeoButton
+} from '@/components/Common/ModalStyles';
+
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://trendy.sytes.net';
 
 export default function StoreContentPage({ params }: { params: { storeId: string } }) {
   const router = useRouter();
-  
+
   const [menus, setMenus] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
   const [activeCategoriaId, setActiveCategoriaId] = useState<number | null>(null);
   const [storeData, setStoreData] = useState<any>(null);
@@ -29,13 +37,33 @@ export default function StoreContentPage({ params }: { params: { storeId: string
   const [formData, setFormData] = useState<any>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [transitionLoading, setTransitionLoading] = useState(false);
+  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
+  const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
+  const [showGeoWarning, setShowGeoWarning] = useState(false);
+  const [geoStatus, setGeoStatus] = useState<'prompt' | 'denied' | 'default'>('default');
+
+  // Scroll inteligente para modales
+  useModalScroll(isModalOpen);
+  useModalScroll(showMapPicker);
+  useModalScroll(showGeoWarning);
 
   // Refs for auto-scroll
   const categoryRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+  const productRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+
+  const scrollToTarget = (id: number, type: 'category' | 'product') => {
+    setTimeout(() => {
+      const element = type === 'category' ? categoryRefs.current[id] : productRefs.current[id];
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 300);
+  };
 
   useEffect(() => {
-    setPortalTarget(document.getElementById('header-portal-root'));
+    setHeaderTarget(document.getElementById('header-portal-root'));
+    setModalTarget(document.getElementById('modal-portal-root'));
   }, []);
 
   useEffect(() => {
@@ -47,21 +75,21 @@ export default function StoreContentPage({ params }: { params: { storeId: string
     try {
       const token = Cookies.get('token') || document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1];
       const headers = { Authorization: `Bearer ${token}` };
-      
+
       const [menusRes, allProductsRes, storeRes] = await Promise.all([
         axios.get(`${API_URL}/api/manage/menus/${params.storeId}`, { headers }),
         axios.get(`${API_URL}/api/manage/products`, { headers }),
         axios.get(`${API_URL}/api/manage/store/${params.storeId}`, { headers }).catch(() => null)
       ]);
-      
+
       if (storeRes && storeRes.data) {
-         setStoreData(storeRes.data);
+        setStoreData(storeRes.data);
       }
 
       setMenus(menusRes.data);
       setProducts(allProductsRes.data);
-      
-      if(menusRes.data.length > 0) {
+
+      if (menusRes.data.length > 0) {
         setActiveMenuId(menusRes.data[0].id);
         fetchCategorias(menusRes.data[0].id, headers);
       }
@@ -109,19 +137,30 @@ export default function StoreContentPage({ params }: { params: { storeId: string
     setIsModalOpen(true);
   };
 
-  const closeForm = () => setIsModalOpen(false);
+  const closeForm = () => {
+    setTransitionLoading(true);
+    setTimeout(() => {
+      setIsModalOpen(false);
+      // Intentar volver al elemento si se conoce el id
+      if (formData.id) {
+        if (modalType === 'categoria') scrollToTarget(formData.id, 'category');
+        if (modalType === 'product') scrollToTarget(formData.id, 'product');
+      }
+    }, 300);
+    setTimeout(() => setTransitionLoading(false), 1400);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = Cookies.get('token') || document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1];
     const headers = { Authorization: `Bearer ${token}` };
-    
+
     try {
       if (modalType === 'menu') {
         const payload = { ...formData, store_id: params.storeId };
         await axios.post(`${API_URL}/api/manage/menus`, payload, { headers });
         showSuccess('Menú guardado con éxito');
-        fetchInitialData(); 
+        fetchInitialData();
       } else if (modalType === 'categoria') {
         const payload = { ...formData, menu_id: activeMenuId };
         await axios.post(`${API_URL}/api/manage/categorias`, payload, { headers });
@@ -138,7 +177,17 @@ export default function StoreContentPage({ params }: { params: { storeId: string
         showSuccess(formData.id ? 'Producto actualizado con éxito' : 'Producto creado con éxito');
         fetchInitialData(); // Para recargar productos
       }
-      setIsModalOpen(false);
+      setTransitionLoading(true);
+      setTimeout(() => {
+        setIsModalOpen(false);
+        // Navegar de regreso al objetivo
+        if (modalType === 'categoria' && formData.id) {
+          scrollToTarget(formData.id, 'category');
+        } else if (modalType === 'product' && formData.id) {
+          scrollToTarget(formData.id, 'product');
+        }
+      }, 300);
+      setTimeout(() => setTransitionLoading(false), 1400);
     } catch (e: any) {
       console.error(e);
       // Solo mostrar error si no fue cancelado o algo similar
@@ -157,17 +206,79 @@ export default function StoreContentPage({ params }: { params: { storeId: string
     setTimeout(() => setErrorMessage(null), 3500);
   };
 
+  const handleOpenMapPicker = async () => {
+    if (!navigator.geolocation) {
+      showError('Tu navegador no soporta geolocalización');
+      return;
+    }
+
+    try {
+      // @ts-ignore
+      const result = await navigator.permissions.query({ name: 'geolocation' });
+
+      if (result.state === 'granted') {
+        setShowMapPicker(true);
+      } else {
+        setGeoStatus(result.state);
+        setShowGeoWarning(true);
+        // Intentar disparar el prompt del navegador al mismo tiempo
+        navigator.geolocation.getCurrentPosition(() => { }, () => { });
+      }
+    } catch (err) {
+      // Fallback si permissions API no está disponible
+      setShowGeoWarning(true);
+      navigator.geolocation.getCurrentPosition(() => { }, () => { });
+    }
+  };
+
+  const handleContinueGeoFlow = () => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        // Éxito: abrir mapa
+        setFormData({
+          ...formData,
+          latitud: pos.coords.latitude.toString(),
+          longitud: pos.coords.longitude.toString()
+        });
+        setShowGeoWarning(false);
+        setShowMapPicker(true);
+      },
+      (err) => {
+        // Error o Denegado: simplemente cerrar modal (estado inicial)
+        setShowGeoWarning(false);
+      }
+    );
+  };
+
+  const handleConfirmCoords = (lat: number, lng: number) => {
+    setFormData({
+      ...formData,
+      latitud: lat.toString(),
+      longitud: lng.toString()
+    });
+    setShowMapPicker(false);
+    showSuccess('Coordenadas registradas correctamente');
+  };
+
   if (loading) {
-     return (
-        <LoadingState>
-          <Spinner />
-          <p>Cargando carta...</p>
-        </LoadingState>
-     )
+    return (
+      <LoadingState>
+        <Spinner />
+        <p>Cargando carta...</p>
+      </LoadingState>
+    )
   }
 
   return (
     <Container>
+      {/* PORTALS AREA */}
+      {headerTarget && createPortal(
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: '10%' }}>
+          <ActionButton $variant="success" onClick={() => openForm('store')}>+ Añadir Nueva Sede</ActionButton>
+        </div>,
+        headerTarget
+      )}
+
       <HeaderSection>
         {storeData && (
           <StoreHeroCard $bgImage={storeData?.image_url}>
@@ -180,7 +291,7 @@ export default function StoreContentPage({ params }: { params: { storeId: string
                   <ActionButton $variant="success-solid" onClick={() => openForm('store', storeData)}>Editar Sede</ActionButton>
                 </div>
               </div>
-              
+
               <div className="hero-right">
                 <div className="info-item">
                   <span className="info-label">• Teléfono</span>
@@ -197,8 +308,8 @@ export default function StoreContentPage({ params }: { params: { storeId: string
                   </div>
                 )}
                 <div className="info-item">
-                   <span className="info-label">• Coordenadas</span>
-                   <span className="info-value">{storeData.latitud ? `${Number(storeData.latitud).toFixed(4)}, ${Number(storeData.longitud).toFixed(4)}` : 'Sin GPS'}</span>
+                  <span className="info-label">• Coordenadas</span>
+                  <span className="info-value">{storeData.latitud ? `${Number(storeData.latitud).toFixed(4)}, ${Number(storeData.longitud).toFixed(4)}` : 'Sin GPS'}</span>
                 </div>
                 <div className="info-item">
                   <span className="info-label">• Estado</span>
@@ -208,7 +319,7 @@ export default function StoreContentPage({ params }: { params: { storeId: string
                   <span className="info-label">• Horario</span>
                   <span className="info-value">{storeData.horario_atencion || 'No registrado'}</span>
                 </div>
-                
+
                 {storeData.accounts && storeData.accounts.length > 0 ? (
                   storeData.accounts.map((acc: any) => (
                     <div className="info-item" key={acc.id}>
@@ -227,26 +338,12 @@ export default function StoreContentPage({ params }: { params: { storeId: string
           </StoreHeroCard>
         )}
 
-        {/* Portal: Boton Añadir Sede inyectado al GlassHeader */}
-        {portalTarget && createPortal(
-          <HeaderPortalContainer>
-             <ActionButton 
-               $variant="success-soft" 
-               onClick={() => openForm('store')}
-               style={{ marginRight: '1.5rem' }}
-             >
-               + Añadir Sede
-             </ActionButton>
-          </HeaderPortalContainer>,
-          portalTarget
-        )}
-        
         <SeparatorLine />
 
         <div className="title-group">
           <h1 className="title">Crear Menú</h1>
         </div>
-        
+
         {menus.length === 0 ? (
           <EmptyHeroCard onClick={() => openForm('menu')}>
             <div className="icon">+</div>
@@ -259,12 +356,12 @@ export default function StoreContentPage({ params }: { params: { storeId: string
             <div className="selector-group">
               <label>Seleccionar menú:</label>
               <SelectPremium value={activeMenuId || ''} onChange={handleMenuSelect}>
-                 {menus.map(m => (
-                   <option key={m.id} value={m.id}>{m.nombre}</option>
-                 ))}
+                {menus.map(m => (
+                  <option key={m.id} value={m.id}>{m.nombre}</option>
+                ))}
               </SelectPremium>
             </div>
-            
+
             <ActionButton onClick={() => openForm('menu')}>+ Nuevo Menú</ActionButton>
           </MenuControlBar>
         )}
@@ -273,210 +370,238 @@ export default function StoreContentPage({ params }: { params: { storeId: string
       {menus.length > 0 && (
         <ContentArea>
           <div className="categories-header">
-             <h2 className="section-title">Categorías del Menú</h2>
-             {activeMenuId && (
-                <ActionButton onClick={() => openForm('categoria')}>
-                  + Nueva Categoría
-                </ActionButton>
-             )}
+            <h2 className="section-title">Categorías del Menú</h2>
+            {activeMenuId && (
+              <ActionButton onClick={() => openForm('categoria')}>
+                + Nueva Categoría
+              </ActionButton>
+            )}
           </div>
 
           <AccordionList>
             {categorias.length === 0 ? (
-               <EmptyHeroCard onClick={() => openForm('categoria')}>
-                 <div className="icon">+</div>
-                 <p className="animated-text">
-                   <span className="arrow">→</span> Añada una nueva Categoría <span className="arrow">←</span>
-                 </p>
-               </EmptyHeroCard>
+              <EmptyHeroCard onClick={() => openForm('categoria')}>
+                <div className="icon">+</div>
+                <p className="animated-text">
+                  <span className="arrow">→</span> Añada una nueva Categoría <span className="arrow">←</span>
+                </p>
+              </EmptyHeroCard>
             ) : (
-            categorias.map(cat => {
-              const isOpen = activeCategoriaId === cat.id;
-              const catProducts = products.filter(p => p.categoria_id === cat.id);
+              categorias.map(cat => {
+                const isOpen = activeCategoriaId === cat.id;
+                const catProducts = products.filter(p => p.categoria_id === cat.id);
 
-              return (
-                <AccordionItem 
-                  key={cat.id} 
-                  $isOpen={isOpen}
-                  ref={(el) => { categoryRefs.current[cat.id] = el; }}
-                >
-                  <AccordionHeader onClick={() => toggleCategoria(cat.id)} $isOpen={isOpen}>
-                    <h3>{cat.nombre}</h3>
-                    <div className="acc-actions">
-                      <span className="count">{catProducts.length} productos</span>
-                      <Chevron $isOpen={isOpen}>▼</Chevron>
-                    </div>
-                  </AccordionHeader>
-                  
-                  <AccordionContentWrapper $isOpen={isOpen}>
-                    <div className="acc-body">
-                      {/* Grid de Productos */}
-                      <ProductsGrid>
-                        {catProducts.map(prod => (
-                          <ProductCard key={prod.id} onClick={() => openForm('product', prod)}>
-                             <div className="p-img">
-                               {prod.image_url ? <img src={prod.image_url} alt={prod.nombre} /> : <span>Sin foto</span>}
-                             </div>
-                             <div className="p-info">
-                               <div className="p-head">
-                                 <h4>{prod.nombre}</h4>
-                                 <span className="price">${Number(prod.precio_base).toLocaleString()}</span>
-                               </div>
-                               <p className="desc">{prod.descripcion_corta || prod.descripcion_larga}</p>
-                               <div className="p-foot">
+                return (
+                  <AccordionItem
+                    key={cat.id}
+                    $isOpen={isOpen}
+                    ref={(el) => { categoryRefs.current[cat.id] = el; }}
+                  >
+                    <AccordionHeader onClick={() => toggleCategoria(cat.id)} $isOpen={isOpen}>
+                      <h3>{cat.nombre}</h3>
+                      <div className="acc-actions">
+                        <span className="count">{catProducts.length} productos</span>
+                        <Chevron $isOpen={isOpen}>▼</Chevron>
+                      </div>
+                    </AccordionHeader>
+
+                    <AccordionContentWrapper $isOpen={isOpen}>
+                      <div className="acc-body">
+                        {/* Grid de Productos */}
+                        <ProductsGrid>
+                          {catProducts.map(prod => (
+                            <ProductCard
+                              key={prod.id}
+                              id={`product-card-${prod.id}`}
+                              ref={(el) => { productRefs.current[prod.id] = el; }}
+                              onClick={() => openForm('product', prod)}
+                            >
+                              <div className="p-img">
+                                {prod.image_url ? <img src={prod.image_url} alt={prod.nombre} /> : <span>Sin foto</span>}
+                              </div>
+                              <div className="p-info">
+                                <div className="p-head">
+                                  <h4>{prod.nombre}</h4>
+                                  <span className="price">${Number(prod.precio_base).toLocaleString()}</span>
+                                </div>
+                                <p className="desc">{prod.descripcion_larga}</p>
+                                <div className="p-foot">
                                   <span className={`status ${prod.disponible ? 'on' : 'off'}`}>
                                     {prod.disponible ? 'Disponible' : 'Agotado'}
                                   </span>
                                   <span className="edit-link">Editar</span>
-                               </div>
-                             </div>
-                          </ProductCard>
-                        ))}
-                        
-                        <ProductCreateCard onClick={() => openForm('product')}>
-                           <span className="icon">+</span>
-                           <p>Añadir Producto a {cat.nombre}</p>
-                        </ProductCreateCard>
-                      </ProductsGrid>
-                    </div>
-                  </AccordionContentWrapper>
-                </AccordionItem>
-              );
-            })
-          )}
-        </AccordionList>
-      </ContentArea>
+                                </div>
+                              </div>
+                            </ProductCard>
+                          ))}
+
+                          <ProductCreateCard onClick={() => openForm('product')}>
+                            <span className="icon">+</span>
+                            <p>Añadir Producto a {cat.nombre}</p>
+                          </ProductCreateCard>
+                        </ProductsGrid>
+                      </div>
+                    </AccordionContentWrapper>
+                  </AccordionItem>
+                );
+              })
+            )}
+          </AccordionList>
+        </ContentArea>
       )}
 
-      {/* Modal Maestro CSS-only / Simple render */}
-      {isModalOpen && (
-         <ModalOverlay>
-            <ModalDialog $large={modalType === 'product' || modalType === 'store'}>
-               <CloseBtn onClick={closeForm}>✕</CloseBtn>
-                <h2>
-                  {modalType === 'menu' && 'Crear Nuevo Menú'}
-                  {modalType === 'categoria' && 'Crear Categoría'}
-                  {modalType === 'product' && (formData.id ? 'Editar Producto' : 'Añadir Producto')}
-                  {modalType === 'store' && (formData.id ? 'Editar Sede' : 'Añadir Nueva Sede')}
-                </h2>
-               
-               <div className="modal-scroll">
-                 <form onSubmit={handleSubmit}>
-                     {/* Campos base (solo para menú/categoría/producto) */}
-                     {modalType !== 'store' && (
-                        <>
-                          <FormGroup>
-                            <label>Nombre {modalType === 'product' && 'del Producto'}</label>
-                            <input required type="text" value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} />
-                          </FormGroup>
+      {/* Modal Maestro Estandarizado */}
+      {/* MODAL SECTION - Montado fuera del header para evitar recortes de scroll */}
+      {isModalOpen && modalTarget && createPortal(
+        <ModalOverlay onClick={closeForm}>
+          <ModalContent onClick={e => e.stopPropagation()} $maxWidth={modalType === 'store' ? '800px' : (modalType === 'product' ? '650px' : '450px')}>
+            <ModalHeader>
+              <ModalTitle>
+                {modalType === 'menu' && 'Crear Nuevo Menú'}
+                {modalType === 'categoria' && 'Crear Categoría'}
+                {modalType === 'product' && (formData.id ? 'Editar Producto' : 'Añadir Producto')}
+                {modalType === 'store' && (formData.id ? 'Editar Sede' : 'Añadir Nueva Sede')}
+              </ModalTitle>
+              <CloseButton onClick={closeForm}>✕</CloseButton>
+            </ModalHeader>
 
-                          {modalType !== 'product' && (
-                              <FormGroup>
-                                <label>Descripción corta</label>
-                                <input type="text" value={formData.descripcion || ''} onChange={e => setFormData({...formData, descripcion: e.target.value})} />
-                              </FormGroup>
-                          )}
-                        </>
-                     )}
+            <Form onSubmit={handleSubmit}>
+              {/* Campos base (solo para menú/categoría/producto) */}
+              {modalType !== 'store' && (
+                <>
+                  <InputGroup>
+                    <Label>Nombre {modalType === 'product' && 'del Producto'}</Label>
+                    <Input required type="text" value={formData.nombre || ''} onChange={e => setFormData({ ...formData, nombre: e.target.value })} />
+                  </InputGroup>
 
-                     {modalType === 'product' && (
-                        <>
-                           <div className="form-grid">
-                              <FormGroup>
-                                <label>Precio</label>
-                                <input required type="number" step="0.01" value={formData.precio_base || ''} onChange={e => setFormData({...formData, precio_base: e.target.value})} className="emerald-text" />
-                              </FormGroup>
-                              <FormGroup style={{ marginTop: '4px' }}>
-                                <label>Tiempo Estimado (ej. 15m)</label>
-                                <input type="text" value={formData.tiempo_prep_estimado || ''} onChange={e => setFormData({...formData, tiempo_prep_estimado: e.target.value})} />
-                              </FormGroup>
-                           </div>
+                  {modalType !== 'product' && (
+                    <InputGroup>
+                      <Label>Descripción corta</Label>
+                      <Input type="text" value={formData.descripcion || ''} onChange={e => setFormData({ ...formData, descripcion: e.target.value })} />
+                    </InputGroup>
+                  )}
+                </>
+              )}
 
-                           <FormGroup>
-                             <label>Descripción Atractiva</label>
-                             <textarea required value={formData.descripcion_larga || ''} onChange={e => setFormData({...formData, descripcion_larga: e.target.value})} placeholder="Describe el plato de forma que genere antojo..." rows={3}/>
-                           </FormGroup>
-                           
-                           <FormGroup>
-                             <label>URL de Fotografía (Estrategia Visual)</label>
-                             <input type="text" value={formData.image_url || ''} onChange={e => setFormData({...formData, image_url: e.target.value})} placeholder="https://..." />
-                           </FormGroup>
+              {modalType === 'product' && (
+                <>
+                  <FormGrid>
+                    <InputGroup>
+                      <Label>Precio</Label>
+                      <Input required type="number" step="0.01" value={formData.precio_base || ''} onChange={e => setFormData({ ...formData, precio_base: e.target.value })} />
+                    </InputGroup>
+                    <InputGroup>
+                      <Label>Tiempo Estimado (ej. 15m)</Label>
+                      <Input type="text" value={formData.tiempo_prep_estimado || ''} onChange={e => setFormData({ ...formData, tiempo_prep_estimado: e.target.value })} />
+                    </InputGroup>
+                  </FormGrid>
 
-                           <CheckboxGroup>
-                             <input type="checkbox" id="dispo" checked={formData.disponible !== false} onChange={e => setFormData({...formData, disponible: e.target.checked})} />
-                             <label htmlFor="dispo">Producto Disponible al Público</label>
-                           </CheckboxGroup>
-                        </>
-                     )}
+                  <InputGroup>
+                    <Label>Descripción Atractiva</Label>
+                    <TextArea required value={formData.descripcion_larga || ''} onChange={e => setFormData({ ...formData, descripcion_larga: e.target.value })} placeholder="Describe el plato de forma que genere antojo..." rows={3} />
+                  </InputGroup>
 
-                      {modalType === 'store' && (
-                        <>
-                           <div className="form-grid">
-                              <FormGroup>
-                                <label>Nombre de la Sede</label>
-                                <input required type="text" value={formData.nombre_sucursal || ''} onChange={e => setFormData({...formData, nombre_sucursal: e.target.value})} placeholder="Ej: Sede Centro, Sucursal Norte..." />
-                              </FormGroup>
-                              <FormGroup>
-                                <label>Estado</label>
-                                <SelectPremium as="select" value={formData.estado || 'abierto'} onChange={e => setFormData({...formData, estado: e.target.value})}>
-                                  <option value="abierto">Abierto</option>
-                                  <option value="cerrado">Cerrado</option>
-                                  <option value="mantenimiento">En mantenimiento</option>
-                                </SelectPremium>
-                              </FormGroup>
-                           </div>
+                  <InputGroup>
+                    <Label>URL de Fotografía (Estrategia Visual)</Label>
+                    <Input type="text" value={formData.image_url || ''} onChange={e => setFormData({ ...formData, image_url: e.target.value })} placeholder="https://..." />
+                  </InputGroup>
 
-                           <div className="form-grid">
-                              <FormGroup>
-                                <label>Teléfono de Contacto</label>
-                                <input type="text" value={formData.telefono || ''} onChange={e => setFormData({...formData, telefono: e.target.value})} placeholder="+57 300..." />
-                              </FormGroup>
-                              <FormGroup>
-                                <label>Dirección física</label>
-                                <input required type="text" value={formData.direccion || ''} onChange={e => setFormData({...formData, direccion: e.target.value})} placeholder="Calle 10 # 5-20" />
-                              </FormGroup>
-                           </div>
+                  <CheckboxGroup>
+                    <input type="checkbox" id="dispo" checked={formData.disponible !== false} onChange={e => setFormData({ ...formData, disponible: e.target.checked })} />
+                    <label htmlFor="dispo">Producto Disponible al Público</label>
+                  </CheckboxGroup>
+                </>
+              )}
 
-                           <FormGroup>
-                             <label>Ubicación en Google Maps (URL)</label>
-                             <input type="text" value={formData.url_maps || ''} onChange={e => setFormData({...formData, url_maps: e.target.value})} placeholder="https://www.google.com/maps/..." />
-                           </FormGroup>
+              {modalType === 'store' && (
+                <>
+                  <FormGrid>
+                    <InputGroup>
+                      <Label>Nombre de la Sede</Label>
+                      <Input required type="text" value={formData.nombre_sucursal || ''} onChange={e => setFormData({ ...formData, nombre_sucursal: e.target.value })} placeholder="Ej: Sede Centro, Sucursal Norte..." />
+                    </InputGroup>
+                    <InputGroup>
+                      <Label>Estado</Label>
+                      <Select value={formData.estado || 'abierto'} onChange={e => setFormData({ ...formData, estado: e.target.value })}>
+                        <option value="abierto">Abierto</option>
+                        <option value="cerrado">Cerrado</option>
+                        <option value="mantenimiento">En mantenimiento</option>
+                      </Select>
+                    </InputGroup>
+                  </FormGrid>
 
-                            <div className="form-grid">
-                               <FormGroup>
-                                 <label>Latitud</label>
-                                 <input type="number" step="0.00000001" value={formData.latitud || ''} onChange={e => setFormData({...formData, latitud: e.target.value})} placeholder="4.12345678" />
-                               </FormGroup>
-                               <FormGroup>
-                                 <label>Longitud</label>
-                                 <input type="number" step="0.00000001" value={formData.longitud || ''} onChange={e => setFormData({...formData, longitud: e.target.value})} placeholder="-74.12345678" />
-                               </FormGroup>
-                            </div>
+                  <FormGrid>
+                    <InputGroup>
+                      <Label>Teléfono de Contacto</Label>
+                      <Input type="text" value={formData.telefono || ''} onChange={e => setFormData({ ...formData, telefono: e.target.value })} placeholder="+57 300..." />
+                    </InputGroup>
+                    <InputGroup>
+                      <Label>Dirección física</Label>
+                      <Input required type="text" value={formData.direccion || ''} onChange={e => setFormData({ ...formData, direccion: e.target.value })} placeholder="Calle 10 # 5-20" />
+                    </InputGroup>
+                  </FormGrid>
 
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-                              <GeoButton type="button" onClick={() => setShowMapPicker(true)}>
-                                <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/></svg>
-                                Registrar geolocalización
-                              </GeoButton>
-                            </div>
+                  <InputGroup>
+                    <Label>Ubicación en Google Maps (URL)</Label>
+                    <Input type="text" value={formData.url_maps || ''} onChange={e => setFormData({ ...formData, url_maps: e.target.value })} placeholder="https://www.google.com/maps/..." />
+                  </InputGroup>
 
-                            <FormGroup>
-                              <label>URL de Fotografía</label>
-                              <input type="text" value={formData.image_url || ''} onChange={e => setFormData({...formData, image_url: e.target.value})} placeholder="https://..." />
-                            </FormGroup>
+                  <FormGrid>
+                    <InputGroup>
+                      <Label>Latitud</Label>
+                      <Input type="number" step="0.00000001" value={formData.latitud || ''} onChange={e => setFormData({ ...formData, latitud: e.target.value })} placeholder="4.12345678" />
+                    </InputGroup>
+                    <InputGroup>
+                      <Label>Longitud</Label>
+                      <Input type="number" step="0.00000001" value={formData.longitud || ''} onChange={e => setFormData({ ...formData, longitud: e.target.value })} placeholder="-74.12345678" />
+                    </InputGroup>
+                  </FormGrid>
 
-                            <FormGroup>
-                              <label>Horario de Atención</label>
-                              <input type="text" value={formData.horario_atencion || ''} onChange={e => setFormData({...formData, horario_atencion: e.target.value})} placeholder="Lun-Vie 8am-8pm, Sáb 9am-5pm" />
-                            </FormGroup>
-                        </>
-                      )}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <GeoButton type="button" onClick={handleOpenMapPicker}>
+                      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor" /></svg>
+                      Registrar geolocalización
+                    </GeoButton>
+                  </div>
 
-                     <SubmitBtn type="submit">Guardar Cambios</SubmitBtn>
-                 </form>
-               </div>
-            </ModalDialog>
-         </ModalOverlay>
+                  <InputGroup>
+                    <Label>URL de Fotografía</Label>
+                    <Input type="text" value={formData.image_url || ''} onChange={e => setFormData({ ...formData, image_url: e.target.value })} placeholder="https://..." />
+                  </InputGroup>
+
+                  <InputGroup>
+                    <Label>Horario de Atención</Label>
+                    <Input type="text" value={formData.horario_atencion || ''} onChange={e => setFormData({ ...formData, horario_atencion: e.target.value })} placeholder="Lun-Vie 8am-8pm, Sáb 9am-5pm" />
+                  </InputGroup>
+                </>
+              )}
+
+              <SubmitButton type="submit">Guardar Cambios</SubmitButton>
+            </Form>
+          </ModalContent>
+        </ModalOverlay>,
+        modalTarget
+      )}
+
+      {/* Modal del Mapa */}
+      {showMapPicker && modalTarget && createPortal(
+        <MapPickerModal
+          onClose={() => setShowMapPicker(false)}
+          onConfirm={handleConfirmCoords}
+          initialLat={parseFloat(formData.latitud) || undefined}
+          initialLng={parseFloat(formData.longitud) || undefined}
+        />,
+        modalTarget
+      )}
+
+      {/* Modal de Advertencia de Geolocalización */}
+      {showGeoWarning && modalTarget && createPortal(
+        <GeoPermissionModal
+          status={geoStatus}
+          onContinue={handleContinueGeoFlow}
+          onClose={() => setShowGeoWarning(false)}
+        />,
+        modalTarget
       )}
 
       {successMessage && (
@@ -492,6 +617,15 @@ export default function StoreContentPage({ params }: { params: { storeId: string
           {errorMessage}
         </ErrorToast>
       )}
+
+      {/* Escudo de Transición Inteligente */}
+      {transitionLoading && modalTarget && createPortal(
+        <TransitionShield>
+          <div className="spinner-grid" />
+          <p style={{ marginTop: '1rem', color: '#10b981', fontWeight: 600 }}>Cargando posición...</p>
+        </TransitionShield>,
+        modalTarget
+      )}
     </Container>
   );
 }
@@ -502,6 +636,35 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   gap: 32px;
+`;
+
+const TransitionShield = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  
+  .spinner-grid {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(16, 185, 129, 0.1);
+    border-top: 3px solid #10b981;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 `;
 
 const HeaderSection = styled.div`
@@ -723,16 +886,16 @@ const ActionButton = styled.button<{ $variant?: 'outline' | 'success-soft' | 'su
 
   &:hover {
     background: ${p => {
-      if (p.$variant === 'success-solid') return '#50e854';
-      if (p.$variant === 'outline') return 'rgba(255,255,255,0.05)';
-      if (p.$variant === 'success-soft') return 'rgba(72, 214, 76, 0.35)';
-      return 'rgba(72, 214, 76, 0.2)';
-    }};
+    if (p.$variant === 'success-solid') return '#50e854';
+    if (p.$variant === 'outline') return 'rgba(255,255,255,0.05)';
+    if (p.$variant === 'success-soft') return 'rgba(72, 214, 76, 0.35)';
+    return 'rgba(72, 214, 76, 0.2)';
+  }};
     color: ${p => {
-      if (p.$variant === 'success-solid') return '#000';
-      if (p.$variant === 'outline') return '#fff';
-      return 'var(--emerald)';
-    }};
+    if (p.$variant === 'success-solid') return '#000';
+    if (p.$variant === 'outline') return '#fff';
+    return 'var(--emerald)';
+  }};
   }
 `;
 
@@ -943,63 +1106,7 @@ const EmptyHeroCard = styled.div`
   }
 `;
 
-// === MODAL STYLES === 
-const ModalOverlay = styled.div`
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px);
-  display: flex; align-items: flex-start; justify-content: center;
-  padding: 40px 20px; overflow-y: auto;
-  animation: fadeIn 0.2s ease-out;
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-`;
-
-const ModalDialog = styled.div<{ $large?: boolean }>`
-  background: #111;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  width: 100%; max-width: ${p => p.$large ? '600px' : '400px'};
-  padding: 30px; position: relative;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-  h2 { font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 24px; }
-  form { display: flex; flex-direction: column; gap: 16px; }
-`;
-
-const CloseBtn = styled.button`
-  position: absolute; top: 20px; right: 20px;
-  width: 32px; height: 32px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05); border: none;
-  display: flex; align-items: center; justify-content: center;
-  color: rgba(255, 255, 255, 0.4); cursor: pointer; transition: all 0.2s;
-  &:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-`;
-
-const FormGroup = styled.div`
-  display: flex; flex-direction: column; gap: 8px;
-  label { font-size: 0.8rem; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
-  input, textarea {
-    background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 12px 16px; border-radius: 12px; color: #fff; font-size: 0.9rem; outline: none; transition: border-color 0.2s;
-    font-family: inherit;
-    &:focus { border-color: var(--emerald); }
-  }
-  .emerald-text { color: var(--emerald); font-weight: 700; }
-`;
-
-const CheckboxGroup = styled.div`
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(255, 255, 255, 0.03); padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);
-  input[type="checkbox"] { accent-color: var(--emerald); width: 16px; height: 16px; cursor: pointer; }
-  label { font-size: 0.85rem; color: #fff; font-weight: 500; cursor: pointer; }
-`;
-
-const SubmitBtn = styled.button`
-  background: var(--emerald); color: #000; border: none; padding: 16px; border-radius: 12px;
-  font-size: 1rem; font-weight: 800; cursor: pointer; margin-top: 10px; transition: transform 0.2s, background 0.2s;
-  &:hover { background: #50e854; transform: scale(0.98); }
-`;
+// Estilos de modal y formulario centralizados en @/components/Common/ModalStyles
 
 const LoadingState = styled.div`
   display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; gap: 16px;
@@ -1057,24 +1164,4 @@ const ErrorToast = styled(SuccessToast)`
   background: rgba(255, 95, 95, 0.95);
   box-shadow: 0 10px 30px rgba(255, 95, 95, 0.3);
   .icon { color: #ff5f5f; }
-`;
-const GeoButton = styled.button`
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  color: #10b981;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
-
-  &:hover {
-    background: rgba(16, 185, 129, 0.2);
-    border-color: #10b981;
-    transform: translateY(-1px);
-  }
 `;
