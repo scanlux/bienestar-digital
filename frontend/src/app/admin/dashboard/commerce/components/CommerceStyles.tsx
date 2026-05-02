@@ -188,7 +188,7 @@ export const SedesGrid = styled.div`
   }
 `;
 
-export const SedeCard = styled.div<{ $bgImage?: string }>`
+export const SedeCard = styled.div<{ $bgImage?: string; $isHighlighted?: boolean }>`
   position: relative;
   height: 200px;
   border-radius: 12px;
