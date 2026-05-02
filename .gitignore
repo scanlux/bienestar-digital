@@ -21,3 +21,6 @@ Thumbs.db
 
 # Gemini / Antigravity
 .gemini/
+
+# Uploads
+backend/uploads/
