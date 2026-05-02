@@ -2,23 +2,23 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
-// GET /api/home - Fetch brands and their products for the marketplace home
+// GET /api/home - Fetch commerces and their products for the marketplace home
 router.get('/home', async (req, res) => {
   try {
-    // 1. Fetch all brands with layout and schedule info, ordered by 'orden'
-    const [brands] = await db.query('SELECT id, nombre, descripcion, logo_url, type, open_time, close_time, orden FROM brands ORDER BY orden ASC');
+    // 1. Fetch all active commerces ordered by 'orden'
+    const [commerces] = await db.query("SELECT id, nombre, descripcion, logo_url, type, open_time, close_time, orden FROM commerces WHERE status = 'active' ORDER BY orden ASC");
 
-    // 2. Fetch products for each brand (simplified for now)
+    // 2. Fetch products for each commerce (simplified for now)
     const [products] = await db.query(`
-      SELECT p.id, p.brand_id, p.nombre, p.descripcion_corta, p.precio_base, pi.url as image_url
+      SELECT p.id, p.commerce_id, p.nombre, p.descripcion_corta, p.precio_base, p.image_url
       FROM products p
-      LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.tipo = 'thumbnail'
+      WHERE p.disponible = 1
     `);
 
-    // 3. Assemble the data (Clean aggregate for the frontend to map)
-    const results = brands.map(brand => ({
-      ...brand,
-      products: products.filter(p => p.brand_id === brand.id).map(p => ({
+    // 3. Assemble the data
+    const results = commerces.map(commerce => ({
+      ...commerce,
+      products: products.filter(p => p.commerce_id === commerce.id).map(p => ({
         id: p.id,
         nombre: p.nombre,
         descripcion_corta: p.descripcion_corta,

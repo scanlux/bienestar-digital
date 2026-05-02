@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import Cookies from 'js-cookie';
+import { getAuthHeaders } from '@/utils/auth';
 
 const API_URL = 'https://trendy.sytes.net/api/manage';
 
@@ -39,8 +39,7 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const token = Cookies.get('token');
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = getAuthHeaders();
       
       const [statsRes, requestsRes] = await Promise.all([
         axios.get(`${API_URL}/stats`, { headers }),
@@ -62,9 +61,8 @@ export default function AdminDashboard() {
 
   const handleAction = async (id: number, status: 'active' | 'rejected') => {
     try {
-      const token = Cookies.get('token');
       await axios.patch(`${API_URL}/commerces/${id}/status`, { status }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders()
       });
       fetchData();
     } catch (error) {

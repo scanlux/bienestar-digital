@@ -10,21 +10,22 @@
   },
   "dependencies": {
     "@motionone/utils": "^10.16.3",
+    "@radix-ui/react-switch": "^1.2.6",
     "@studio-freight/react-lenis": "^0.0.36",
+    "axios": "^1.6.7",
     "framer-motion": "^10.16.4",
     "gsap": "^3.12.2",
+    "js-cookie": "^3.0.5",
     "next": "13.5.4",
     "react": "^18",
     "react-dom": "^18",
-    "styled-components": "^6.1.0",
-    "axios": "^1.6.7",
-    "js-cookie": "^3.0.5"
+    "styled-components": "^6.1.0"
   },
   "devDependencies": {
+    "@types/js-cookie": "^3.0.6",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@types/js-cookie": "^3.0.6",
     "eslint": "^8",
     "eslint-config-next": "13.5.4",
     "typescript": "^5"

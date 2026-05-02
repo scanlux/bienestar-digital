@@ -1,13 +1,9 @@
+import React from 'react';
 import styled, { keyframes } from 'styled-components';
+import * as SwitchPrimitive from '@radix-ui/react-switch';
+import { fadeIn, spin, Spinner } from './UIElements';
 
-export const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-export const spin = keyframes`
-  to { transform: rotate(360deg); }
-`;
+// Animations moved to UIElements.tsx
 
 // === MODAL SHELL ===
 
@@ -86,6 +82,25 @@ export const CloseButton = styled.button`
   }
 `;
 
+// === WARNING BANNER ===
+
+export const WarningBanner = styled.div`
+  background-color: rgba(234, 179, 8, 0.1);
+  border-left: 4px solid #eab308;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  color: #fef08a;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  animation: ${fadeIn} 0.3s ease;
+
+  strong {
+    color: #facc15;
+    font-weight: 700;
+  }
+`;
+
 // === FORM SYSTEM (referencia: commerce/page.tsx) ===
 
 export const Form = styled.form`
@@ -111,9 +126,9 @@ export const InputGroup = styled.div`
 `;
 
 export const Label = styled.label`
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.75);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `;
@@ -147,6 +162,13 @@ export const Input = styled.input`
   &[type='number']::-webkit-outer-spin-button {
     -webkit-appearance: none;
   }
+
+  .was-validated &:invalid {
+    border-color: #ef4444 !important;
+    color: #f87171 !important;
+    background: rgba(239, 68, 68, 0.05) !important;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4) !important;
+  }
 `;
 
 export const Select = styled.select`
@@ -175,6 +197,13 @@ export const Select = styled.select`
     background: #1a1a1a;
     color: #fff;
   }
+
+  .was-validated &:invalid {
+    border-color: #ef4444 !important;
+    color: #f87171 !important;
+    background: rgba(239, 68, 68, 0.05) !important;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4) !important;
+  }
 `;
 
 export const TextArea = styled.textarea`
@@ -199,6 +228,13 @@ export const TextArea = styled.textarea`
   &:focus {
     border-color: rgba(16, 185, 129, 0.5);
     background: rgba(255, 255, 255, 0.07);
+  }
+
+  .was-validated &:invalid {
+    border-color: #ef4444 !important;
+    color: #f87171 !important;
+    background: rgba(239, 68, 68, 0.05) !important;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4) !important;
   }
 `;
 
@@ -249,31 +285,300 @@ export const CheckboxGroup = styled.div`
   }
 `;
 
-export const GeoButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #10b981;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+import { ActionButton } from './UIElements';
 
-  &:hover {
-    background: rgba(16, 185, 129, 0.2);
-    border-color: rgba(16, 185, 129, 0.5);
+export const GeoButton = styled(ActionButton).attrs({ $variant: 'luminous' })`
+  width: 100%;
+  border-radius: 10px;
+  font-size: 0.95rem;
+
+  svg {
+    width: 20px;
+    height: 20px;
   }
 `;
 
-export const Spinner = styled.div`
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #10b981;
+export const GeoInfo = styled.div`
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 0.25rem;
+  animation: ${fadeIn} 0.4s ease;
+  
+  .geo-tag {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    
+    strong {
+      color: #10b981;
+      font-weight: 700;
+    }
+  }
+`;
+
+// Spinner moved to UIElements.tsx
+
+export const ScheduleGrid = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 5px;
+
+  .grid-header {
+    display: grid;
+    grid-template-columns: 100px 120px 1fr 60px;
+    gap: 12px;
+    padding: 0 8px 8px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.65);
+    text-align: center;
+    span:first-child { text-align: left; }
+  }
+
+  .grid-row {
+    display: grid;
+    grid-template-columns: 100px 120px 1fr 60px;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: background 0.2s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .day-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .status-select {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 0.85rem;
+      padding: 6px 10px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s;
+
+      &:focus {
+        background: rgba(255, 255, 255, 0.18);
+        border-color: #10b981;
+      }
+
+      &.abierto { color: #34d399; font-weight: 700; }
+      &.cerrado { color: #f87171; }
+    }
+
+    .time-inputs {
+      display: grid;
+      grid-template-columns: 24px 1fr 20px 1fr 24px;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      max-width: 380px; /* Aumentado ligeramente para acomodar el nuevo spacer */
+      margin: 0 auto;
+
+      input {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid #10b981;
+        padding: 6px 12px;
+        width: 100%;
+        font-size: 0.95rem;
+        text-align: center;
+        border-radius: 6px;
+        color: #fff;
+        transition: all 0.2s;
+        box-sizing: border-box;
+
+        &:focus {
+          background: rgba(16, 185, 129, 0.2);
+          border-color: #34d399;
+          box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+
+
+
+        &:disabled {
+          opacity: 0.3;
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        &.maintenance-mode {
+          border-color: #f97316;
+          color: #ffedd5; /* Color crema/blanco para contraste sobre naranja */
+          background: rgba(249, 115, 22, 0.15);
+          
+          &:focus {
+            border-color: #ff781f;
+            background: rgba(249, 115, 22, 0.2);
+            box-shadow: 0 0 15px rgba(249, 115, 22, 0.5);
+          }
+        }
+
+        
+        &.invalid-time {
+          border-color: #ef4444 !important;
+          color: #f87171 !important;
+          box-shadow: 0 0 15px rgba(239, 68, 68, 0.6) !important;
+          background: rgba(239, 68, 68, 0.05) !important;
+        }
+
+
+      }
+
+      .sep {
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 1rem;
+        text-align: center;
+      }
+    }
+  }
+`;
+
+export const AccountsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.01);
+  border-radius: 12px;
+  padding: 10px;
+`;
+
+export const MaintenanceBtn = styled.button`
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px dashed #f97316;
+  color: #fb923c;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  grid-column: 2 / span 3;
+  box-sizing: border-box;
+  margin: 0 auto;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  
+  &:hover {
+    background: rgba(249, 115, 22, 0.2);
+    border-style: solid;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(249, 115, 22, 0.2);
+  }
+`;
+
+export const RemoveMaintenanceBtn = styled.button`
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  color: #f87171;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  animation: ${spin} 0.8s linear infinite;
+  font-size: 0.7rem;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+
+  &:hover {
+    background: #ef4444;
+    color: #fff;
+    transform: scale(1.1);
+  }
+`;
+
+const StyledSwitch = styled(SwitchPrimitive.Root)`
+  all: unset;
+  width: 46px;
+  height: 24px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  position: relative;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  WebkitTapHighlightColor: rgba(0, 0, 0, 0);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &[data-state='checked'] {
+    background-color: #10b981;
+    border-color: #10b981;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.6);
+  }
+`;
+
+const StyledThumb = styled(SwitchPrimitive.Thumb)`
+  display: block;
+  width: 18px;
+  height: 18px;
+  background-color: white;
+  border-radius: 9999px;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 100ms;
+  transform: translateX(2px);
+  will-change: transform;
+
+  &[data-state='checked'] {
+    transform: translateX(24px); /* 46px width - 18px thumb - 2px right padding - 2px border offset = 24px */
+  }
+`;
+
+export const PremiumSwitch = ({ id, checked, onCheckedChange }: { id?: string, checked: boolean, onCheckedChange: (c: boolean) => void }) => (
+  <StyledSwitch id={id} checked={checked} onCheckedChange={onCheckedChange}>
+    <StyledThumb />
+  </StyledSwitch>
+);
+
+export const SwitchGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s;
+  flex: 1;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    flex: 1;
+  }
 `;

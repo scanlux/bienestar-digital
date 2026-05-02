@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/context/AuthContext';
+import { ToastProvider } from '@/context/ToastContext';
 import StyledComponentsRegistry from '../../libs/registry';
 import { GlobalStyles } from '@/components/Layout/GlobalStyles';
 
@@ -19,9 +20,12 @@ export default function RootLayout({
       <body>
         <StyledComponentsRegistry>
           <GlobalStyles />
-          <AuthProvider>
-            {children}
-          </AuthProvider>
+          <ToastProvider>
+            <AuthProvider>
+              {children}
+              <div id="modal-portal-root" />
+            </AuthProvider>
+          </ToastProvider>
         </StyledComponentsRegistry>
       </body>
     </html>

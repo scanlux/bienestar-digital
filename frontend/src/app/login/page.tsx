@@ -1,28 +1,47 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import styled, { keyframes } from 'styled-components';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import { FloatingErrorToast } from '@/components/Common/Toasts';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [showErrorToast, setShowErrorToast] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
   const { login } = useAuth();
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    setModalTarget(document.getElementById('modal-portal-root'));
+  }, []);
+
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError('');
+    setIsSubmitted(true);
+    setErrorMessage('');
+    setShowErrorToast(false);
+
+    if (!e.currentTarget.checkValidity()) {
+      setErrorMessage('Por favor completa todos los campos.');
+      setShowErrorToast(true);
+      return;
+    }
+
     setLoading(true);
 
     try {
       await login(email, password);
-      // El contexto de Auth usualmente maneja las redirecciones, o podemos forzarla aqui
     } catch (err: any) {
-      setError(err.message || 'Error al iniciar sesion');
+      setErrorMessage(err.message || 'Error al iniciar sesion');
+      setShowErrorToast(true);
     } finally {
       setLoading(false);
     }
@@ -42,7 +61,11 @@ export default function Login() {
           <Subtitle>Ingresa tus credenciales para continuar</Subtitle>
         </Header>
 
-        <Form onSubmit={handleSubmit}>
+        <Form 
+          onSubmit={handleSubmit} 
+          noValidate 
+          className={isSubmitted ? 'was-validated' : ''}
+        >
           <InputWrapper>
             <Label>Email</Label>
             <Input
@@ -65,8 +88,6 @@ export default function Login() {
             />
           </InputWrapper>
 
-          {error && <ErrorMessage>{error}</ErrorMessage>}
-
           <SubmitButton type="submit" disabled={loading}>
             {loading ? <Spinner /> : 'Iniciar Sesion'}
           </SubmitButton>
@@ -76,6 +97,14 @@ export default function Login() {
           Desarrollado para TrendyTech Marketplace
         </FooterText>
       </LoginBox>
+
+      {showErrorToast && modalTarget && createPortal(
+        <FloatingErrorToast 
+          message={errorMessage} 
+          onClose={() => setShowErrorToast(false)} 
+        />,
+        modalTarget
+      )}
     </PageWrapper>
   );
 }
@@ -231,6 +260,12 @@ const Input = styled.input`
   &::placeholder {
     color: rgba(255, 255, 255, 0.15);
   }
+
+  .was-validated &:invalid {
+    border-color: #ff5f5f !important;
+    background: rgba(255, 95, 95, 0.05) !important;
+    box-shadow: 0 0 0 4px rgba(255, 95, 95, 0.1) !important;
+  }
 `;
 
 const ErrorMessage = styled.div`
@@ -253,26 +288,21 @@ const SubmitButton = styled.button`
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  margin-top: 0.75rem;
-  box-shadow: 0 10px 20px -5px rgba(72, 214, 76, 0.3);
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
   display: flex;
-  align-items: center;
   justify-content: center;
-  transition: transform 0.2s, opacity 0.2s, box-shadow 0.2s;
+  align-items: center;
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 15px 25px -5px rgba(72, 214, 76, 0.4);
-  }
-
-  &:active {
-    transform: translateY(0);
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
   }
 
   &:disabled {
     opacity: 0.7;
     cursor: not-allowed;
-    transform: none;
   }
 `;
 
@@ -285,7 +315,7 @@ const Spinner = styled.div`
   animation: ${spin} 0.8s linear infinite;
 `;
 
-const FooterText = styled.div`
+const FooterText = styled.p`
   margin-top: 2.5rem;
   text-align: center;
   font-size: 0.8rem;

@@ -2,10 +2,22 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { auth, adminOnly } = require('../middleware/auth');
+const { isStoreCurrentlyOpen } = require('../utils/timeUtils');
 
 // Aplicar middleware de administraciÃ³n a todas las rutas de este archivo
 router.use(auth);
 router.use(adminOnly);
+
+// --- CATÁLOGO DE PAGOS ---
+
+router.get('/payment-platforms', async (req, res) => {
+  try {
+    const [platforms] = await db.query('SELECT * FROM payment_platforms ORDER BY nombre ASC');
+    res.json(platforms);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // --- COMERCIOS (COMMERCES) ---
 
@@ -54,11 +66,11 @@ router.get('/stats', async (req, res) => {
 
 // Crear un nuevo comercio
 router.post('/commerces', async (req, res) => {
-  const { nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status } = req.body;
+  const { nombre, nit, nit_dv, telefono, ciudad, direccion, descripcion, logo_url, type, orden } = req.body;
   try {
     const [result] = await db.query(
-      'INSERT INTO commerces (nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type || 'horizontal', open_time, close_time, orden || 0, status || 'pending']
+      'INSERT INTO commerces (nombre, nit, nit_dv, telefono, ciudad, direccion, descripcion, logo_url, type, orden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [nombre, nit, nit_dv || null, telefono, ciudad, direccion, descripcion, logo_url, type || 'horizontal', orden || 0]
     );
     res.json({ id: result.insertId, message: 'Comercio creado con éxito' });
   } catch (error) {
@@ -69,11 +81,11 @@ router.post('/commerces', async (req, res) => {
 // Actualizar un comercio
 router.put('/commerces/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status } = req.body;
+  const { nombre, nit, nit_dv, telefono, ciudad, direccion, descripcion, logo_url, type, orden } = req.body;
   try {
     await db.query(
-      'UPDATE commerces SET nombre=?, nit=?, telefono=?, ciudad=?, direccion=?, descripcion=?, logo_url=?, type=?, open_time=?, close_time=?, orden=?, status=? WHERE id=?',
-      [nombre, nit, telefono, ciudad, direccion, descripcion, logo_url, type, open_time, close_time, orden, status, id]
+      'UPDATE commerces SET nombre=?, nit=?, nit_dv=?, telefono=?, ciudad=?, direccion=?, descripcion=?, logo_url=?, type=?, orden=? WHERE id=?',
+      [nombre, nit, nit_dv || null, telefono, ciudad, direccion, descripcion, logo_url, type, orden, id]
     );
     res.json({ message: 'Comercio actualizado con éxito' });
   } catch (error) {
@@ -98,36 +110,107 @@ router.patch('/commerces/:id/status', async (req, res) => {
 
 // --- SEDES (STORES) ---
 
-// Obtener sedes de un comercio
+// Obtener sedes de un comercio (incluye horario resumido o completo)
 router.get('/stores/:commerceId', async (req, res) => {
   try {
     const [stores] = await db.query('SELECT * FROM stores WHERE commerce_id = ?', [req.params.commerceId]);
+    
+    // Obtener horarios para todas las sedes encontradas
+    for (let store of stores) {
+      const [schedule] = await db.query('SELECT * FROM store_operating_hours WHERE store_id = ? ORDER BY day_index ASC', [store.id]);
+      store.schedule = schedule;
+      // Inyectar estado en tiempo real
+      store.is_currently_open = isStoreCurrentlyOpen(store.estado, schedule);
+    }
+    
     res.json(stores);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Crear o actualizar una sede
+// Crear o actualizar una sede (incluye gestión de horario semanal y cuentas bancarias)
 router.post('/stores', async (req, res) => {
-  const { id, commerce_id, nombre_sucursal, telefono, direccion, latitud, longitud, horario_atencion, estado, image_url, url_maps } = req.body;
+  const { id, commerce_id, nombre_sucursal, contacto_directo, telefono, telefono_domicilio, direccion, latitud, longitud, estado, image_url, schedule, accounts, fecha_regreso } = req.body;
+  
+  // Limpieza: Si es operativo, forzamos fecha_regreso a null
+  // Extraer solo YYYY-MM-DD si viene como ISO datetime (ej: '2026-05-07T05:00:00.000Z')
+  const cleanFecha = fecha_regreso ? fecha_regreso.split('T')[0] : null;
+  const finalFechaRegreso = (estado === 'operativo' || !cleanFecha) ? null : cleanFecha;
+
+  let connection;
   try {
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    let storeId = id;
+
     if (id) {
       // Actualizar sede existente
-      await db.query(
-        'UPDATE stores SET nombre_sucursal=?, telefono=?, direccion=?, latitud=?, longitud=?, horario_atencion=?, estado=?, image_url=?, url_maps=? WHERE id=?',
-        [nombre_sucursal, telefono || null, direccion, latitud || null, longitud || null, horario_atencion, estado || 'abierto', image_url || null, url_maps || null, id]
+      await connection.query(
+        'UPDATE stores SET nombre_sucursal=?, contacto_directo=?, telefono=?, telefono_domicilio=?, direccion=?, latitud=?, longitud=?, estado=?, fecha_regreso=?, image_url=? WHERE id=?',
+        [nombre_sucursal, contacto_directo || null, telefono || null, telefono_domicilio || null, direccion, latitud || null, longitud || null, estado || 'abierto', finalFechaRegreso, image_url || null, id]
       );
-      res.json({ message: 'Sede actualizada con éxito' });
     } else {
       // Crear nueva sede
-      const [result] = await db.query(
-        'INSERT INTO stores (commerce_id, nombre_sucursal, telefono, direccion, latitud, longitud, horario_atencion, estado, image_url, url_maps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [commerce_id, nombre_sucursal, telefono || null, direccion, latitud || null, longitud || null, horario_atencion, estado || 'abierto', image_url || null, url_maps || null]
+      const [result] = await connection.query(
+        'INSERT INTO stores (commerce_id, nombre_sucursal, contacto_directo, telefono, telefono_domicilio, direccion, latitud, longitud, estado, fecha_regreso, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [commerce_id, nombre_sucursal, contacto_directo || null, telefono || null, telefono_domicilio || null, direccion, latitud || null, longitud || null, estado || 'abierto', finalFechaRegreso, image_url || null]
       );
-      res.json({ id: result.insertId, message: 'Sede creada con éxito' });
+      storeId = result.insertId;
     }
+
+    // Procesar horario semanal si se proporciona
+    if (schedule && Array.isArray(schedule)) {
+      for (const day of schedule) {
+        // UPSERT para cada día
+        await connection.query(`
+          INSERT INTO store_operating_hours 
+          (store_id, day_index, status, open_time, close_time, is_24h)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE 
+          status=VALUES(status), open_time=VALUES(open_time), close_time=VALUES(close_time), is_24h=VALUES(is_24h)
+        `, [storeId, day.day_index, day.status, day.open_time, day.close_time, day.is_24h]);
+      }
+    }
+
+    // Procesar cuentas bancarias si se proporcionan
+    if (accounts && Array.isArray(accounts)) {
+      // Limpiamos las cuentas anteriores para este storeId (reemplazo total)
+      await connection.query('DELETE FROM store_accounts WHERE store_id = ?', [storeId]);
+      
+      if (accounts.length > 0) {
+        // Insertamos las nuevas cuentas enviadas desde el frontend
+        const values = accounts.map(acc => [
+          storeId, 
+          acc.platform_id, 
+          acc.tipo_cuenta || 'Ahorros', 
+          acc.numero_cuenta, 
+          acc.llave || null,
+          acc.titular_nombre || null, 
+          acc.titular_documento || null, 
+          acc.detalle || null, 
+          acc.vencimiento_tarjeta || null,
+          acc.es_principal === true || acc.es_principal === 1 || acc.es_principal === 'true' ? 1 : 0
+        ]);
+        
+        await connection.query(`
+          INSERT INTO store_accounts 
+          (store_id, platform_id, tipo_cuenta, numero_cuenta, llave, titular_nombre, titular_documento, detalle, vencimiento_tarjeta, es_principal) 
+          VALUES ?
+        `, [values]);
+      }
+    }
+
+    await connection.commit();
+    connection.release();
+
+    res.json({ id: storeId, message: id ? 'Sede actualizada con éxito' : 'Sede creada con éxito' });
   } catch (error) {
+    if (connection) {
+      await connection.rollback();
+      connection.release();
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -138,11 +221,23 @@ router.get('/store/:id', async (req, res) => {
     const [stores] = await db.query('SELECT s.*, c.nombre as commerce_nombre FROM stores s LEFT JOIN commerces c ON s.commerce_id = c.id WHERE s.id = ?', [req.params.id]);
     if (stores.length === 0) return res.status(404).json({ error: 'Store not found' });
     
-    // Obtener las cuentas bancarias asociadas a esta sede
-    const [accounts] = await db.query('SELECT * FROM store_accounts WHERE store_id = ?', [req.params.id]);
+    // Obtener las cuentas bancarias asociadas a esta sede con el join al catálogo
+    const [accounts] = await db.query(`
+      SELECT sa.*, pp.nombre as banco_nombre, pp.tipo_entidad 
+      FROM store_accounts sa 
+      LEFT JOIN payment_platforms pp ON sa.platform_id = pp.id 
+      WHERE sa.store_id = ?
+    `, [req.params.id]);
+    
+    // Obtener el horario semanal
+    const [schedule] = await db.query('SELECT * FROM store_operating_hours WHERE store_id = ? ORDER BY day_index ASC', [req.params.id]);
     
     const storeData = stores[0];
     storeData.accounts = accounts;
+    storeData.schedule = schedule;
+    
+    // Inyectar estado en tiempo real
+    storeData.is_currently_open = isStoreCurrentlyOpen(storeData.estado, schedule);
     
     res.json(storeData);
   } catch (error) {
@@ -234,7 +329,7 @@ router.get('/products', async (req, res) => {
 
 // Create or update product
 router.post('/products', async (req, res) => {
-  const { id, commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible, ingredientes } = req.body;
+  const { id, commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible, es_vegetariano, ingredientes } = req.body;
   
   let connection;
   try {
@@ -246,14 +341,14 @@ router.post('/products', async (req, res) => {
     if (id) {
       // Update
       await connection.query(
-        'UPDATE products SET categoria_id=?, nombre=?, descripcion_corta=?, descripcion_larga=?, precio_base=?, tiempo_prep_estimado=?, image_url=?, disponible=? WHERE id=?',
-        [categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible, id]
+        'UPDATE products SET categoria_id=?, nombre=?, descripcion_corta=?, descripcion_larga=?, precio_base=?, tiempo_prep_estimado=?, image_url=?, disponible=?, es_vegetariano=? WHERE id=?',
+        [categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible, es_vegetariano, id]
       );
     } else {
       // Create
       const [result] = await connection.query(
-        'INSERT INTO products (commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible !== undefined ? disponible : true]
+        'INSERT INTO products (commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible, es_vegetariano) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [commerce_id, categoria_id, nombre, descripcion_corta, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible !== undefined ? disponible : true, es_vegetariano || false]
       );
       productId = result.insertId;
     }

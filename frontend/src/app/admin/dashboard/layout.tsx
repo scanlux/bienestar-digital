@@ -74,8 +74,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </ContentWrapper>
       </MainContent>
-      {/* Nuevo root para modales fuera de filtros y contenedores limitados */}
-      <div id="modal-portal-root" />
     </LayoutContainer>
   );
 }

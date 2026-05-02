@@ -40,7 +40,7 @@ export default function GeoPermissionModal({ status, onContinue, onClose }: GeoP
           {status === 'denied' ? (
             <>
               Parece que has bloqueado el acceso a la ubicación. <br/>
-              Para continuar, haz click en el <strong>icono del candado</strong> en la barra de direcciones y selecciona <strong>"Permitir"</strong>.
+              Para continuar, haz click en el <strong>icono del candado</strong> en la barra de direcciones y selecciona <strong>&quot;Permitir&quot;</strong>.
             </>
           ) : (
             'Necesitamos acceso a tu ubicación para situar la sede de forma precisa en el mapa y facilitar las entregas.'
