@@ -1,0 +1,57 @@
+name: Deploy Frontend (Next.js Static)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Usar pnpm de forma estricta
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Static HTML
+        # Nota: Asegúrate de tener output: 'export' configurado en tu next.config.js
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_API_URL: 'https://trendy.sytes.net/api' # Cambiar según corresponda
+
+      # Opción 1: Despliegue mediante SSH sobre Tailscale (Recomendado y Seguro)
+      # Para esto, se debe usar la Action oficial de Tailscale para conectar la máquina de GitHub a tu VPN.
+      - name: Connect to Tailscale VPN
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Deploy Static Files via Rsync
+        run: |
+          # Registrar la llave privada temporalmente para SSH
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # Escanear el host de la NEW Micro (IP en la VPN de Tailscale o IP Pública)
+          ssh-keyscan -H "${{ secrets.MICRO_TAILSCALE_IP }}" >> ~/.ssh/known_hosts
+          
+          # Transferir los archivos estáticos de Next.js compilados (directorio 'out')
+          # El script setup_new_micro.sh prepara el directorio /var/www/<domain>/html para esto.
+          rsync -avz --delete out/ ${{ secrets.SSH_USER }}@${{ secrets.MICRO_TAILSCALE_IP }}:/var/www/trendy.sytes.net/html/
