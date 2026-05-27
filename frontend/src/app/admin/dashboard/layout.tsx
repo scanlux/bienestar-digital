@@ -8,8 +8,10 @@ import { useAuth } from '@/context/AuthContext';
 
 const NAV_ITEMS = [
   { label: 'Inicio', path: '/admin/dashboard', icon: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z' },
-  { label: 'Catálogo Comercios', path: '/admin/dashboard/commerce', icon: 'M12 2L2 22h20L12 2zm0 3.83L18.17 19H5.83L12 5.83z' },
-  { label: 'Sedes', path: '/admin/dashboard/stores', icon: 'M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z' }
+  { label: 'Catálogo Comercios', path: '/admin/dashboard/commerce', icon: 'M12 2L2 22h20L12 2zm0 3.83L18.17 19H5.83L12 5.83z', permission: 'menu_commerce' },
+  { label: 'Sedes', path: '/admin/dashboard/stores', icon: 'M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z', permission: 'menu_stores' },
+  { label: 'Inteligencia', path: '/admin/dashboard/intelligence', icon: 'M21 16.5c0 .38-.21.71-.53.88l-7.97 4.44c-.31.17-.69.17-1 0L3.53 17.38c-.32-.17-.53-.5-.53-.88V7.5c0-.38.21-.71.53-.88l7.97-4.44c.31-.17.69-.17 1 0l7.97 4.44c.32.17.53.5.53.88v9zM12 4.15L5.33 7.85 12 11.56l6.67-3.71L12 4.15z', permission: 'menu_intelligence' },
+  { label: 'Usuarios y Permisos', path: '/admin/dashboard/users', icon: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z', permission: 'manage_users' }
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -44,6 +46,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <NavList>
           {NAV_ITEMS.map((item) => {
+            // Filtrar según permisos del usuario. Si no tiene property permission, siempre se muestra.
+            if (item.permission && (!user?.permissions || !user.permissions.includes(item.permission))) {
+              return null;
+            }
+
             const isActive = pathname === item.path;
             return (
               <NavItem key={item.path}>
@@ -67,6 +74,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <MainContent>
         <GlassHeader>
+          <div id="header-back-portal-root" style={{ display: 'flex', alignItems: 'center' }} />
           <HeaderText>{getPageTitle(pathname)}</HeaderText>
           <div id="header-portal-root" style={{ display: 'flex', alignItems: 'center', flex: 1 }} />
         </GlassHeader>

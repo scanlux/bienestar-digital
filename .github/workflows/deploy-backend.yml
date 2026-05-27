@@ -3,7 +3,7 @@ name: Deploy Backend (Docker to GHCR)
 on:
   push:
     branches:
-      - main
+      - produccion
 
 # Permisos requeridos para escribir paquetes en el registro GHCR
 permissions:
@@ -66,16 +66,12 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "${{ secrets.ARM_US_TAILSCALE_IP }}" >> ~/.ssh/known_hosts
           
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.ARM_US_TAILSCALE_IP }} << 'EOF'
-            cd /opt/bienestar
-            
-            # Autenticar Docker contra GHCR para poder descargar la imagen privada (si aplica)
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Descargar imagen actualizada y recrear contenedor sin downtime para los otros servicios
-            docker compose pull backend
-            docker compose up -d backend
-            
-            # Limpiar imágenes huérfanas anteriores para no saturar disco
-            docker image prune -f
-          EOF
+            ssh ${{ secrets.SSH_USER }}@${{ secrets.ARM_US_TAILSCALE_IP }} << 'EOF'
+              cd /opt/bienestar
+              
+              # Autenticar Docker contra GHCR para poder descargar la imagen privada (si aplica)
+              echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+              
+              # Ejecutar actualización segura sin downtime y sin saturar memoria RAM (OOM prevent)
+              nohup sudo bash safe_service_update.sh backend > resultado_backend.log 2>&1 &
+            EOF

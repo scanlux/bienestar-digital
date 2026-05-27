@@ -1,0 +1,23 @@
+{
+  "name": "bienestar-digital-workspace",
+  "private": true,
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp",
+      "unrs-resolver"
+    ]
+  },
+  "lint-staged": {
+    "frontend/**/*.{js,jsx,ts,tsx}": [
+      "pnpm --filter chatbot exec eslint --fix"
+    ],
+    "backend/**/*.{js,ts}": []
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5"
+  },
+  "scripts": {
+    "prepare": "husky"
+  }
+}

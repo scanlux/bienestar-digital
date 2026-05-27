@@ -5,8 +5,8 @@
 #   localhost:6379 -> Oracle:6379 (Redis)
 # ============================================================
 
-$KEY = "$env:USERPROFILE\.ssh\ssh-key.key"
-$HOST_SSH = "ubuntu@143.47.104.153"
+$KEY = "$env:USERPROFILE\.ssh\arm-usa\ssh-key.key"
+$HOST_SSH = "ubuntu@150.136.118.187"
 
 Write-Host "🚀 Iniciando tunel SSH hacia Oracle Cloud..." -ForegroundColor Cyan
 Write-Host "   MariaDB : localhost:3306 -> Oracle:3306" -ForegroundColor Green

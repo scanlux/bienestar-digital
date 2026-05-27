@@ -1,8 +1,8 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import MapPickerModal from '@/components/MapPickerModal';
 import GeoPermissionModal from '@/components/Common/GeoPermissionModal';
@@ -19,6 +19,7 @@ import { ImageUploadZone } from '@/components/Common/ImageUploadZone';
 import { DEFAULT_SCHEDULE, API_URL } from '@/constants';
 import { getAuthHeaders } from '@/utils/auth';
 import { formatTime, getFullImageUrl } from '@/utils';
+import { COMMERCE_HIGHLIGHT_PARAM } from '@/utils/commerceNavigation';
 
 // Refactored Components
 import { PageContainer, CommercesGrid, EmptyState, SearchInput, SearchIconIcon } from './components/CommerceStyles';
@@ -29,6 +30,8 @@ import { SedesManagementModal } from './components/SedesManagementModal';
 
 export default function CommerceManagementPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const lastProcessedHighlightRef = useRef<string | null>(null);
   const { user } = useAuth();
   const [commerces, setCommerces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,6 +184,29 @@ export default function CommerceManagementPage() {
       }
     }, 600);
   };
+
+  const runCommerceHighlightFlow = (commerceId: number) => {
+    setTransitionLoading(true);
+    scrollToCommerce(commerceId);
+    setTimeout(() => setTransitionLoading(false), 1400);
+  };
+
+  useEffect(() => {
+    const raw = searchParams.get(COMMERCE_HIGHLIGHT_PARAM);
+    if (!raw) {
+      lastProcessedHighlightRef.current = null;
+      return;
+    }
+    if (loading || raw === lastProcessedHighlightRef.current) return;
+
+    const commerceId = Number(raw);
+    if (Number.isNaN(commerceId) || commerces.length === 0) return;
+    if (!commerces.some((c) => c.id === commerceId)) return;
+
+    lastProcessedHighlightRef.current = raw;
+    runCommerceHighlightFlow(commerceId);
+    router.replace('/admin/dashboard/commerce', { scroll: false });
+  }, [loading, commerces, searchParams, router]);
 
   const handleOpenCreateModal = () => {
     setIsEditing(false);
@@ -381,7 +407,22 @@ export default function CommerceManagementPage() {
         <ModalOverlay onClick={closeMainModal}>
           <ModalContent onClick={e => e.stopPropagation()}>
             <ModalHeader>
-              <ModalTitle>{isEditing ? 'Editar Comercio' : 'Nuevo Comercio'}</ModalTitle>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <ModalTitle>{isEditing ? 'Editar Comercio' : 'Nuevo Comercio'}</ModalTitle>
+                {isEditing && currentCommerceId && (
+                  <ActionButton
+                    $variant="success-solid"
+                    type="button"
+                    style={{ padding: '6px 14px', fontSize: '0.8rem', height: 'auto', borderRadius: '8px' }}
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      router.push(`/admin/dashboard/commerce/${currentCommerceId}/menus`);
+                    }}
+                  >
+                    Gestionar Menús
+                  </ActionButton>
+                )}
+              </div>
               <CloseButton onClick={closeMainModal}>✕</CloseButton>
             </ModalHeader>
             

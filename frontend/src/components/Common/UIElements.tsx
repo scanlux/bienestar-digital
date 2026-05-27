@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import styled, { keyframes, css } from 'styled-components';
 
 // --- ANIMACIONES COMUNES ---
@@ -133,3 +134,51 @@ export const TransitionShield: React.FC<TransitionShieldProps> = ({ message = 'S
     <p>{message}</p>
   </ShieldWrapper>
 );
+
+// --- BOTON DE VOLVER PARA EL HEADER ---
+export const GlassHeaderBackButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #ffffff;
+  border-radius: 8px;
+  color: #ffffff;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  margin-right: 12px;
+  height: 36px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
+export const HeaderBackButton: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => {
+  const [mounted, setMounted] = React.useState(false);
+  const [target, setTarget] = React.useState<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    setMounted(true);
+    setTarget(document.getElementById('header-back-portal-root'));
+  }, []);
+
+  if (!mounted || !target) return null;
+
+  return createPortal(
+    <GlassHeaderBackButton onClick={onClick}>
+      {children}
+    </GlassHeaderBackButton>,
+    target
+  );
+};
+

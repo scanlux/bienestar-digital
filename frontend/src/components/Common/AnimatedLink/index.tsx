@@ -56,7 +56,14 @@ const letterAnimationTwo = {
   },
 };
 
-const AnimatedLink = forwardRef(({ title, ...props }: { title: string; [key: string]: any }, ref: any) => {
+interface AnimatedLinkProps {
+  title: string;
+  [key: string]: any;
+}
+
+
+const AnimatedLink = forwardRef<HTMLDivElement, AnimatedLinkProps>(({ title, ...props }, ref) => {
+
   const [isHovered, setIsHovered] = useState(false);
   return (
     <Div

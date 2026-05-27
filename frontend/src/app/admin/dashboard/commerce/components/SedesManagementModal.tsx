@@ -6,7 +6,8 @@ import {
 } from '@/components/Common/ModalStyles';
 import { 
   SedesGrid, SedeCard, SedeCardHeader, SedeEstadoBadge, SedeNombre, 
-  SedeInfo, SedeInfoRow, SedeInfoIcon, SedeEditBtn, SedeGhostCard 
+  SedeInfo, SedeInfoRow, SedeInfoIcon, SedeEditBtn, SedeGhostCard,
+  SedeRegresoAlert
 } from './CommerceStyles';
 
 interface SedesManagementModalProps {
@@ -70,6 +71,14 @@ export const SedesManagementModal: React.FC<SedesManagementModalProps> = ({
                   </SedeEstadoBadge>
                 </SedeCardHeader>
                 <SedeNombre>{sede.nombre_sucursal || `Sede #${sede.id}`}</SedeNombre>
+                
+                {sede.estado !== 'operativo' && sede.fecha_regreso && new Date(sede.fecha_regreso) <= new Date() && (
+                  <SedeRegresoAlert>
+                    <span>⚠️</span>
+                    ¡DEBE ABRIR HOY! ({new Date(sede.fecha_regreso).toLocaleDateString()})
+                  </SedeRegresoAlert>
+                )}
+
                 <SedeInfo>
                   <SedeInfoRow>
                     <SedeInfoIcon viewBox="0 0 24 24">

@@ -15,7 +15,7 @@ router.post('/login', async (req, res) => {
 
   try {
     // 1. Buscar usuario en la base de datos
-    const [users] = await db.query('SELECT id, email, password_hash, nombre, rol, estado FROM users WHERE email = ?', [email]);
+    const [users] = await db.query('SELECT id, email, password_hash, nombres, apellidos, rol, estado FROM users WHERE email = ?', [email]);
     const user = users[0];
 
     if (!user) {
@@ -32,27 +32,183 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    // 3. Generar JWT
+    // 3. Obtener permisos del usuario
+    const [permissionsData] = await db.query(`
+      SELECT p.name 
+      FROM user_permissions up
+      JOIN permissions p ON up.permission_id = p.id
+      WHERE up.user_id = ?
+    `, [user.id]);
+    
+    const permissions = permissionsData.map(p => p.name);
+
+    // 4. Generar JWT
     const token = jwt.sign(
-      { id: user.id, email: user.email, rol: user.rol },
+      { id: user.id, email: user.email, rol: user.rol, permissions },
       process.env.JWT_SECRET || 'f3a1d9c2e4b6a8d0c2e4f6a8d0c2e4b6', // Usar el del .env o fallback
       { expiresIn: '24h' }
     );
 
-    // 4. Responder con data segura
+    // 5. Responder con data segura
     res.json({
       token,
       user: {
         id: user.id,
         email: user.email,
-        nombre: user.nombre,
-        rol: user.rol
+        nombre: `${user.nombres} ${user.apellidos || ''}`.trim(),
+        nombres: user.nombres,
+        apellidos: user.apellidos,
+        rol: user.rol,
+        permissions
       }
     });
 
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// @route   POST /api/auth/mobile/register
+// @desc    Sync Firebase user to MariaDB
+router.post('/mobile/register', async (req, res) => {
+  const { email, nombre, firebaseUid } = req.body;
+
+  if (!email || !firebaseUid) {
+    return res.status(400).json({ error: 'Email y UID son obligatorios' });
+  }
+
+  try {
+    // Verificar si ya existe
+    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing.length > 0) {
+      return res.status(200).json({ message: 'Usuario ya sincronizado', user: existing[0] });
+    }
+
+    // Separar nombre en nombres y apellidos
+    const parts = (nombre || 'Usuario Focnius').trim().split(/\s+/);
+    const nombres = parts.slice(0, -1).join(' ') || parts[0];
+    const apellidos = parts.length > 1 ? parts[parts.length - 1] : '';
+
+    // Insertar con rol customer y un password hash dummy ya que Firebase maneja la auth real
+    const dummyHash = await bcrypt.hash(firebaseUid, 10);
+    const [result] = await db.query(
+      'INSERT INTO users (email, password_hash, nombres, apellidos, rol, estado) VALUES (?, ?, ?, ?, ?, ?)',
+      [email, dummyHash, nombres, apellidos, 'customer', 'activo']
+    );
+
+    res.status(201).json({
+      message: 'Usuario sincronizado exitosamente',
+      user: { id: result.insertId, email, rol: 'customer' }
+    });
+  } catch (error) {
+    console.error('Mobile Register error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// @route   GET /api/auth/mobile/check-user
+// @desc    Check if a user exists by email
+router.get('/mobile/check-user', async (req, res) => {
+  const { email } = req.query;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email es obligatorio' });
+  }
+
+  try {
+    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing.length > 0) {
+      return res.status(200).json({ exists: true });
+    }
+    return res.status(200).json({ exists: false });
+  } catch (error) {
+    console.error('Check user error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// @route   POST /api/auth/mobile/register-full
+// @desc    Sync or create user and insert their first address
+router.post('/mobile/register-full', async (req, res) => {
+  const { email, nombres, apellidos, nombre, cedula, celular, firebaseUid, password, direccion, latitud, longitud } = req.body;
+
+  if (!email || !direccion || !celular) {
+    return res.status(400).json({ error: 'Faltan datos obligatorios del perfil' });
+  }
+
+  if (!firebaseUid && !password) {
+    return res.status(400).json({ error: 'Debe proveer firebaseUid o contraseña' });
+  }
+
+  // Lógica de separación de nombres y apellidos como contingencia robusta
+  let dbNombres = nombres;
+  let dbApellidos = apellidos;
+
+  if (!dbNombres && nombre) {
+    const parts = nombre.trim().split(/\s+/);
+    dbNombres = parts.slice(0, -1).join(' ') || parts[0];
+    dbApellidos = parts.length > 1 ? parts[parts.length - 1] : '';
+  }
+
+  dbNombres = dbNombres || 'Usuario';
+  dbApellidos = dbApellidos || 'Focnius';
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Verificar si ya existe el usuario
+    const [existing] = await connection.query('SELECT id FROM users WHERE email = ?', [email]);
+    let userId;
+
+    if (existing.length > 0) {
+      userId = existing[0].id;
+      // Actualizar celular y cédula si vienen
+      await connection.query('UPDATE users SET celular = ?, cedula_numero = ? WHERE id = ?', [celular, cedula, userId]);
+    } else {
+      // 2. Insertar nuevo usuario
+      let hash;
+      if (firebaseUid) {
+        hash = await bcrypt.hash(firebaseUid, 10);
+      } else {
+        hash = await bcrypt.hash(password, 10);
+      }
+
+      const [result] = await connection.query(
+        'INSERT INTO users (email, password_hash, nombres, apellidos, celular, cedula_numero, rol, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [email, hash, dbNombres, dbApellidos, celular, cedula, 'customer', 'activo']
+      );
+      userId = result.insertId;
+    }
+
+    // 3. Insertar la dirección
+    await connection.query(
+      'INSERT INTO user_addresses (user_id, label, direccion, latitud, longitud, is_default) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, 'Casa', direccion, latitud || null, longitud || null, true]
+    );
+
+    await connection.commit();
+
+    res.status(201).json({
+      message: 'Perfil completado exitosamente',
+      user: {
+        id: userId,
+        email,
+        nombre: `${dbNombres} ${dbApellidos}`.trim(),
+        nombres: dbNombres,
+        apellidos: dbApellidos,
+        celular,
+        cedula_numero: cedula,
+        rol: 'customer'
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Register Full error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  } finally {
+    connection.release();
   }
 });
 

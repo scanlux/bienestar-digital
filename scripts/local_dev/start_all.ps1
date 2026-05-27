@@ -4,7 +4,7 @@
 #   Ventana 2: Frontend     (Ctrl+C para detener Next.js)
 #   Ventana 3: Dashboard    (Ctrl+C para detener el monitoreo)
 #
-# El acceso a DB/Redis se hace via Tailscale (IP: 100.124.223.45)
+# El acceso a DB/Redis se hace via Tailscale (IP dinámica leída de backend/.env)
 # Detecta y mata procesos anteriores antes de arrancar.
 
 $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -12,6 +12,18 @@ $ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dashScript   = "$ROOT\dashboard_loop.ps1"
 $backendDir   = "$ROOT\backend"
 $frontendDir  = "$ROOT\frontend"
+
+# Leer IP de DB/Redis del archivo .env del backend
+$dbHost = "100.127.144.125" # Fallback inicial
+$envFile = "$backendDir\.env"
+if (Test-Path $envFile) {
+    $envContent = Get-Content $envFile
+    foreach ($line in $envContent) {
+        if ($line -match "^\s*DB_HOST\s*=\s*(.+)\s*$") {
+            $dbHost = $Matches[1].Trim()
+        }
+    }
+}
 
 # Detectar PowerShell disponible
 $psExe = "powershell"
@@ -43,7 +55,7 @@ Write-Host ""
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "   BIENESTAR-DIGITAL - ARRANQUE (TAILSCALE)" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host "   Usando: $psExe | IP Oracle: 100.124.223.45" -ForegroundColor DarkGray
+Write-Host "   Usando: $psExe | IP Oracle: $dbHost" -ForegroundColor DarkGray
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -63,14 +75,14 @@ Write-Host ""
 
 # ---- VENTANA 1: BACKEND NODE.JS ----
 Write-Host "[1/3] Lanzando Backend (Node.js en :4000)..." -ForegroundColor Yellow
-Start-Process $psExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location '$backendDir'; npm run dev"
+Start-Process $psExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location '$backendDir'; pnpm run dev"
 
 Write-Host "      Esperando 7s para que el backend inicialice..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 7
 
 # ---- VENTANA 2: FRONTEND NEXT.JS ----
 Write-Host "[2/3] Lanzando Frontend (Next.js en :3000)..." -ForegroundColor Yellow
-Start-Process $psExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location '$frontendDir'; npm run dev"
+Start-Process $psExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location '$frontendDir'; pnpm run dev"
 
 Write-Host "      Esperando 5s antes de iniciar el dashboard..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 5
@@ -86,9 +98,9 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host ""
 Write-Host "  Frontend   : http://localhost:3000" -ForegroundColor White
 Write-Host "  Backend    : http://localhost:4000" -ForegroundColor White
-Write-Host "  DB (Tail)  : 100.124.223.45:3306" -ForegroundColor White
-Write-Host "  Redis (Tail): 100.124.223.45:6379" -ForegroundColor White
+Write-Host "  DB (Tail)  : ${dbHost}:3306" -ForegroundColor White
+Write-Host "  Redis (Tail): ${dbHost}:6379" -ForegroundColor White
 Write-Host ""
 Write-Host "  Para detener un servicio: cierra su ventana o Ctrl+C en ella." -ForegroundColor Yellow
+Write-Host "" -ForegroundColor Yellow
 Write-Host ""
-

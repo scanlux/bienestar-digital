@@ -51,6 +51,9 @@ app.use('/api/preguntas', preguntasRoutes);
 const managementRoutes = require('./routes/management');
 app.use('/api/manage', managementRoutes);
 
+const usersRoutes = require('./routes/users');
+app.use('/api/manage/users', usersRoutes);
+
 const uploadRoutes = require('./routes/upload');
 app.use('/api/upload', uploadRoutes);
 

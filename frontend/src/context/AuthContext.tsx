@@ -10,6 +10,7 @@ interface User {
   email: string;
   nombre: string;
   rol: 'admin' | 'vendor' | 'customer' | 'delivery';
+  permissions?: string[];
 }
 
 interface AuthContextType {

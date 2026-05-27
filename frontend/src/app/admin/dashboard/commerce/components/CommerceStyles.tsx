@@ -259,6 +259,23 @@ export const SedeEditBtn = styled(ActionButton).attrs({ $variant: 'luminous' })`
   width: fit-content;
 `;
 
+export const SedeRegresoAlert = styled.div`
+  background: #EF4444; /* Danger color */
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  width: fit-content;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+`;
+
 
 
 

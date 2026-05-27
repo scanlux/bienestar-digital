@@ -23,5 +23,6 @@ GRANT SELECT, INSERT, UPDATE ON `marketplace_db`.`domi_packages` TO 'bienestar_d
 GRANT SELECT, INSERT, UPDATE ON `marketplace_db`.`order_incidents` TO 'bienestar_deployer'@'%';
 GRANT SELECT, INSERT, UPDATE ON `marketplace_db`.`rescue_assignments` TO 'bienestar_deployer'@'%';
 GRANT SELECT, INSERT, UPDATE ON `marketplace_db`.`orders` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`product_popularity` TO 'bienestar_deployer'@'%';
 
 FLUSH PRIVILEGES;

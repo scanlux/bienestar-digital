@@ -3,7 +3,7 @@ name: Deploy Frontend (Docker to GHCR)
 on:
   push:
     branches:
-      - main
+      - produccion
 
 # Permisos requeridos para escribir paquetes en el registro GHCR
 permissions:
@@ -71,12 +71,8 @@ jobs:
             cd /opt/bienestar
             
             # Autenticar Docker contra GHCR para descargar la imagen
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Descargar imagen actualizada y recrear contenedor sin downtime para los otros servicios
-            docker compose pull frontend
-            docker compose up -d frontend
-            
-            # Limpiar imágenes huérfanas
-            docker image prune -f
+            # Ejecutar actualización segura sin downtime y sin saturar memoria RAM (OOM prevent)
+            nohup sudo bash safe_service_update.sh frontend > resultado_frontend.log 2>&1 &
           EOF

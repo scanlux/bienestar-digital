@@ -3,7 +3,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-    container_name: bienestar_frontend_prod
+    container_name: bienestar-frontend
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -16,7 +16,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-    container_name: bienestar_backend_prod
+    container_name: bienestar-backend
     restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -41,7 +41,7 @@ services:
 
   mariadb:
     image: mariadb:10.11
-    container_name: bienestar_db_prod
+    container_name: bienestar-db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
@@ -57,7 +57,7 @@ services:
 
   redis:
     image: redis:alpine
-    container_name: bienestar_redis_prod
+    container_name: bienestar-redis
     restart: unless-stopped
     ports:
       - "6379:6379"

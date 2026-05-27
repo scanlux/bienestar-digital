@@ -24,3 +24,16 @@ Thumbs.db
 
 # Uploads
 backend/uploads/
+
+# Archivos pesados
+*.tar.gz
+*.zip
+
+# Next.js
+.next/
+
+# IDE y Editor
+.vscode/
+
+# Dependencias locales
+pnpm-debug.log*

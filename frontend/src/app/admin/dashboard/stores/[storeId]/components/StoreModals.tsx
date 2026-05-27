@@ -82,7 +82,7 @@ export const StoreModals: React.FC<StoreModalsProps> = ({
         <ModalHeader>
           <ModalTitle>
             {modalType === 'menu' && 'Crear Nuevo Menú'}
-            {modalType === 'categoria' && 'Crear Categoría'}
+            {modalType === 'categoria' && (formData.id ? 'Editar Categoría' : 'Crear Categoría')}
             {modalType === 'product' && (formData.id ? 'Editar Producto' : 'Añadir Producto')}
           </ModalTitle>
           <CloseButton type="button" onClick={closeForm}>✕</CloseButton>
@@ -172,6 +172,15 @@ export const StoreModals: React.FC<StoreModalsProps> = ({
                   onChange={e => setFormData({ ...formData, descripcion_larga: e.target.value })} 
                   placeholder="Describe el plato de forma que genere antojo..." 
                   rows={3} 
+                />
+              </InputGroup>
+              <InputGroup>
+                <Label>Etiquetas Semánticas (Automáticas + Manuales)</Label>
+                <Input 
+                  type="text" 
+                  value={formData.tags || ''} 
+                  placeholder="Ej: postre, helado, chocolate"
+                  onChange={e => setFormData({ ...formData, tags: e.target.value })} 
                 />
               </InputGroup>
               <ImageUploadZone 

@@ -14,6 +14,9 @@ GRANT UPDATE, DELETE ON `marketplace_db`.`product_ingredients` TO 'bienestar_adm
 GRANT UPDATE, DELETE ON `marketplace_db`.`payment_platforms` TO 'bienestar_admin_prod'@'%';
 GRANT UPDATE, DELETE ON `marketplace_db`.`store_accounts` TO 'bienestar_admin_prod'@'%';
 GRANT UPDATE, DELETE ON `marketplace_db`.`store_operating_hours` TO 'bienestar_admin_prod'@'%';
+GRANT UPDATE, DELETE ON `marketplace_db`.`store_menus` TO 'bienestar_admin_prod'@'%';
+GRANT UPDATE, DELETE ON `marketplace_db`.`store_categories` TO 'bienestar_admin_prod'@'%';
+GRANT UPDATE, DELETE ON `marketplace_db`.`store_products` TO 'bienestar_admin_prod'@'%';
 GRANT UPDATE, DELETE ON `marketplace_db`.`users` TO 'bienestar_admin_prod'@'%';
 
 -- 3. Tabla Operativa Transaccional
@@ -24,5 +27,6 @@ GRANT UPDATE ON `marketplace_db`.`wallets` TO 'bienestar_admin_prod'@'%';
 GRANT UPDATE ON `marketplace_db`.`domi_packages` TO 'bienestar_admin_prod'@'%';
 GRANT UPDATE ON `marketplace_db`.`order_incidents` TO 'bienestar_admin_prod'@'%';
 GRANT UPDATE ON `marketplace_db`.`rescue_assignments` TO 'bienestar_admin_prod'@'%';
+GRANT UPDATE ON `marketplace_db`.`product_popularity` TO 'bienestar_admin_prod'@'%';
 
 FLUSH PRIVILEGES;

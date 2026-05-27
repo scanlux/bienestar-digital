@@ -3,7 +3,7 @@ const mysql = require('mysql2/promise');
 async function run() {
   try {
     const conn = await mysql.createConnection({
-      host: '100.124.223.45',
+      host: '100.127.144.125',
       user: 'bienestar_admin_prod', // Usando el usuario del .env para consistencia
       password: '7hda}rGb_yuX2@pL9*qN4!zB1vM8',
       database: 'marketplace_db'

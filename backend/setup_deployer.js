@@ -5,7 +5,7 @@ async function setup() {
     const deployerPass = 'D3pl0y3r_2026_Secure';
     
     const connection = await mysql.createConnection({
-        host: '100.124.223.45',
+        host: '100.127.144.125',
         user: 'root',
         password: rootPass,
         database: 'marketplace_db'

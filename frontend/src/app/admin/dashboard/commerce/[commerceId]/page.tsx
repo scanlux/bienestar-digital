@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { LoadingState, Spinner } from '@/components/Common/UIElements';
+import { LoadingState, Spinner, HeaderBackButton } from '@/components/Common/UIElements';
 import { FloatingSuccessToast, FloatingErrorToast } from '@/components/Common/Toasts';
 import { useToast } from '@/context/ToastContext';
 import { getAuthHeaders } from '@/utils/auth';
@@ -108,11 +108,11 @@ export default function StoresManagementPage({ params }: { params: { commerceId:
 
   return (
     <PageWrapper>
+      <HeaderBackButton onClick={() => router.push('/admin/dashboard/commerce')}>
+        ← Volver
+      </HeaderBackButton>
       <HeaderSection>
         <div>
-          <BackButton onClick={() => router.push('/admin/dashboard/commerce')}>
-            ← Volver a Comercio
-          </BackButton>
           <TitleSection>
             Sedes Físicas <span>Activas</span>
           </TitleSection>
