@@ -3,7 +3,7 @@ const isProd = process.env.NODE_ENV === 'production';
 
 const nextConfig = {
     images: {
-        unoptimized: !isProd,
+        unoptimized: true,
     },
     compiler: {
         styledComponents: true,
@@ -11,3 +11,4 @@ const nextConfig = {
 }
 
 module.exports = nextConfig
+

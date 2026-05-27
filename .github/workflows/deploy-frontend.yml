@@ -1,40 +1,57 @@
-name: Deploy Frontend (Next.js Static)
+name: Deploy Frontend (Docker to GHCR)
 
 on:
   push:
     branches:
       - main
 
+# Permisos requeridos para escribir paquetes en el registro GHCR
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Usar pnpm de forma estricta
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login en GitHub Container Registry (GHCR)
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          version: 9
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      # Generar nombres de tag en minúsculas (requisito de Docker)
+      - name: Extract Metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          node-version: 20
-          cache: 'pnpm'
+          images: ghcr.io/${{ github.repository }}-frontend
 
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
+      # Construcción externa de la Imagen (Segura e Inmutable)
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend # Ubicación del frontend en el repo
+          file: ./frontend/Dockerfile.prod # Especificar Dockerfile.prod del frontend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Build Static HTML
-        # Nota: Asegúrate de tener output: 'export' configurado en tu next.config.js
-        run: pnpm build
-        env:
-          NEXT_PUBLIC_API_URL: 'https://trendy.sytes.net/api' # Cambiar según corresponda
-
-      # Opción 1: Despliegue mediante SSH sobre Tailscale (Recomendado y Seguro)
-      # Para esto, se debe usar la Action oficial de Tailscale para conectar la máquina de GitHub a tu VPN.
+  deploy-to-arm-us:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      # Conectar a la VPN para poder acceder de forma segura a la instancia ARM interna
       - name: Connect to Tailscale VPN
         uses: tailscale/github-action@v2
         with:
@@ -42,16 +59,24 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: Deploy Static Files via Rsync
+      # Notificar y desplegar en la ARM US usando SSH privado sobre la VPN
+      - name: Execute Pull and Restart in ARM US
         run: |
-          # Registrar la llave privada temporalmente para SSH
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.ARM_US_TAILSCALE_IP }}" >> ~/.ssh/known_hosts
           
-          # Escanear el host de la NEW Micro (IP en la VPN de Tailscale o IP Pública)
-          ssh-keyscan -H "${{ secrets.MICRO_TAILSCALE_IP }}" >> ~/.ssh/known_hosts
-          
-          # Transferir los archivos estáticos de Next.js compilados (directorio 'out')
-          # El script setup_new_micro.sh prepara el directorio /var/www/<domain>/html para esto.
-          rsync -avz --delete out/ ${{ secrets.SSH_USER }}@${{ secrets.MICRO_TAILSCALE_IP }}:/var/www/trendy.sytes.net/html/
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.ARM_US_TAILSCALE_IP }} << 'EOF'
+            cd /opt/bienestar
+            
+            # Autenticar Docker contra GHCR para descargar la imagen
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Descargar imagen actualizada y recrear contenedor sin downtime para los otros servicios
+            docker compose pull frontend
+            docker compose up -d frontend
+            
+            # Limpiar imágenes huérfanas
+            docker image prune -f
+          EOF
