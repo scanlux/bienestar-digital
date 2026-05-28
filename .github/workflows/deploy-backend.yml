@@ -17,9 +17,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Copy pnpm-lock.yaml to backend
-        run: cp pnpm-lock.yaml backend/
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -42,7 +39,7 @@ jobs:
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend # Ubicación del backend en el repo
+          context: . # Contexto en la raiz para acceder a workspaces
           file: ./backend/Dockerfile.prod
           push: true
           tags: ${{ steps.meta.outputs.tags }}
