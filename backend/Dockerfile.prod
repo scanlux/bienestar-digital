@@ -4,6 +4,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
+RUN node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json')); delete pkg.scripts.prepare; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2))"
 RUN pnpm install --filter backend --frozen-lockfile --prod
 COPY backend ./backend
 WORKDIR /app/backend
