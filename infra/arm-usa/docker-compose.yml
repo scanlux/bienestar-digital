@@ -25,7 +25,8 @@ services:
       - "127.0.0.1:3306:3306"          # Acceso localhost interno
       - "100.127.144.125:3306:3306" # Acceso seguro de desarrollo local (Tailscale)
     volumes:
-      - db_data:/var/lib/mysql
+      - ./mariadb/data:/var/lib/mysql
+      - ./mariadb/config/my.cnf:/etc/mysql/conf.d/my.cnf:ro
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}
@@ -39,7 +40,6 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
       - "100.127.144.125:6379:6379" # Acceso seguro de desarrollo local (Tailscale)
+    volumes:
+      - ./redis/data:/data
     restart: unless-stopped
-
-volumes:
-  db_data:
