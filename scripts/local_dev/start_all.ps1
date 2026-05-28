@@ -7,9 +7,11 @@
 # El acceso a DB/Redis se hace via Tailscale (IP dinámica leída de backend/.env)
 # Detecta y mata procesos anteriores antes de arrancar.
 
-$ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LOCAL_DEV_DIR = $PSScriptRoot
+$SCRIPTS_DIR = Split-Path -Parent $LOCAL_DEV_DIR
+$ROOT = Split-Path -Parent $SCRIPTS_DIR
 
-$dashScript   = "$ROOT\dashboard_loop.ps1"
+$dashScript   = "$LOCAL_DEV_DIR\dashboard_loop.ps1"
 $backendDir   = "$ROOT\backend"
 $frontendDir  = "$ROOT\frontend"
 

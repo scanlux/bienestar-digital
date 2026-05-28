@@ -1,0 +1,45 @@
+# Solo Backend + DB + Cache. Sin frontend.
+services:
+  backend:
+    image: ghcr.io/scanlux/bienestar-digital-backend:produccion
+    container_name: bienestar-backend
+    ports:
+      - "127.0.0.1:4000:4000"    # Solo accesible via Nginx de la Micro
+    volumes:
+      - ./uploads:/app/uploads    # Persistencia de imagenes
+      - ./data:/app/data          # Persistencia de datos
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=mariadb           # Red interna Docker
+      - REDIS_HOST=redis          # Red interna Docker
+    env_file: .env
+    depends_on:
+      - mariadb
+      - redis
+    restart: unless-stopped
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: bienestar-db
+    ports:
+      - "127.0.0.1:3306:3306"          # Acceso localhost interno
+      - "100.127.144.125:3306:3306" # Acceso seguro de desarrollo local (Tailscale)
+    volumes:
+      - db_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: bienestar-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+      - "100.127.144.125:6379:6379" # Acceso seguro de desarrollo local (Tailscale)
+    restart: unless-stopped
+
+volumes:
+  db_data:

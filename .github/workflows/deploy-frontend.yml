@@ -17,6 +17,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Copy pnpm-lock.yaml to frontend
+        run: cp pnpm-lock.yaml frontend/
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -47,11 +50,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy-to-arm-us:
+  deploy-to-micro-us:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      # Conectar a la VPN para poder acceder de forma segura a la instancia ARM interna
+      # Conectar a la VPN para poder acceder de forma segura a la instancia Micro interna
       - name: Connect to Tailscale VPN
         uses: tailscale/github-action@v2
         with:
@@ -59,15 +62,15 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      # Notificar y desplegar en la ARM US usando SSH privado sobre la VPN
-      - name: Execute Pull and Restart in ARM US
+      # Notificar y desplegar en la Micro US usando SSH privado sobre la VPN
+      - name: Execute Pull and Restart in Micro US
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.ARM_US_TAILSCALE_IP }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "${{ secrets.MICRO_US_TAILSCALE_IP }}" >> ~/.ssh/known_hosts
           
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.ARM_US_TAILSCALE_IP }} << 'EOF'
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.MICRO_US_TAILSCALE_IP }} << 'EOF'
             cd /opt/bienestar
             
             # Autenticar Docker contra GHCR para descargar la imagen

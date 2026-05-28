@@ -33,8 +33,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-const analyzeRoutes = require('./routes/analyze');
-app.use('/api', analyzeRoutes);
 
 const generateRoutes = require('./routes/generate');
 app.use('/api/generate', generateRoutes);

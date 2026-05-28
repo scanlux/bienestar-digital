@@ -1,7 +1,7 @@
 # create_startup_shortcut.ps1
 # Crea un acceso directo en la carpeta Startup de Windows
 
-$SCRIPT_PATH    = "C:\Users\starlux\.gemini\antigravity\scratch\bienestar-digital\start_all.ps1"
+$SCRIPT_PATH    = "C:\Users\starlux\.gemini\antigravity\scratch\bienestar-digital\scripts\local_dev\start_all.ps1"
 $STARTUP_FOLDER = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
 $SHORTCUT_PATH  = "$STARTUP_FOLDER\BienestarDigital-Dev.lnk"
 
@@ -41,4 +41,3 @@ if (Test-Path $SHORTCUT_PATH) {
     Write-Host "ERROR al crear el acceso directo." -ForegroundColor Red
 }
 Write-Host ""
-pause

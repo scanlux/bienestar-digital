@@ -1,0 +1,23 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: bienestar-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/scanlux/bienestar-digital-frontend:produccion
+    container_name: bienestar-frontend
+    expose:
+      - "3000"    # Solo visible dentro de la red interna de Docker para Nginx
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
