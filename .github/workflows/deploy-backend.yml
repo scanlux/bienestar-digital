@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - produccion
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
 
 # Permisos requeridos para escribir paquetes en el registro GHCR
 permissions:

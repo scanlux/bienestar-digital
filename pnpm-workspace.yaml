@@ -1,6 +1,7 @@
 packages:
   - 'frontend'
   - 'backend'
+  - 'telemetry'
 allowBuilds:
   sharp: true
   unrs-resolver: true
