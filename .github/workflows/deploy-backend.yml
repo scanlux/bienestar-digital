@@ -70,7 +70,7 @@ jobs:
       - name: Execute Pull and Restart in ARM US
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY_ARM }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "${{ secrets.ARM_US_TAILSCALE_IP }}" >> ~/.ssh/known_hosts
           
