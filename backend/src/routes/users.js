@@ -1,17 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-
-// Función helper para verificar admin
-const isAdmin = (req, res, next) => {
-  // En producción, esto debería validar el JWT y comprobar que req.user.rol === 'admin'
-  // Por simplicidad en este módulo, lo dejamos pasar si hay cabecera (asumido por Auth middleware previo)
-  next();
-};
+const { auth, adminOnly } = require('../middleware/auth');
+const { logSecurityEvent } = require('../utils/securityLogger');
 
 // @route   GET /api/manage/users
 // @desc    Obtener lista de usuarios y sus permisos (solo admins)
-router.get('/', isAdmin, async (req, res) => {
+router.get('/', auth, adminOnly, async (req, res) => {
   try {
     const [users] = await db.query('SELECT id, email, nombres, apellidos, rol, estado FROM users WHERE rol = "admin" OR rol = "vendor"');
     
@@ -46,7 +41,7 @@ router.get('/', isAdmin, async (req, res) => {
 
 // @route   PUT /api/manage/users/:id/permissions
 // @desc    Actualizar permisos de un usuario
-router.put('/:id/permissions', isAdmin, async (req, res) => {
+router.put('/:id/permissions', auth, adminOnly, async (req, res) => {
   const userId = req.params.id;
   const { permissions } = req.body; // Array de strings (nombres de permisos)
 
@@ -73,6 +68,13 @@ router.put('/:id/permissions', isAdmin, async (req, res) => {
     }
 
     await connection.commit();
+
+    // Registrar evento de seguridad crítico
+    await logSecurityEvent(req.user.id, 'USER_PERMISSIONS_UPDATED', 'HIGH', req, {
+      targetUserId: userId,
+      newPermissions: permissions
+    });
+
     res.json({ message: 'Permisos actualizados exitosamente' });
   } catch (error) {
     await connection.rollback();
@@ -84,3 +86,4 @@ router.put('/:id/permissions', isAdmin, async (req, res) => {
 });
 
 module.exports = router;
+

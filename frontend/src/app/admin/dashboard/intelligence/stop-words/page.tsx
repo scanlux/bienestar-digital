@@ -7,6 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { ActionButton, LoadingState, Spinner, HeaderBackButton } from '@/components/Common/UIElements';
 import { AlertModal } from '@/components/Common/AlertModal';
+import { API_URL } from '@/constants';
+
 
 interface StopWord {
   id: number;
@@ -37,7 +39,7 @@ export default function StopWordsPage() {
 
   const fetchWords = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/manage/intelligence/stop-words`, {
+      const res = await fetch(`${API_URL}/api/manage/intelligence/stop-words`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -56,7 +58,7 @@ export default function StopWordsPage() {
     
     setAdding(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/manage/intelligence/stop-words`, {
+      const res = await fetch(`${API_URL}/api/manage/intelligence/stop-words`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -88,7 +90,7 @@ export default function StopWordsPage() {
 
   const executeDelete = async (id: number, word: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/manage/intelligence/stop-words/${id}`, {
+      const res = await fetch(`${API_URL}/api/manage/intelligence/stop-words/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

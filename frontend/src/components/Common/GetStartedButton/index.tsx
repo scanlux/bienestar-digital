@@ -7,7 +7,7 @@ const GetStartedButton = ({ padding }: { padding: string }) => {
       style={{
         padding: padding,
       }}
-      href="/analyze"
+      href="/login"
     >
       Get Started
     </LinkTo>

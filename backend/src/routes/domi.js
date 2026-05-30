@@ -16,6 +16,7 @@ const router = express.Router();
 const db = require('../config/db');
 const { auth, adminOnly } = require('../middleware/auth');
 const domiEngine = require('../services/domiEngine');
+const { logSecurityEvent } = require('../utils/securityLogger');
 
 // =============================================
 // ENDPOINTS PUBLICOS (solo lectura)
@@ -64,6 +65,54 @@ router.post('/calculate', async (req, res) => {
 // Consultar billetera
 router.get('/wallet/:ownerType/:ownerId', auth, async (req, res) => {
   const { ownerType, ownerId } = req.params;
+
+  // Regla BOLA: Sólo administradores o los autorizados pueden ver la wallet
+  if (req.user.rol !== 'admin') {
+      if (ownerType === 'user') {
+        // Cliente o repartidor sólo pueden ver su propia billetera
+        if (String(req.user.id) !== String(ownerId)) {
+          await logSecurityEvent(req.user.id, 'BOLA_ATTEMPT', 'HIGH', req, {
+            reason: 'Intento de ver billetera ajena de tipo usuario',
+            targetOwnerType: ownerType,
+            targetOwnerId: ownerId
+          });
+          return res.status(403).json({ error: 'Acceso no autorizado. Sólo puedes consultar tu propia billetera.' });
+        }
+      } else if (ownerType === 'store') {
+        // Un administrador de sede debe pertenecer a esa sede
+        const hasAccess = req.user.rol === 'vendor' && req.user.storeIds && req.user.storeIds.includes(parseInt(ownerId));
+        // Un gerente de comercio debe ser el dueño del comercio de la sede
+        let isManager = false;
+        if (req.user.rol === 'vendor' && req.user.commerceId) {
+          try {
+            const [stores] = await db.query('SELECT id FROM stores WHERE id = ? AND commerce_id = ?', [ownerId, req.user.commerceId]);
+            if (stores.length > 0) {
+              isManager = true;
+            }
+          } catch (e) {
+            console.error('Error verifying store manager access:', e);
+          }
+        }
+        
+        if (!hasAccess && !isManager) {
+          await logSecurityEvent(req.user.id, 'BOLA_ATTEMPT', 'HIGH', req, {
+            reason: 'Intento de ver billetera de sede sin autorizacion',
+            targetOwnerType: ownerType,
+            targetOwnerId: ownerId
+          });
+          return res.status(403).json({ error: 'Acceso denegado a la billetera de esta sede.' });
+        }
+      } else {
+        // Billetera del sistema u otras no permitidas para roles no admin
+        await logSecurityEvent(req.user.id, 'BOLA_ATTEMPT', 'HIGH', req, {
+          reason: 'Intento de ver billetera de sistema u otra invalida',
+          targetOwnerType: ownerType,
+          targetOwnerId: ownerId
+        });
+        return res.status(403).json({ error: 'Acceso denegado.' });
+      }
+    }
+
   try {
     const [rows] = await db.query(
       'SELECT id, owner_type, owner_id, balance_custody, balance_utility, locked_balance, created_at, updated_at FROM wallets WHERE owner_type = ? AND owner_id = ?',
@@ -115,10 +164,36 @@ router.post('/mint', auth, adminOnly, async (req, res) => {
 
 // Historial de paquetes de una tienda
 router.get('/packages/:storeId', auth, async (req, res) => {
+  const storeId = req.params.storeId;
+  
+  // Regla BOLA: Sólo administradores, el administrador de la sede o el gerente del comercio dueño de dicha tienda pueden ver esto.
+  if (req.user.rol !== 'admin') {
+    const hasAccess = req.user.rol === 'vendor' && req.user.storeIds && req.user.storeIds.includes(parseInt(storeId));
+    let isManager = false;
+    if (req.user.rol === 'vendor' && req.user.commerceId) {
+      try {
+        const [stores] = await db.query('SELECT id FROM stores WHERE id = ? AND commerce_id = ?', [storeId, req.user.commerceId]);
+        if (stores.length > 0) {
+          isManager = true;
+        }
+      } catch (e) {
+        console.error('Error verifying store manager access for packages:', e);
+      }
+    }
+    
+    if (!hasAccess && !isManager) {
+      await logSecurityEvent(req.user.id, 'BOLA_ATTEMPT', 'HIGH', req, {
+        reason: 'Intento de ver historial de paquetes de sede sin autorizacion',
+        targetStoreId: storeId
+      });
+      return res.status(403).json({ error: 'Acceso denegado al historial de paquetes de esta sede.' });
+    }
+  }
+
   try {
     const [packages] = await db.query(
       'SELECT * FROM domi_packages WHERE store_id = ? ORDER BY created_at DESC',
-      [req.params.storeId]
+      [storeId]
     );
     res.json(packages);
   } catch (error) {

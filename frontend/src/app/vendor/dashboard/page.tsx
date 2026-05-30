@@ -49,16 +49,23 @@ export default function VendorDashboard() {
           <p className="text-white/50 mb-10">Gestiona tu restaurante y activa el &quot;Antojo&quot;.</p>
 
           {/* Quick Actions */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-            {['Nuevos Pedidos', 'Menú', 'Estadísticas', 'Configuración'].map((action, idx) => (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+            {[
+              { label: 'Nuevos Pedidos', onClick: () => {} },
+              { label: 'Menú', onClick: () => {} },
+              { label: 'Sedes Admins', onClick: () => router.push('/vendor/store-admins') },
+              { label: 'Estadísticas', onClick: () => {} },
+              { label: 'Configuración', onClick: () => {} }
+            ].map((action, idx) => (
               <button 
                 key={idx}
+                onClick={action.onClick}
                 className="p-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.05] hover:border-orange-500/30 transition-all flex flex-col items-center justify-center gap-2 group"
               >
                 <div className="w-10 h-10 rounded-full bg-orange-500/10 group-hover:bg-orange-500/20 flex items-center justify-center transition-colors">
                   <div className="w-4 h-4 rounded-full bg-orange-500/50" />
                 </div>
-                <span className="text-sm font-medium text-white/80 group-hover:text-white">{action}</span>
+                <span className="text-sm font-medium text-white/80 group-hover:text-white">{action.label}</span>
               </button>
             ))}
           </div>

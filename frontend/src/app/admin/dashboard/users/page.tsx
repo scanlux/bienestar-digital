@@ -5,8 +5,8 @@ import styled from 'styled-components';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
+import { API_URL } from '@/constants';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://trendy.sytes.net';
 
 const AVAILABLE_PERMISSIONS = [
   { id: 'menu_commerce', label: 'Catálogo de Comercios' },

@@ -6,8 +6,8 @@ import axios from 'axios';
 import { Spinner } from './UIElements';
 import { getAuthToken } from '@/utils/auth';
 import { getFullImageUrl } from '@/utils';
+import { API_URL } from '@/constants';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://trendy.sytes.net';
 
 interface ImageUploadZoneProps {
   onUploadSuccess: (url: string) => void;

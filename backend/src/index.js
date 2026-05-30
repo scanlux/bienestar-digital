@@ -43,11 +43,9 @@ app.use('/api/auth', authRoutes);
 const homeRoutes = require('./routes/home');
 app.use('/api', homeRoutes);
 
-const preguntasRoutes = require('./routes/preguntas');
-app.use('/api/preguntas', preguntasRoutes);
-
 const managementRoutes = require('./routes/management');
 app.use('/api/manage', managementRoutes);
+
 
 const usersRoutes = require('./routes/users');
 app.use('/api/manage/users', usersRoutes);

@@ -10,7 +10,7 @@ router.get('/home', async (req, res) => {
 
     // 2. Fetch products for each commerce (simplified for now)
     const [products] = await db.query(`
-      SELECT p.id, p.commerce_id, p.nombre, p.descripcion_corta, p.precio_base, p.image_url
+      SELECT p.id, p.commerce_id, p.nombre, p.descripcion_larga AS descripcion_corta, p.precio_base, p.image_url
       FROM products p
       WHERE p.disponible = 1
     `);
@@ -28,6 +28,7 @@ router.get('/home', async (req, res) => {
     }));
 
     res.json(results);
+
   } catch (error) {
     console.error('Error fetching home data:', error);
     res.status(500).json({ error: 'Internal Server Error' });

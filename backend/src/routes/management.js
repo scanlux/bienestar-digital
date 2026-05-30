@@ -4,8 +4,228 @@ const db = require('../config/db');
 const { auth, adminOnly } = require('../middleware/auth');
 const { isStoreCurrentlyOpen } = require('../utils/timeUtils');
 
-// Aplicar middleware de administraciÃ³n a todas las rutas de este archivo
+const bcrypt = require('bcryptjs');
+
+// Aplicar middleware de autenticación a todas las rutas de este archivo
 router.use(auth);
+
+// Helper check for Commerce Manager or Admin
+const isCommerceManagerOrAdmin = (req, res, next) => {
+  if (req.user.rol === 'admin' || (req.user.rol === 'vendor' && req.user.commerceId)) {
+    next();
+  } else {
+    res.status(403).json({ error: 'Acceso denegado. Se requiere rol de Administrador o Gerente de Comercio.' });
+  }
+};
+
+// --- ENDPOINTS PARA GERENTE DE COMERCIO Y ADMIN ---
+
+// Obtener mis sedes (las sedes del comercio del gerente o todas si es admin)
+router.get('/my-stores', isCommerceManagerOrAdmin, async (req, res) => {
+  try {
+    let query = 'SELECT * FROM stores';
+    const params = [];
+    
+    if (req.user.rol !== 'admin') {
+      query += ' WHERE commerce_id = ?';
+      params.push(req.user.commerceId);
+    } else if (req.query.commerceId) {
+      query += ' WHERE commerce_id = ?';
+      params.push(req.query.commerceId);
+    }
+    
+    const [stores] = await db.query(query, params);
+    res.json(stores);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener administradores de sede de mi comercio
+router.get('/store-admins', isCommerceManagerOrAdmin, async (req, res) => {
+  try {
+    let query = 'SELECT id, email, nombres, apellidos, celular, rol, estado, commerce_id FROM users WHERE rol = "vendor"';
+    const params = [];
+
+    if (req.user.rol !== 'admin') {
+      query += ' AND commerce_id = ?';
+      params.push(req.user.commerceId);
+    }
+
+    const [users] = await db.query(query, params);
+
+    // Mapear y adjuntar storeIds asignados
+    const mappedAdmins = [];
+    for (const u of users) {
+      if (u.id === req.user.id) continue;
+
+      const [assignedStores] = await db.query('SELECT store_id FROM user_stores WHERE user_id = ?', [u.id]);
+      const storeIds = assignedStores.map(s => s.store_id);
+
+      mappedAdmins.push({
+        id: u.id,
+        email: u.email,
+        nombre: `${u.nombres} ${u.apellidos || ''}`.trim(),
+        nombres: u.nombres,
+        apellidos: u.apellidos,
+        celular: u.celular,
+        rol: u.rol,
+        estado: u.estado,
+        commerce_id: u.commerce_id,
+        storeIds
+      });
+    }
+
+    res.json(mappedAdmins);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Crear administrador de sede
+router.post('/store-admins', isCommerceManagerOrAdmin, async (req, res) => {
+  const { email, password, nombres, apellidos, celular, storeIds } = req.body;
+  let commerce_id = req.user.rol === 'admin' ? req.body.commerce_id : req.user.commerceId;
+
+  if (!email || !password || !nombres || !commerce_id) {
+    return res.status(400).json({ error: 'Email, contraseña, nombres y commerce_id son obligatorios.' });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verificar si el usuario ya existe
+    const [existing] = await connection.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'El correo electrónico ya está registrado.' });
+    }
+
+    // Hash de la contraseña
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Insertar usuario administrador de sede
+    const [result] = await connection.query(
+      'INSERT INTO users (email, password_hash, nombres, apellidos, celular, rol, estado, commerce_id) VALUES (?, ?, ?, ?, ?, "vendor", "activo", ?)',
+      [email, passwordHash, nombres, apellidos || null, celular || null, commerce_id]
+    );
+    const newUserId = result.insertId;
+
+    // Insertar relaciones user_stores
+    if (storeIds && Array.isArray(storeIds) && storeIds.length > 0) {
+      // Validar que las sedes pertenecen al comercio
+      const [validStores] = await connection.query(
+        'SELECT id FROM stores WHERE id IN (?) AND commerce_id = ?',
+        [storeIds, commerce_id]
+      );
+      const validStoreIds = validStores.map(s => s.id);
+
+      if (validStoreIds.length > 0) {
+        const values = validStoreIds.map(sid => [newUserId, sid]);
+        await connection.query('INSERT INTO user_stores (user_id, store_id) VALUES ?', [values]);
+      }
+    }
+
+    await connection.commit();
+    res.status(201).json({ id: newUserId, message: 'Administrador de sede creado con éxito.' });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// Actualizar administrador de sede
+router.put('/store-admins/:id', isCommerceManagerOrAdmin, async (req, res) => {
+  const adminId = req.params.id;
+  const { nombres, apellidos, celular, storeIds, password } = req.body;
+  let commerce_id = req.user.rol === 'admin' ? req.body.commerce_id : req.user.commerceId;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verificar existencia y pertenencia al comercio
+    const [existing] = await connection.query('SELECT id, commerce_id FROM users WHERE id = ? AND rol = "vendor"', [adminId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Administrador de sede no encontrado.' });
+    }
+
+    if (req.user.rol !== 'admin' && existing[0].commerce_id !== req.user.commerceId) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar este administrador.' });
+    }
+
+    // Actualizar datos de usuario
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      await connection.query(
+        'UPDATE users SET nombres = ?, apellidos = ?, celular = ?, password_hash = ? WHERE id = ?',
+        [nombres, apellidos || null, celular || null, passwordHash, adminId]
+      );
+    } else {
+      await connection.query(
+        'UPDATE users SET nombres = ?, apellidos = ?, celular = ? WHERE id = ?',
+        [nombres, apellidos || null, celular || null, adminId]
+      );
+    }
+
+    // Actualizar relaciones user_stores
+    await connection.query('DELETE FROM user_stores WHERE user_id = ?', [adminId]);
+
+    if (storeIds && Array.isArray(storeIds) && storeIds.length > 0) {
+      // Validar que las sedes pertenecen al comercio
+      const targetCommerce = req.user.rol === 'admin' ? existing[0].commerce_id : req.user.commerceId;
+      const [validStores] = await connection.query(
+        'SELECT id FROM stores WHERE id IN (?) AND commerce_id = ?',
+        [storeIds, targetCommerce]
+      );
+      const validStoreIds = validStores.map(s => s.id);
+
+      if (validStoreIds.length > 0) {
+        const values = validStoreIds.map(sid => [adminId, sid]);
+        await connection.query('INSERT INTO user_stores (user_id, store_id) VALUES ?', [values]);
+      }
+    }
+
+    await connection.commit();
+    res.json({ message: 'Administrador de sede actualizado con éxito.' });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// Cambiar estado (activo/inactivo) de un administrador de sede
+router.put('/store-admins/:id/status', isCommerceManagerOrAdmin, async (req, res) => {
+  const adminId = req.params.id;
+  const { estado } = req.body;
+
+  if (!['activo', 'inactivo'].includes(estado)) {
+    return res.status(400).json({ error: 'Estado inválido. Debe ser activo o inactivo.' });
+  }
+
+  try {
+    // Verificar existencia y pertenencia al comercio
+    const [existing] = await db.query('SELECT id, commerce_id FROM users WHERE id = ? AND rol = "vendor"', [adminId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Administrador de sede no encontrado.' });
+    }
+
+    if (req.user.rol !== 'admin' && existing[0].commerce_id !== req.user.commerceId) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar este administrador.' });
+    }
+
+    await db.query('UPDATE users SET estado = ? WHERE id = ?', [estado, adminId]);
+    res.json({ message: `Administrador de sede actualizado a estado: ${estado}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- SECCIÓN ADMIN ONLY ---
 router.use(adminOnly);
 
 // --- CATÁLOGO DE PAGOS ---
@@ -689,6 +909,55 @@ router.post('/store-products', async (req, res) => {
     `, [store_id, product_id, precio_local, tiempo_prep_local, disponible,
         precio_local, tiempo_prep_local, disponible]);
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener logs de auditoría de seguridad (exclusivo para administradores)
+router.get('/security-logs', adminOnly, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const eventType = req.query.eventType;
+    const severity = req.query.severity;
+    
+    let query = `
+      SELECT s.*, u.email as user_email, u.nombres as user_nombre 
+      FROM security_audit_logs s
+      LEFT JOIN users u ON s.user_id = u.id
+    `;
+    const params = [];
+    const conditions = [];
+
+    if (eventType) {
+      conditions.push('s.event_type = ?');
+      params.push(eventType);
+    }
+    if (severity) {
+      conditions.push('s.severity = ?');
+      params.push(severity);
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY s.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const [logs] = await db.query(query, params);
+
+    // Obtener total para paginación
+    let countQuery = 'SELECT COUNT(*) as total FROM security_audit_logs s';
+    const countParams = [];
+    if (conditions.length > 0) {
+      countQuery += ' WHERE ' + conditions.join(' AND ');
+      countParams.push(...params.slice(0, -2)); // excluir limit/offset
+    }
+    const [[{ total }]] = await db.query(countQuery, countParams);
+
+    res.json({ logs, total });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

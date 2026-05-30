@@ -5,6 +5,8 @@ import styled from 'styled-components';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { AlertModal } from '@/components/Common/AlertModal';
+import { API_URL } from '@/constants';
+
 
 interface PopularProduct {
   id: number;
@@ -35,7 +37,7 @@ export default function IntelligencePage() {
 
   const fetchRanking = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/manage/analytics/popularity`, {
+      const res = await fetch(`${API_URL}/api/manage/analytics/popularity`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -55,7 +57,7 @@ export default function IntelligencePage() {
     setUpdating(true);
     setMessage('');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/manage/analytics/trigger`, {
+      const res = await fetch(`${API_URL}/api/manage/analytics/trigger`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -90,7 +92,7 @@ export default function IntelligencePage() {
 
     try {
       while (!finished) {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/manage/intelligence/generate-tags`, {
+        const res = await fetch(`${API_URL}/api/manage/intelligence/generate-tags`, {
           method: 'POST',
           headers: { 
             'Authorization': `Bearer ${token}`,
@@ -163,7 +165,7 @@ export default function IntelligencePage() {
                   <tr key={item.id}>
                     <td>
                       <ProductCell>
-                        <ProductImg src={item.image_url?.startsWith('http') ? item.image_url : `${process.env.NEXT_PUBLIC_API_URL}${item.image_url}`} />
+                        <ProductImg src={item.image_url?.startsWith('http') ? item.image_url : `${API_URL}${item.image_url}`} />
                         <ProductName>{item.nombre}</ProductName>
                       </ProductCell>
                     </td>

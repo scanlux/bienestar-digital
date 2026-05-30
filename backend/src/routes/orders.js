@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const { auth } = require('../middleware/auth');
+const { logSecurityEvent } = require('../utils/securityLogger');
 
 /**
  * @route POST /api/public/orders
  * @desc Crear un nuevo pedido desde la App Móvil
  */
-router.post('/', async (req, res) => {
+router.post('/', auth, async (req, res) => {
   const { 
     store_id, 
     customer_user_id, 
@@ -19,6 +21,15 @@ router.post('/', async (req, res) => {
 
   if (!store_id || !customer_user_id || !total_cop) {
     return res.status(400).json({ error: 'Faltan campos obligatorios (store_id, customer_user_id, total_cop)' });
+  }
+
+  // Regla BOLA: Sólo el propio cliente (o un admin) puede crear un pedido a su nombre
+  if (req.user.rol !== 'admin' && String(req.user.id) !== String(customer_user_id)) {
+    await logSecurityEvent(req.user.id, 'BOLA_ATTEMPT', 'HIGH', req, {
+      reason: 'Intento de crear pedido para otro usuario',
+      targetCustomerUserId: customer_user_id
+    });
+    return res.status(403).json({ error: 'Acceso no autorizado. No puedes crear pedidos para otros usuarios.' });
   }
 
   let connection;
@@ -68,7 +79,18 @@ router.post('/', async (req, res) => {
  * @route GET /api/public/orders/user/:userId
  * @desc Obtener historial de pedidos de un usuario
  */
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId', auth, async (req, res) => {
+  const userId = req.params.userId;
+
+  // Regla BOLA: Sólo el propio cliente (o un admin) puede ver su historial de pedidos
+  if (req.user.rol !== 'admin' && String(req.user.id) !== String(userId)) {
+    await logSecurityEvent(req.user.id, 'BOLA_ATTEMPT', 'HIGH', req, {
+      reason: 'Intento de ver historial de pedidos de otro usuario',
+      targetUserId: userId
+    });
+    return res.status(403).json({ error: 'Acceso no autorizado. Sólo puedes ver tu propio historial de pedidos.' });
+  }
+
   try {
     const [orders] = await db.query(`
       SELECT o.*, s.nombre_sucursal as store_name
@@ -76,7 +98,7 @@ router.get('/user/:userId', async (req, res) => {
       JOIN stores s ON o.store_id = s.id
       WHERE o.customer_user_id = ?
       ORDER BY o.created_at DESC
-    `, [req.params.userId]);
+    `, [userId]);
     res.json(orders);
   } catch (error) {
     res.status(500).json({ error: error.message });
