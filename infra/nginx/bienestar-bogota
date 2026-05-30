@@ -65,6 +65,14 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
+    # Servir imágenes estáticas desde el directorio de subidas
+    location /uploads/ {
+        alias /var/www/bienestar/uploads/;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Access-Control-Allow-Origin *;
+        try_files $uri =404;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:4001;
         proxy_http_version 1.1;

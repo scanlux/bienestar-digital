@@ -106,9 +106,47 @@ router.post('/:entityType', auth, adminOnly, upload.single('image'), async (req,
         console.error('[HACKER_BRIDGE_ERROR] Fallo crítico en SCP:', sshError.message);
       }
     }
+    
+    // --- PRODUCCION: Reenvio de imagen a arm-bogota via API HTTP (Opcion A) ---
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        const fileBuffer = fs.readFileSync(uploadPath);
+        const fileBlob = new Blob([fileBuffer], { type: 'image/webp' });
+        const formData = new FormData();
+        formData.append('image', fileBlob, fileName);
+
+        const mediaServerUrl = process.env.MEDIA_SERVER_URL || 'https://trendy-telemetry.sytes.net';
+        console.log(`[MEDIA_UPLOAD] Enviando ${fileName} a ${mediaServerUrl}...`);
+
+        const response = await fetch(`${mediaServerUrl}/api/media/upload/${entityType}`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': req.header('Authorization') || ''
+          }
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errText}`);
+        }
+
+        const resData = await response.json();
+        if (!resData.success) {
+          throw new Error('Respuesta de éxito falsa desde el servidor de medios');
+        }
+
+        console.log(`[MEDIA_UPLOAD] Sincronización exitosa con servidor de medios para ${fileName}`);
+      } catch (uploadError) {
+        console.error('[MEDIA_UPLOAD_ERROR] Fallo crítico al subir imagen a Bogotá:', uploadError.message);
+        return res.status(500).json({ error: 'Error al sincronizar imagen con el servidor de medios: ' + uploadError.message });
+      }
+    }
 
     // 3. Responder con la URL completa (Siempre Producción)
-    const baseUrl = 'https://trendy.sytes.net';
+    const baseUrl = process.env.NODE_ENV === 'production'
+      ? 'https://trendy-telemetry.sytes.net'
+      : 'https://trendy.sytes.net';
     const absoluteUrl = `${baseUrl}/uploads/${folderName}/${fileName}`;
     
     res.json({

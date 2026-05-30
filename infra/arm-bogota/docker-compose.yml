@@ -8,6 +8,9 @@ services:
       - NODE_ENV=production
       - REDIS_URL=redis://:haspass@redis:6379 # We pass password via requirepass
       - PORT=4001
+      - UPLOAD_DIR=/app/telemetry/uploads
+    volumes:
+      - /var/www/bienestar/uploads:/app/telemetry/uploads
     env_file: .env
     depends_on:
       - redis

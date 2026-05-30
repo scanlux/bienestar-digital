@@ -4,6 +4,9 @@ const { Server } = require('socket.io');
 const { createClient } = require('redis');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 4001;
@@ -14,6 +17,20 @@ if (!JWT_SECRET) {
   console.error('[CRITICAL] JWT_SECRET is not set in environment variables');
   process.exit(1);
 }
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+
+// Ensure uploads directory structure exists
+const ensureUploadDirs = () => {
+  const types = ['stores', 'commerces', 'products'];
+  types.forEach(t => {
+    const dir = path.join(UPLOAD_DIR, t);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+};
+ensureUploadDirs();
 
 // Helper to calculate geographical distance between two coordinates in meters (Haversine formula)
 function getHaversineDistance(lat1, lon1, lat2, lon2) {
@@ -213,7 +230,81 @@ const startServer = async () => {
     });
   });
 
+  // Multer Storage Setup for Media Uploads (saving optimized webp files from USA backend)
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const { entityType } = req.params;
+      const folderName = `${entityType}s`; // stores, commerces, products
+      const dir = path.join(UPLOAD_DIR, folderName);
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const { entityType } = req.params;
+      const ext = path.extname(file.originalname) || '.webp';
+      cb(null, `${entityType}-${Date.now()}${ext}`);
+    }
+  });
+
+  const upload = multer({
+    storage: storage,
+    limits: { fileSize: 15 * 1024 * 1024 }
+  });
+
+  // REST API Auth Middlewares
+  const apiAuth = (req, res, next) => {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Acceso denegado. No se proporcionó un token.' });
+    }
+    try {
+      const verified = jwt.verify(token, JWT_SECRET);
+      req.user = verified;
+      next();
+    } catch (error) {
+      res.status(400).json({ error: 'Token inválido' });
+    }
+  };
+
+  const apiAdminOnly = (req, res, next) => {
+    if (req.user && req.user.rol === 'admin') {
+      next();
+    } else {
+      res.status(403).json({ error: 'Acceso restringido a administradores' });
+    }
+  };
+
   // REST API Endpoints on Telemetry Service
+
+  // Endpoint to upload optimized media files (called by the main backend in USA)
+  app.post('/api/media/upload/:entityType', apiAuth, apiAdminOnly, (req, res) => {
+    const { entityType } = req.params;
+    const allowedTypes = ['store', 'commerce', 'product'];
+
+    if (!allowedTypes.includes(entityType)) {
+      return res.status(400).json({ error: 'Tipo de entidad no válido' });
+    }
+
+    upload.single('image')(req, res, (err) => {
+      if (err) {
+        console.error('[ERROR] Multer upload failed:', err);
+        return res.status(400).json({ error: 'Fallo al subir el archivo: ' + err.message });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+      }
+
+      console.log(`[INFO] Received upload for ${entityType}: ${req.file.filename}`);
+      const folderName = `${entityType}s`;
+      const absoluteUrl = `https://trendy-telemetry.sytes.net/uploads/${folderName}/${req.file.filename}`;
+
+      return res.status(200).json({
+        success: true,
+        filename: req.file.filename,
+        url: absoluteUrl
+      });
+    });
+  });
   
   // Endpoint to register the destination coordinates for an order (called by the main backend in USA)
   app.post('/api/telemetry/order/destination', async (req, res) => {
