@@ -62,20 +62,37 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      # Notificar y desplegar en la Micro US usando SSH privado sobre la VPN
-      - name: Execute Pull and Restart in Micro US
+      # Preparar la llave SSH y verificar conectividad antes de intentar el deploy
+      - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY_MICRO }}" | tr -d '\r' > ~/.ssh/id_rsa
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY_MICRO }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.MICRO_US_TAILSCALE_IP }}" >> ~/.ssh/known_hosts 2>/dev/null
-          
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 ${{ secrets.SSH_USER }}@${{ secrets.MICRO_US_TAILSCALE_IP }} << 'EOF'
-            cd /opt/bienestar
-            
-            # Autenticar Docker contra GHCR para descargar la imagen
-            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Ejecutar actualización segura sin downtime y sin saturar memoria RAM (OOM prevent)
-            nohup sudo bash safe_service_update.sh frontend > resultado_frontend.log 2>&1 &
-          EOF
+          # Verificar que la llave tiene el formato correcto
+          ssh-keygen -l -f ~/.ssh/id_rsa
+
+      - name: Test Tailscale Connectivity to Micro US
+        run: |
+          echo "Verificando conectividad Tailscale hacia ${{ secrets.MICRO_US_TAILSCALE_IP }}..."
+          ping -c 3 "${{ secrets.MICRO_US_TAILSCALE_IP }}" || echo "ADVERTENCIA: ping fallo, intentando SSH de todas formas"
+          ssh-keyscan -H "${{ secrets.MICRO_US_TAILSCALE_IP }}" >> ~/.ssh/known_hosts 2>/dev/null && echo "ssh-keyscan OK" || echo "ssh-keyscan fallo"
+
+      # Desplegar en Micro US via SSH sobre la VPN Tailscale
+      - name: Execute Deploy in Micro US
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          MICRO_IP: ${{ secrets.MICRO_US_TAILSCALE_IP }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh -v \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=30 \
+            -o ServerAliveInterval=10 \
+            -o BatchMode=yes \
+            -i ~/.ssh/id_rsa \
+            "${SSH_USER}@${MICRO_IP}" \
+            "cd /opt/bienestar && \
+             echo '${GITHUB_TOKEN}' | sudo docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin && \
+             nohup sudo bash safe_service_update.sh frontend > resultado_frontend.log 2>&1 & \
+             echo 'Deploy iniciado en background. PID: '\$!"
