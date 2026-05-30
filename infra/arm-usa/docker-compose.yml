@@ -6,7 +6,7 @@ services:
     ports:
       - "10.0.0.39:4000:4000"    # Solo accesible desde la VCN interna (Micro-USA)
     volumes:
-      - ./uploads:/app/uploads    # Persistencia de imagenes
+      - ./uploads:/app/backend/uploads    # Persistencia de imagenes
       - ./data:/app/data          # Persistencia de datos
     environment:
       - NODE_ENV=production
