@@ -1,0 +1,82 @@
+# rt.trendy.sytes.net - Video streaming (HTTP)
+server {
+    listen 80;
+    server_name rt.trendy.sytes.net;
+
+    # Servir archivos estáticos de video directo desde disco usando sendfile
+    location /videos/ {
+        alias /var/www/bienestar/videos/uploads/;
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types {
+            video/mp4 mp4;
+            application/x-mpegURL m3u8;
+            video/MP2T ts;
+        }
+        add_header Cache-Control "public, max-age=86400";
+        add_header Access-Control-Allow-Origin *;
+    }
+
+    # Proxy reverso para API y WebSockets a PM2 (puerto 4000)
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        
+        # Soporte para WebSockets (Mínima Latencia)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts largos para mantener websockets abiertos
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+
+# trendy-telemetry.sytes.net - Redirect HTTP to HTTPS
+server {
+    listen 80;
+    server_name trendy-telemetry.sytes.net;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# trendy-telemetry.sytes.net - Telemetry SSL termination
+server {
+    listen 443 ssl;
+    server_name trendy-telemetry.sytes.net;
+
+    ssl_certificate /etc/letsencrypt/live/trendy-telemetry.sytes.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/trendy-telemetry.sytes.net/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    location / {
+        proxy_pass http://127.0.0.1:4001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket long-lived connections timeouts (24 hours)
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}

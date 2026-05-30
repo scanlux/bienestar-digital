@@ -15,6 +15,22 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
+// Helper to calculate geographical distance between two coordinates in meters (Haversine formula)
+function getHaversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth radius in meters
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+            Math.cos(phi1) * Math.cos(phi2) *
+            Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+}
+
 // 1. Initialize Express and HTTP Server
 const app = express();
 app.use(express.json());
@@ -117,6 +133,48 @@ const startServer = async () => {
               longitude: lonNum,
               timestamp: Date.now()
             });
+
+            // 4. Calculate distance to destination and trigger proximity alert if within 15 meters
+            let destLat = null;
+            let destLon = null;
+
+            // Check if destination coordinates were passed in the update payload
+            if (data.destLatitude !== undefined && data.destLongitude !== undefined) {
+              destLat = parseFloat(data.destLatitude);
+              destLon = parseFloat(data.destLongitude);
+            } else {
+              // Otherwise, attempt to load them from Redis (previously registered by the main backend)
+              const destKey = `order:destination:${orderId}`;
+              const destData = await pubClient.hGetAll(destKey);
+              if (destData && destData.latitude && destData.longitude) {
+                destLat = parseFloat(destData.latitude);
+                destLon = parseFloat(destData.longitude);
+              }
+            }
+
+            if (destLat !== null && destLon !== null && !isNaN(destLat) && !isNaN(destLon)) {
+              const distanceMeters = getHaversineDistance(latNum, lonNum, destLat, destLon);
+              console.log(`[INFO] Proximity check for Order ${orderId}: Driver is ${distanceMeters.toFixed(2)}m away from destination`);
+
+              if (distanceMeters <= 15) {
+                const notifiedKey = `order:notified:${orderId}`;
+                const alreadyNotified = await pubClient.get(notifiedKey);
+
+                if (!alreadyNotified) {
+                  // Mark as notified in Redis with a 5-minute TTL to avoid duplicate alerts
+                  await pubClient.set(notifiedKey, '1', { EX: 300 });
+
+                  // Emit proximity alert to client/room
+                  console.log(`[TRIGGER] Proximity alert: Driver ${userId} is arriving for Order ${orderId}!`);
+                  trackingNamespace.to(`order:${orderId}`).emit('order:proximity', {
+                    orderId,
+                    driverId: userId,
+                    distanceMeters,
+                    message: 'Está llegando tu Domi'
+                  });
+                }
+              }
+            }
           }
 
           // Also broadcast to the driver's specific monitors (if any)
@@ -157,6 +215,38 @@ const startServer = async () => {
 
   // REST API Endpoints on Telemetry Service
   
+  // Endpoint to register the destination coordinates for an order (called by the main backend in USA)
+  app.post('/api/telemetry/order/destination', async (req, res) => {
+    const { orderId, latitude, longitude } = req.body;
+
+    if (!orderId || latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ error: 'Missing orderId, latitude, or longitude' });
+    }
+
+    const latNum = parseFloat(latitude);
+    const lonNum = parseFloat(longitude);
+
+    if (isNaN(latNum) || isNaN(lonNum)) {
+      return res.status(400).json({ error: 'Invalid coordinates' });
+    }
+
+    try {
+      const destKey = `order:destination:${orderId}`;
+      await pubClient.hSet(destKey, {
+        latitude: String(latNum),
+        longitude: String(lonNum)
+      });
+      // Expire coordinates after 2 hours
+      await pubClient.expire(destKey, 7200);
+
+      console.log(`[INFO] Registered destination for order ${orderId}: (${latNum}, ${lonNum})`);
+      return res.status(200).json({ success: true, message: 'Destination registered successfully' });
+    } catch (err) {
+      console.error(`[ERROR] Failed to save destination for order ${orderId}:`, err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // Endpoint to get a driver's current position (called by the main backend in USA)
   app.get('/api/telemetry/driver/:driverId', async (req, res) => {
     const { driverId } = req.params;
