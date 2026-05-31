@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+// Trigger deploy to production Micro-USA (Tailscale ACL update)
 const isProd = process.env.NODE_ENV === 'production';
 
 const nextConfig = {
