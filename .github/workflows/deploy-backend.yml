@@ -109,7 +109,7 @@ jobs:
               "cat /tmp/.ghcr_token | sudo docker login ghcr.io -u '${DEPLOY_ACTOR}' --password-stdin && \
                rm -f /tmp/.ghcr_token && \
                cd /opt/bienestar && \
-               nohup sudo bash safe_service_update.sh backend > resultado_backend.log 2>&1 & \
+               nohup sudo bash safe_service_update.sh backend > /home/ubuntu/resultado_backend.log 2>&1 & \
                echo 'Deploy backend iniciado en background. PID: '\$!"
 
           # Limpiar archivo local
