@@ -1,8 +1,8 @@
-# Etapa 1 (builder): Corre nativamente en x86 del runner de GitHub (sin emulacion QEMU).
-# Instala dependencias en la arquitectura nativa para evitar el crash "Illegal instruction".
+# Etapa 1 (builder): Corre en la plataforma destino (ARM64) para instalar
+# las dependencias nativas correctas.
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
-FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
