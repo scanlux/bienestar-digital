@@ -1,4 +1,4 @@
-// Trigger deploy to production ARM-Bogota (Tailscale ACL update and safety verification)
+// Trigger deploy to production ARM-Bogota (UFW-Docker integration applied)
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');

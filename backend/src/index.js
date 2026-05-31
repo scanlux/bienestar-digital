@@ -1,4 +1,4 @@
-// Trigger deploy to production ARM-USA (Tailscale ACL update and safety verification)
+// Trigger deploy to production ARM-USA (UFW-Docker integration applied)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
