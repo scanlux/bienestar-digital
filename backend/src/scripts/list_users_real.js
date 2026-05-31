@@ -12,7 +12,7 @@ async function listUsers() {
   console.log(`Conectando a ${config.host} como ${config.user}...`);
   try {
     const connection = await mysql.createConnection(config);
-    const [rows] = await connection.execute('SELECT id, nombre, email, rol, permissions FROM users');
+    const [rows] = await connection.execute('SELECT id, nombres, email, rol, estado, commerce_id FROM users');
     console.log('--- USERS LIST ---');
     console.log(JSON.stringify(rows, null, 2));
     console.log('------------------');

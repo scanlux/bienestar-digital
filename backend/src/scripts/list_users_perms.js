@@ -12,7 +12,7 @@ async function listUsersAndPermissions() {
   try {
     const connection = await mysql.createConnection(config);
     
-    const [users] = await connection.execute('SELECT id, nombre, email, rol FROM users');
+    const [users] = await connection.execute('SELECT id, nombres, email, rol FROM users');
     const [perms] = await connection.execute('SELECT user_id, permission_id FROM user_permissions');
     
     // Agrupar permisos por usuario
