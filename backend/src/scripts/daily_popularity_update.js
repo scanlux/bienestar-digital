@@ -28,11 +28,11 @@ async function updatePopularity() {
     }
 
     await connection.commit();
-    console.log('✅ Popularidad actualizada correctamente.');
+    console.log('SUCCESS: Popularidad actualizada correctamente.');
     process.exit(0);
   } catch (err) {
     if (connection) await connection.rollback();
-    console.error('❌ Error actualizando popularidad:', err);
+    console.error('ERROR: Error actualizando popularidad:', err);
     process.exit(1);
   } finally {
     if (connection) connection.release();

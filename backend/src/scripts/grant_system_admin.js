@@ -1,11 +1,12 @@
+require('dotenv').config();
 const mysql = require('mysql2/promise');
 
 async function grantAllPermissions() {
   const config = {
-    host: '100.127.144.125',
+    host: process.env.DB_HOST || '100.127.144.125',
     user: 'root',
-    password: 'Kh#azr9b!yvP27_mQ*rT5x', // Contraseña proporcionada por el usuario
-    database: 'marketplace_db'
+    password: process.env.DB_ROOT_PASSWORD,
+    database: process.env.DB_NAME || 'marketplace_db'
   };
 
   const userId = 10; // system@trendy.com
@@ -27,11 +28,11 @@ async function grantAllPermissions() {
       );
     }
 
-    console.log('✅ Todos los permisos (Super Admin) han sido otorgados con éxito.');
+    console.log('SUCCESS: Todos los permisos (Super Admin) han sido otorgados con éxito.');
     
     await connection.end();
   } catch (error) {
-    console.error('❌ Error al otorgar permisos:', error.message);
+    console.error('ERROR al otorgar permisos:', error.message);
   }
 }
 

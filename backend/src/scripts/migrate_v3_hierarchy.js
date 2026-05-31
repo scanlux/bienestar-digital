@@ -2,17 +2,17 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 
 async function runMigration() {
-  console.log('🚀 Iniciando migración de base de datos como "root"...');
+  console.log('Iniciando migracion de base de datos como "root"...');
   let conn;
   try {
     conn = await mysql.createConnection({
       host: process.env.DB_HOST || '100.127.144.125',
       user: 'root',
-      password: '7hda}rGb_yuX2@pL9*qN4!zB1vM8',
+      password: process.env.DB_ROOT_PASSWORD,
       database: process.env.DB_NAME || 'marketplace_db'
     });
     
-    console.log('✅ Conexión establecida como root. Aplicando cambios estructurales...');
+    console.log('Conexion establecida como root. Aplicando cambios estructurales...');
 
     console.log('[1/4] Agregando campos de gerencia a la tabla "commerces"...');
     try {
@@ -70,9 +70,9 @@ async function runMigration() {
       console.warn('  - Advertencia al otorgar permisos:', e.message);
     }
     
-    console.log('✅ ¡Migración aplicada con éxito!');
+    console.log('Migracion aplicada con exito!');
   } catch (error) {
-    console.error('❌ Error ejecutando migración:', error.message);
+    console.error('Error ejecutando migracion:', error.message);
   } finally {
     if (conn) await conn.end();
     process.exit(0);

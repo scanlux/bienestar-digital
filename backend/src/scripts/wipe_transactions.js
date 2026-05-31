@@ -4,22 +4,22 @@ const path = require('path');
 require('dotenv').config({ path: __dirname + '/../../.env' });
 
 async function wipe() {
-  console.log('🔴 INICIANDO PURGA TRANSACCIONAL (MODO BYPASS)...');
+  console.log('START: INICIANDO PURGA TRANSACCIONAL (MODO BYPASS)...');
   
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST,
+    host: process.env.DB_HOST || 'localhost',
     user: 'root', 
-    password: 'Kh#azr9b!yvP27_mQ*rT5x',
-    database: process.env.DB_NAME,
+    password: process.env.DB_ROOT_PASSWORD,
+    database: process.env.DB_NAME || 'bienestar',
     multipleStatements: true
   });
 
   try {
-    console.log('🔓 Activando bypass de seguridad por sesión...');
+    console.log('BYPASS: Activando bypass de seguridad por sesion...');
     await connection.query('SET @domi_bypass_security = 1;');
     await connection.query('SET FOREIGN_KEY_CHECKS = 0;');
 
-    console.log('🧹 Vaciando tablas transaccionales...');
+    console.log('CLEAN: Vaciando tablas transaccionales...');
     const tablesToTruncate = [
       'order_items',
       'orders',
@@ -35,10 +35,10 @@ async function wipe() {
       console.log(`  - ${table} vaciada.`);
     }
 
-    console.log('💸 Reiniciando saldos de Billeteras a 0...');
+    console.log('RESET: Reiniciando saldos de Billeteras a 0...');
     await connection.query('UPDATE wallets SET balance_custody = 0, balance_utility = 0;');
 
-    console.log('🛡️ Verificando y Restaurando Triggers de Inmutabilidad...');
+    console.log('SECURITY: Verificando y Restaurando Triggers de Inmutabilidad...');
     const triggersPath = path.join(__dirname, '../../scripts/db_security/04_create_triggers.sql');
     if (fs.existsSync(triggersPath)) {
       const triggersSql = fs.readFileSync(triggersPath, 'utf8');
@@ -56,11 +56,11 @@ async function wipe() {
       console.log('  - Triggers restaurados.');
     }
 
-    console.log('🔒 Desactivando bypass y reactivando FK...');
+    console.log('LOCK: Desactivando bypass y reactivando FK...');
     await connection.query('SET @domi_bypass_security = NULL;');
     await connection.query('SET FOREIGN_KEY_CHECKS = 1;');
 
-    console.log('\n🔍 VALIDANDO INTEGRIDAD POST-PURGA...');
+    console.log('\nVALIDATION: VALIDANDO INTEGRIDAD POST-PURGA...');
     
     // 1. Validar Triggers
     const [triggers] = await connection.query(`
@@ -70,23 +70,23 @@ async function wipe() {
     
     console.log(`  - Triggers activos: ${triggers.length} de 6 esperados.`);
     if (triggers.length < 6) {
-      console.warn('  ⚠️ ATENCIÓN: Faltan triggers de seguridad. Ejecute scripts/db_security/restore_security.sh');
+      console.warn('  WARNING: Faltan triggers de seguridad. Ejecute scripts/db_security/restore_security.sh');
     }
 
     // 2. Validar Tablas Vacías
     for (const table of tablesToTruncate) {
       const [[{ count }]] = await connection.query(`SELECT COUNT(*) as count FROM ${table}`);
       if (count > 0) {
-        console.error(`  ❌ ERROR: La tabla ${table} no se vació (registros: ${count})`);
+        console.error(`  ERROR: La tabla ${table} no se vacio (registros: ${count})`);
       } else {
-        console.log(`  - Tabla ${table}: OK (Vacía)`);
+        console.log(`  - Tabla ${table}: OK (Vacia)`);
       }
     }
 
-    console.log('\n✅ RESULTADO: Purga exitosa y validada. Sistema listo.');
+    console.log('\nSUCCESS: Purga exitosa y validada. Sistema listo.');
 
   } catch (err) {
-    console.error('❌ FALLO CRÍTICO EN LA PURGA:', err);
+    console.error('ERROR: FALLO CRITICO EN LA PURGA:', err);
     process.exit(1);
   } finally {
     await connection.end();

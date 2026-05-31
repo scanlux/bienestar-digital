@@ -13,22 +13,22 @@ async function check() {
     try {
         const [columns] = await connection.query('SHOW COLUMNS FROM commerces LIKE "nit_dv"');
         if (columns.length > 0) {
-            console.log('✅ La columna nit_dv EXISTE.');
+            console.log('SUCCESS: La columna nit_dv EXISTE.');
             console.log('Detalles:', columns[0]);
         } else {
-            console.log('❌ La columna nit_dv NO EXISTE.');
+            console.log('ERROR: La columna nit_dv NO EXISTE.');
         }
 
         console.log('\n--- Verificando usuario bienestar_deployer ---');
         try {
             const [users] = await connection.query("SELECT User FROM mysql.user WHERE User = 'bienestar_deployer'");
             if (users.length > 0) {
-                console.log('✅ El usuario bienestar_deployer EXISTE.');
+                console.log('SUCCESS: El usuario bienestar_deployer EXISTE.');
             } else {
-                console.log('❌ El usuario bienestar_deployer NO EXISTE.');
+                console.log('ERROR: El usuario bienestar_deployer NO EXISTE.');
             }
         } catch (e) {
-            console.log('⚠️ No se pudo verificar mysql.user (probablemente falta de permisos), pero intentaremos conectarnos como deployer.');
+            console.log('WARNING: No se pudo verificar mysql.user (probablemente falta de permisos), pero intentaremos conectarnos como deployer.');
         }
 
         await connection.end();

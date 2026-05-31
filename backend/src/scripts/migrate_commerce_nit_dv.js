@@ -6,7 +6,7 @@ async function migrate() {
     const connection = await mysql.createConnection({
         host: process.env.DB_HOST,
         user: 'bienestar_deployer',
-        password: 'D3pl0y3r_2026_Secure',
+        password: process.env.DB_DEPLOYER_PASSWORD,
         database: process.env.DB_NAME
     });
     

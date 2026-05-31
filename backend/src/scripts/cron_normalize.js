@@ -5,12 +5,12 @@ async function run() {
   let connection;
   try {
     connection = await db.getConnection();
-    console.log('🔄 Iniciando Normalización Completa del Catálogo...');
+    console.log('Iniciando Normalizacion Completa del Catalogo...');
 
     // 1. Obtener la lista negra (stop_words) actualizada desde la DB
     const [stopWordsRows] = await connection.query('SELECT word FROM stop_words');
     const stopWordsList = stopWordsRows.map(r => r.word);
-    console.log(`📋 Lista negra cargada: ${stopWordsList.length} palabras.`);
+    console.log(`Lista negra cargada: ${stopWordsList.length} palabras.`);
 
     // 2. Obtener todos los productos con sus relaciones completas
     const [products] = await connection.query(`
@@ -23,7 +23,7 @@ async function run() {
       LEFT JOIN commerces com ON p.commerce_id = com.id
     `);
 
-    console.log(`📦 Procesando ${products.length} productos...`);
+    console.log(`Procesando ${products.length} productos...`);
 
     let updatedCount = 0;
     
@@ -49,10 +49,10 @@ async function run() {
       }
     }
 
-    console.log(`✅ Normalización completada con éxito. Se actualizaron los tags de ${updatedCount} productos.`);
+    console.log(`SUCCESS: Normalizacion completada con exito. Se actualizaron los tags de ${updatedCount} productos.`);
     process.exit(0);
   } catch (err) {
-    console.error('❌ Error en la normalización:', err);
+    console.error('ERROR: Error en la normalizacion:', err);
     process.exit(1);
   } finally {
     if (connection) connection.release();
