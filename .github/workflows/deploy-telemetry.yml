@@ -9,7 +9,7 @@ on:
       - 'infra/arm-bogota/**'
       - '.github/workflows/deploy-telemetry.yml'
 
-# Permissions required to publish to GHCR
+# Permisos requeridos para publicar en GHCR
 permissions:
   contents: read
   packages: write
@@ -34,7 +34,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Generate lowercase tag name
+      # Generar nombres de tag en minusculas
       - name: Extract Metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -44,7 +44,7 @@ jobs:
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: . # Context in root to access monorepo packages
+          context: .
           file: ./telemetry/Dockerfile
           platforms: linux/arm64
           push: true
@@ -57,7 +57,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      # Connect to Tailscale VPN to access the regional ARM-Bogota instance internally
+      # Conectar a la VPN para acceder a la instancia ARM-Bogota
       - name: Connect to Tailscale VPN
         uses: tailscale/github-action@v2
         with:
@@ -65,29 +65,58 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      # Deploy using SSH over private Tailscale IP
-      - name: Execute Pull and Restart in ARM Bogota
+      # Preparar la llave SSH y verificar formato
+      - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY_BOGOTA }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}" >> ~/.ssh/known_hosts
-          
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.ARM_BOGOTA_TAILSCALE_IP }} << 'EOF'
-            mkdir -p /opt/bienestar
-            cd /opt/bienestar
-            
-            # Authenticate Docker to pull private GHCR images
-            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Pull new image and restart the telemetry service without shutting down database/redis
-            # (Matches safe update pattern to protect RAM on OCI instances)
-            if [ -f "docker-compose.yml" ]; then
-              sudo docker compose pull telemetry
-              sudo docker compose up -d --no-deps telemetry
-              sudo docker image prune -f
-            else
-              echo "[WARN] docker-compose.yml not found in /opt/bienestar. Telemetry deployment skipped."
-              exit 1
-            fi
-          EOF
+          ssh-keygen -l -f ~/.ssh/id_rsa
+          echo "Llave SSH configurada correctamente."
+
+      # Registrar la huella del servidor y verificar conectividad
+      - name: Verify Tailscale Connectivity
+        run: |
+          echo "Verificando conectividad Tailscale hacia ARM-Bogota..."
+          ping -c 3 "${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}" || echo "ADVERTENCIA: ping fallo, intentando SSH de todas formas"
+          ssh-keyscan -H "${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}" >> ~/.ssh/known_hosts 2>/dev/null && echo "Host key registrado OK" || echo "ssh-keyscan fallo"
+
+      # Desplegar en ARM Bogota via SSH sobre la VPN Tailscale
+      - name: Execute Deploy in ARM Bogota
+        env:
+          DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+        run: |
+          # Escribir el token en un archivo temporal (evita fugas en logs)
+          TOKEN_FILE=$(mktemp)
+          printf '%s' "${DEPLOY_TOKEN}" > "${TOKEN_FILE}"
+
+          # Copiar el archivo de token al servidor de forma segura
+          scp -o BatchMode=yes \
+              -o ConnectTimeout=30 \
+              -i ~/.ssh/id_rsa \
+              "${TOKEN_FILE}" \
+              "${{ secrets.SSH_USER }}@${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}:/tmp/.ghcr_token"
+
+          # Ejecutar deploy remoto
+          ssh -o BatchMode=yes \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=10 \
+              -i ~/.ssh/id_rsa \
+              "${{ secrets.SSH_USER }}@${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}" \
+              "cat /tmp/.ghcr_token | sudo docker login ghcr.io -u '${DEPLOY_ACTOR}' --password-stdin && \
+               rm -f /tmp/.ghcr_token && \
+               cd /opt/bienestar && \
+               if [ -f docker-compose.yml ]; then \
+                 sudo docker compose pull telemetry && \
+                 sudo docker compose up -d --no-deps telemetry && \
+                 sudo docker image prune -f && \
+                 echo 'Deploy telemetry completado.'; \
+               else \
+                 echo '[ERROR] docker-compose.yml no encontrado en /opt/bienestar'; \
+                 exit 1; \
+               fi"
+
+          # Limpiar archivo local
+          rm -f "${TOKEN_FILE}"
