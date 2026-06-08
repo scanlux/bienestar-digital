@@ -1,12 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import styled from 'styled-components';
-import { motion, AnimatePresence } from 'framer-motion';
+import styled, { keyframes } from 'styled-components';
 import axios from 'axios';
 import { getAuthHeaders } from '@/utils/auth';
-
-const API_URL = 'https://trendy.sytes.net/api/manage';
+import { API_URL } from '@/constants';
 
 interface Stats {
   activeCommerces: number;
@@ -16,12 +14,15 @@ interface Stats {
   totalOrders: number;
 }
 
-interface CommerceRequest {
+interface RegistrationRequest {
   id: number;
-  nombre: string;
-  descripcion: string;
-  logo_url: string;
-  type: string;
+  tipo_solicitud: 'commerce' | 'delivery_company';
+  nit: string;
+  razon_social: string;
+  email_contacto: string;
+  nombres_contacto: string;
+  apellidos_contacto: string;
+  celular_contacto: string;
   created_at?: string;
 }
 
@@ -33,17 +34,18 @@ export default function AdminDashboard() {
     totalProducts: 0,
     totalOrders: 0
   });
-  const [requests, setRequests] = useState<CommerceRequest[]>([]);
+  const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'requests' | 'activity'>('requests');
+  const [processingId, setProcessingId] = useState<number | null>(null);
 
   const fetchData = async () => {
     try {
       const headers = getAuthHeaders();
       
       const [statsRes, requestsRes] = await Promise.all([
-        axios.get(`${API_URL}/stats`, { headers }),
-        axios.get(`${API_URL}/commerces?status=pending`, { headers })
+        axios.get(`${API_URL}/api/manage/stats`, { headers }),
+        axios.get(`${API_URL}/api/manage/requests?estado=pendiente`, { headers })
       ]);
 
       setStats(statsRes.data);
@@ -59,14 +61,26 @@ export default function AdminDashboard() {
     fetchData();
   }, []);
 
-  const handleAction = async (id: number, status: 'active' | 'rejected') => {
+  const handleAction = async (id: number, action: 'approve' | 'reject') => {
+    const confirmMsg = action === 'approve' 
+      ? '¿Estás seguro de que deseas aprobar esta solicitud? Se creará la cuenta y entidad correspondientes.' 
+      : '¿Estás seguro de que deseas rechazar esta solicitud?';
+    if (!confirm(confirmMsg)) return;
+
+    setProcessingId(id);
     try {
-      await axios.patch(`${API_URL}/commerces/${id}/status`, { status }, {
-        headers: getAuthHeaders()
-      });
+      const headers = getAuthHeaders();
+      if (action === 'approve') {
+        await axios.post(`${API_URL}/api/manage/requests/${id}/approve`, {}, { headers });
+      } else {
+        await axios.post(`${API_URL}/api/manage/requests/${id}/reject`, { notas_system: 'Rechazado por administración matriz.' }, { headers });
+      }
+      alert(action === 'approve' ? 'Solicitud aprobada con éxito.' : 'Solicitud rechazada con éxito.');
       fetchData();
-    } catch (error) {
-      alert('Error al procesar la solicitud');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al procesar la solicitud');
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -81,10 +95,7 @@ export default function AdminDashboard() {
 
   return (
     <Container>
-      <HeaderSection
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <HeaderSection>
         <div className="title-group">
           <p className="subtitle">Resumen General —</p>
           <h1 className="title">Estado de la Plataforma</h1>
@@ -96,11 +107,7 @@ export default function AdminDashboard() {
 
       {/* KPI Grid */}
       <KpiGrid>
-        <KpiCard
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-        >
+        <KpiCard>
           <div className="icon">🏪</div>
           <div className="data">
             <span className="label">Comercios Activos</span>
@@ -109,12 +116,7 @@ export default function AdminDashboard() {
           <div className="progress-bg"><div className="progress-bar" style={{ width: '75%' }} /></div>
         </KpiCard>
 
-        <KpiCard
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          className="accent"
-        >
+        <KpiCard className="accent">
           <div className="icon">✦</div>
           <div className="data">
             <span className="label">Solicitudes</span>
@@ -123,11 +125,7 @@ export default function AdminDashboard() {
           <div className="tag">PENDIENTES</div>
         </KpiCard>
 
-        <KpiCard
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3 }}
-        >
+        <KpiCard>
           <div className="icon">🥡</div>
           <div className="data">
             <span className="label">Sedes Totales</span>
@@ -135,11 +133,7 @@ export default function AdminDashboard() {
           </div>
         </KpiCard>
 
-        <KpiCard
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.4 }}
-        >
+        <KpiCard>
           <div className="icon">🍔</div>
           <div className="data">
             <span className="label">Productos</span>
@@ -150,17 +144,13 @@ export default function AdminDashboard() {
 
       <MainGrid>
         {/* Management Panel */}
-        <Panel
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
+        <Panel>
           <PanelTabs>
             <Tab 
               $active={activeTab === 'requests'} 
               onClick={() => setActiveTab('requests')}
             >
-              Control de Solicitudes
+              Control de Solicitudes de Registro
               {requests.length > 0 && <span className="count">{requests.length}</span>}
             </Tab>
             <Tab 
@@ -172,63 +162,63 @@ export default function AdminDashboard() {
           </PanelTabs>
 
           <PanelContent>
-            <AnimatePresence mode="wait">
-              {activeTab === 'requests' ? (
-                <RequestList
-                  key="req-list"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                >
-                  {requests.length === 0 ? (
-                    <EmptyState>
-                      <span className="e-icon">✔</span>
-                      <p>Todo al día. No hay solicitudes pendientes.</p>
-                    </EmptyState>
-                  ) : (
-                    requests.map((req) => (
-                      <RequestItem key={req.id}>
-                        <div className="b-info">
-                          <div className="b-logo">
-                            {req.logo_url ? <img src={req.logo_url} alt="" /> : '🏪'}
-                          </div>
-                          <div className="b-text">
-                            <p className="b-name">{req.nombre}</p>
-                            <p className="b-desc">{req.descripcion?.substring(0, 80)}...</p>
-                          </div>
+            {activeTab === 'requests' ? (
+              <RequestList>
+                {requests.length === 0 ? (
+                  <EmptyState>
+                    <span className="e-icon">✔</span>
+                    <p>Todo al día. No hay solicitudes de registro pendientes.</p>
+                  </EmptyState>
+                ) : (
+                  requests.map((req) => (
+                    <RequestItem key={req.id}>
+                      <div className="b-info">
+                        <div className="b-logo">
+                          {req.tipo_solicitud === 'commerce' ? '🏪' : '🛵'}
                         </div>
-                        <div className="b-actions">
-                           <ActionBtn $variant="approve" onClick={() => handleAction(req.id, 'active')}>
-                             Aprobar
-                           </ActionBtn>
-                           <ActionBtn $variant="reject" onClick={() => handleAction(req.id, 'rejected')}>
-                             Rechazar
-                           </ActionBtn>
+                        <div className="b-text">
+                          <div className="b-name-row">
+                            <p className="b-name">{req.razon_social}</p>
+                            <TypeBadge className={req.tipo_solicitud}>
+                              {req.tipo_solicitud === 'commerce' ? 'Comercio' : 'Mensajería'}
+                            </TypeBadge>
+                          </div>
+                          <p className="b-desc">
+                            NIT: {req.nit} | Contacto: {req.nombres_contacto} {req.apellidos_contacto}
+                          </p>
+                          <p className="b-contact-info">
+                            Correo: {req.email_contacto} | Celular: {req.celular_contacto}
+                          </p>
                         </div>
-                      </RequestItem>
-                    ))
-                  )}
-                </RequestList>
-              ) : (
-                <motion.div
-                  key="act-list"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                >
-                  <EmptyState>Registro de actividad temporalmente deshabilitado.</EmptyState>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                      </div>
+                      <div className="b-actions">
+                         <ActionBtn 
+                           $variant="approve" 
+                           onClick={() => handleAction(req.id, 'approve')}
+                           disabled={processingId === req.id}
+                         >
+                           Aprobar
+                         </ActionBtn>
+                         <ActionBtn 
+                           $variant="reject" 
+                           onClick={() => handleAction(req.id, 'reject')}
+                           disabled={processingId === req.id}
+                         >
+                           Rechazar
+                         </ActionBtn>
+                      </div>
+                    </RequestItem>
+                  ))
+                )}
+              </RequestList>
+            ) : (
+              <EmptyState>Registro de actividad de sistema temporalmente deshabilitado.</EmptyState>
+            )}
           </PanelContent>
         </Panel>
 
         {/* Sidebar Mini Tools */}
-        <SidebarTools
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.6 }}
-        >
+        <SidebarTools>
           <ToolBox>
             <h3>Acciones Rápidas</h3>
             <ToolBtn onClick={() => fetchData()}>
@@ -255,14 +245,21 @@ export default function AdminDashboard() {
   );
 }
 
-// Styled Components
+// ------------- ANIMACIONES NATIVAS CSS -------------
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+// ------------- STYLED COMPONENTS -------------
 const Container = styled.div`
   display: flex;
   flex-direction: column;
   gap: 32px;
+  animation: ${fadeIn} 0.5s ease-out forwards;
 `;
 
-const HeaderSection = styled(motion.div)`
+const HeaderSection = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -299,7 +296,7 @@ const KpiGrid = styled.div`
   gap: 20px;
 `;
 
-const KpiCard = styled(motion.div)`
+const KpiCard = styled.div`
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
   padding: 24px;
@@ -365,7 +362,7 @@ const MainGrid = styled.div`
   @media (max-width: 1100px) { grid-template-columns: 1fr; }
 `;
 
-const Panel = styled(motion.div)`
+const Panel = styled.div`
   background: rgba(255, 255, 255, 0.01);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 32px;
@@ -423,7 +420,7 @@ const PanelContent = styled.div`
   min-height: 400px;
 `;
 
-const RequestList = styled(motion.div)`
+const RequestList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -432,7 +429,7 @@ const RequestList = styled(motion.div)`
 const RequestItem = styled.div`
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.03);
-  padding: 16px 20px;
+  padding: 20px;
   border-radius: 20px;
   display: flex;
   align-items: center;
@@ -443,7 +440,7 @@ const RequestItem = styled.div`
 
   .b-info {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 18px;
     .b-logo {
       width: 48px;
@@ -453,19 +450,44 @@ const RequestItem = styled.div`
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
       font-size: 1.5rem;
-      img { width: 100%; height: 100%; object-fit: cover; }
     }
     .b-text {
-      .b-name { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 2px; }
-      .b-desc { font-size: 12px; color: rgba(255, 255, 255, 0.35); line-height: 1.5; }
+      .b-name-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .b-name { font-size: 1rem; font-weight: 700; color: #fff; }
+      .b-desc { font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 2px; }
+      .b-contact-info { font-size: 11px; color: rgba(255, 255, 255, 0.35); }
     }
   }
 
   .b-actions {
     display: flex;
     gap: 8px;
+  }
+`;
+
+const TypeBadge = styled.span`
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  
+  &.commerce {
+    background: rgba(249, 115, 22, 0.1);
+    color: #f97316;
+    border: 1px solid rgba(249, 115, 22, 0.2);
+  }
+  
+  &.delivery_company {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.2);
   }
 `;
 
@@ -480,13 +502,18 @@ const ActionBtn = styled.button<{ $variant: 'approve' | 'reject' }>`
   cursor: pointer;
   transition: all 0.2s;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: ${props => props.$variant === 'approve' ? 'rgba(72, 214, 76, 0.15)' : 'rgba(255, 95, 95, 0.15)'};
     transform: translateY(-2px);
   }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `;
 
-const SidebarTools = styled(motion.div)`
+const SidebarTools = styled.div`
   display: flex;
   flex-direction: column;
   gap: 24px;

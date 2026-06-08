@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { isStoreCurrentlyOpen } = require('../utils/timeUtils');
+const { auth } = require('../middleware/auth');
 
 /**
  * @route GET /api/public/commerces
@@ -270,6 +271,155 @@ router.get('/store/:id', async (req, res) => {
     res.json(storeData);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener el feed de videos activos
+router.get('/videos/feed', async (req, res) => {
+  try {
+    const [videos] = await db.query(`
+      SELECT 
+        v.id, v.title, v.description, v.url_high, v.url_low, v.url_mid, v.created_at,
+        c.id as commerce_id, c.nombre as commerce_nombre, c.logo_url as commerce_logo,
+        (SELECT COUNT(*) FROM commerce_video_likes WHERE video_id = v.id) as likes_count
+      FROM commerce_videos v
+      JOIN commerces c ON v.commerce_id = c.id
+      WHERE v.status = 'active' AND c.type = 'Empresarial' AND v.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 5 DAY)
+      ORDER BY v.created_at DESC
+    `);
+    res.json(videos);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Dar/quitar Me Gusta a un video (Toggle Like)
+router.post('/videos/:id/like', auth, async (req, res) => {
+  const videoId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // Verificar si el video existe
+    const [videos] = await db.query('SELECT id FROM commerce_videos WHERE id = ? AND status = "active"', [videoId]);
+    if (videos.length === 0) {
+      return res.status(404).json({ error: 'Video no encontrado o inactivo.' });
+    }
+
+    // Verificar si ya le dio like
+    const [existing] = await db.query('SELECT 1 FROM commerce_video_likes WHERE video_id = ? AND user_id = ?', [videoId, userId]);
+    
+    if (existing.length > 0) {
+      // Remover like
+      await db.query('DELETE FROM commerce_video_likes WHERE video_id = ? AND user_id = ?', [videoId, userId]);
+      return res.json({ liked: false, message: 'Me gusta eliminado.' });
+    } else {
+      // Agregar like
+      await db.query('INSERT INTO commerce_video_likes (video_id, user_id) VALUES (?, ?)', [videoId, userId]);
+      return res.json({ liked: true, message: 'Me gusta registrado.' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener comentarios de un video
+router.get('/videos/:id/comments', async (req, res) => {
+  const videoId = req.params.id;
+
+  try {
+    const [comments] = await db.query(`
+      SELECT 
+        vc.id, vc.comment, vc.created_at,
+        u.id as user_id, CONCAT(p.nombres, ' ', COALESCE(p.apellidos, '')) as user_nombre
+      FROM commerce_video_comments vc
+      JOIN users u ON vc.user_id = u.id
+      LEFT JOIN profiles p ON p.usuario_id = u.id
+      WHERE vc.video_id = ?
+      ORDER BY vc.created_at ASC
+    `, [videoId]);
+    res.json(comments);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Comentar en un video
+router.post('/videos/:id/comments', auth, async (req, res) => {
+  const videoId = req.params.id;
+  const { comment } = req.body;
+  const userId = req.user.id;
+
+  if (!comment || comment.trim().length === 0) {
+    return res.status(400).json({ error: 'El comentario no puede estar vacío.' });
+  }
+
+  try {
+    // Verificar si el video existe
+    const [videos] = await db.query('SELECT id FROM commerce_videos WHERE id = ? AND status = "active"', [videoId]);
+    if (videos.length === 0) {
+      return res.status(404).json({ error: 'Video no encontrado o inactivo.' });
+    }
+
+    const [result] = await db.query(`
+      INSERT INTO commerce_video_comments (video_id, user_id, comment)
+      VALUES (?, ?, ?)
+    `, [videoId, userId, comment.trim()]);
+
+    res.status(201).json({
+      success: true,
+      commentId: result.insertId,
+      message: 'Comentario registrado con éxito.'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// @route   POST /api/public/requests
+// @desc    Crear una solicitud pública de registro (comercio o delivery)
+router.post('/requests', async (req, res) => {
+  const { tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, apellidos_contacto, celular_contacto } = req.body;
+
+  if (!tipo_solicitud || !nit || !razon_social || !email_contacto || !nombres_contacto || !apellidos_contacto || !celular_contacto) {
+    return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
+  }
+
+  if (!['commerce', 'delivery_company'].includes(tipo_solicitud)) {
+    return res.status(400).json({ error: 'Tipo de solicitud inválido.' });
+  }
+
+  try {
+    // Verificar si el NIT o el Email ya están registrados en solicitudes
+    const [existingRequest] = await db.query(
+      'SELECT id, estado FROM registration_requests WHERE nit = ? OR email_contacto = ?',
+      [nit, email_contacto]
+    );
+
+    if (existingRequest.length > 0) {
+      const reqState = existingRequest[0].estado;
+      if (reqState === 'pendiente') {
+        return res.status(400).json({ error: 'Ya existe una solicitud pendiente con este NIT o Correo.' });
+      } else if (reqState === 'aprobado') {
+        return res.status(400).json({ error: 'Este NIT o Correo ya cuenta con una solicitud aprobada y una cuenta de negocio.' });
+      }
+    }
+
+    // Verificar en la tabla de usuarios
+    const [existingUser] = await db.query('SELECT id FROM users WHERE email = ?', [email_contacto]);
+    if (existingUser.length > 0) {
+      return res.status(400).json({ error: 'El correo electrónico ya se encuentra registrado en el sistema.' });
+    }
+
+    await db.query(`
+      INSERT INTO registration_requests 
+      (tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, apellidos_contacto, celular_contacto, estado)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pendiente')
+    `, [tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, apellidos_contacto, celular_contacto]);
+
+    res.status(201).json({ success: true, message: 'Solicitud de registro enviada con éxito.' });
+  } catch (error) {
+    console.error('Error creating registration request:', error);
+    res.status(500).json({ error: 'Error interno al procesar la solicitud.' });
   }
 });
 

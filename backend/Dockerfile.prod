@@ -16,7 +16,8 @@ COPY backend ./backend
 # Solo copia el codigo y node_modules ya instalados desde el builder.
 FROM --platform=$TARGETPLATFORM node:22-alpine
 WORKDIR /app/backend
-COPY --from=builder /app/backend ./
-COPY --from=builder /app/node_modules ../node_modules
+COPY --chown=node:node --from=builder /app/backend ./
+COPY --chown=node:node --from=builder /app/node_modules ../node_modules
+USER node
 EXPOSE 4000
 CMD ["node", "src/index.js"]

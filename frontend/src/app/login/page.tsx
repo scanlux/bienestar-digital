@@ -38,7 +38,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, 'business');
     } catch (err: any) {
       setErrorMessage(err.message || 'Error al iniciar sesion');
       setShowErrorToast(true);
@@ -52,13 +52,13 @@ export default function Login() {
       <BackgroundGlow />
       <LoginBox>
         <LogoArea onClick={() => router.push('/')}>
-          <Cube>A</Cube>
-          <LogoText>Admin<span>Core</span></LogoText>
+          <Cube>N</Cube>
+          <LogoText>Negocios<span>Core</span></LogoText>
         </LogoArea>
 
         <Header>
-          <Title>Bienvenido</Title>
-          <Subtitle>Ingresa tus credenciales para continuar</Subtitle>
+          <Title>Portal de Negocios</Title>
+          <Subtitle>Inicia sesión para gestionar tu comercio, sede o delivery</Subtitle>
         </Header>
 
         <Form 

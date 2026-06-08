@@ -15,5 +15,10 @@ export const formatTime = (time: string | null) => {
 
 export const getFullImageUrl = (url: string | null | undefined) => {
   if (!url) return '';
-  return url;
+  // Si ya es una URL absoluta (http/https), usarla tal cual
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  // Si es un blob local (previsualización), usarlo directo
+  if (url.startsWith('blob:')) return url;
+  // Ruta relativa: anteponer API_URL
+  return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
 };

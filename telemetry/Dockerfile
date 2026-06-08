@@ -16,8 +16,10 @@ COPY telemetry ./telemetry
 # Etapa 2 (final): Imagen minima que corre en ARM64 (destino del servidor).
 # Solo copia el codigo y node_modules ya instalados desde el builder.
 FROM --platform=$TARGETPLATFORM node:22-alpine
+RUN apk add --no-cache ffmpeg
 WORKDIR /app/telemetry
-COPY --from=builder /app/telemetry ./
-COPY --from=builder /app/node_modules ../node_modules
+COPY --chown=node:node --from=builder /app/telemetry ./
+COPY --chown=node:node --from=builder /app/node_modules ../node_modules
+USER node
 EXPOSE 4001
 CMD ["node", "src/server.js"]

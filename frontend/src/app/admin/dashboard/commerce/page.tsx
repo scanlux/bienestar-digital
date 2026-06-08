@@ -22,7 +22,7 @@ import { formatTime, getFullImageUrl } from '@/utils';
 import { COMMERCE_HIGHLIGHT_PARAM } from '@/utils/commerceNavigation';
 
 // Refactored Components
-import { PageContainer, CommercesGrid, EmptyState, SearchInput, SearchIconIcon } from './components/CommerceStyles';
+import { PageContainer, CommercesGrid, EmptyState, SearchInput, SearchIconIcon, SedeGhostCard } from './components/CommerceStyles';
 import { CommerceCard } from './components/CommerceCard';
 import { SedesManagementModal } from './components/SedesManagementModal';
 
@@ -68,7 +68,9 @@ export default function CommerceManagementPage() {
     direccion: '',
     descripcion: '', 
     logo_url: '',
-    type: 'horizontal' 
+    type: 'Empresarial',
+    admin_nombres: '',
+    admin_apellidos: ''
   });
 
   // Sedes states
@@ -220,7 +222,9 @@ export default function CommerceManagementPage() {
       direccion: '',
       descripcion: '', 
       logo_url: '',
-      type: 'horizontal' 
+      type: 'Empresarial',
+      admin_nombres: '',
+      admin_apellidos: ''
     });
     setIsModalOpen(true);
     scrollToTop();
@@ -238,7 +242,9 @@ export default function CommerceManagementPage() {
       direccion: commerce.direccion || '',
       descripcion: commerce.descripcion || '', 
       logo_url: commerce.logo_url || '',
-      type: commerce.type || 'horizontal' 
+      type: commerce.type || 'Empresarial',
+      admin_nombres: commerce.admin_nombres || '',
+      admin_apellidos: commerce.admin_apellidos || ''
     });
     setIsModalOpen(true);
     scrollToTop();
@@ -394,6 +400,11 @@ export default function CommerceManagementPage() {
             />
           ))}
           
+          <SedeGhostCard onClick={handleOpenCreateModal}>
+            <span className="icon">+</span>
+            <span className="label">Nuevo Comercio</span>
+          </SedeGhostCard>
+          
           {filteredCommerces.length === 0 && (
             <EmptyState>
               No se encontraron resultados para &quot;{searchTerm}&quot;
@@ -461,6 +472,24 @@ export default function CommerceManagementPage() {
                   </InputGroup>
                 </div>
                 <InputGroup>
+                  <Label>Nombres del Administrador</Label>
+                  <Input required type="text" value={formData.admin_nombres} onChange={e => setFormData({...formData, admin_nombres: e.target.value})} placeholder="Nombres" />
+                </InputGroup>
+                <InputGroup>
+                  <Label>Apellidos del Administrador</Label>
+                  <Input required type="text" value={formData.admin_apellidos} onChange={e => setFormData({...formData, admin_apellidos: e.target.value})} placeholder="Apellidos" />
+                </InputGroup>
+                <InputGroup>
+                  <Label>Teléfono contacto</Label>
+                  <Input 
+                    required 
+                    type="text" 
+                    value={formData.telefono} 
+                    onChange={e => setFormData({...formData, telefono: e.target.value.replace(/\D/g, '')})} 
+                    placeholder="3001234567" 
+                  />
+                </InputGroup>
+                <InputGroup>
                   <Label>Ciudad</Label>
                   <Select required value={formData.ciudad} onChange={e => setFormData({...formData, ciudad: e.target.value})}>
                     <option value="">Seleccionar ciudad...</option>
@@ -469,16 +498,6 @@ export default function CommerceManagementPage() {
                     <option value="Villavicencio">Villavicencio</option>
                     <option value="Bogotá">Bogotá</option>
                   </Select>
-                </InputGroup>
-                <InputGroup>
-                  <Label>Teléfono</Label>
-                  <Input 
-                    required 
-                    type="text" 
-                    value={formData.telefono} 
-                    onChange={e => setFormData({...formData, telefono: e.target.value.replace(/\D/g, '')})} 
-                    placeholder="3001234567" 
-                  />
                 </InputGroup>
               </FormGrid>
 
@@ -504,8 +523,8 @@ export default function CommerceManagementPage() {
               <InputGroup>
                 <Label>Tipo de Interfaz</Label>
                 <Select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                  <option value="horizontal">Horizontal (Clásica)</option>
-                  <option value="vertical">Vertical (TikTok Style)</option>
+                  <option value="Empresarial">Empresarial (TikTok Style / Videos)</option>
+                  <option value="Comercial">Comercial (Clasica)</option>
                 </Select>
               </InputGroup>
 

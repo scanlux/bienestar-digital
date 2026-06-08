@@ -13,43 +13,51 @@ import { API_URL } from '@/constants';
 import {
   PageWrapper, HeaderSection, BackButton, TitleSection, SubtitleText,
   CreateButton, StoresGrid, StoreCard, CardContent, CardHeader, Badge,
-  CardFooter, FooterButton, EmptyMessage, ModalOverlay, ModalContent,
-  CloseModal, InputGroup, Input, Select, CheckboxGroup, SubmitButton
+  CardFooter, FooterButton, EmptyMessage
 } from './StoresManagementStyles';
+import MapPickerModal from '@/components/MapPickerModal';
+import GeoPermissionModal from '@/components/Common/GeoPermissionModal';
+import { useModalScroll } from '@/hooks/useModalScroll';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { StoreFormModal } from '@/components/Common/StoreFormModal';
 export default function StoresManagementPage({ params }: { params: { commerceId: string } }) {
   const router = useRouter();
   const { user } = useAuth();
   const [stores, setStores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ 
-    commerce_id: params.commerceId, 
-    nombre_sucursal: '', 
-    direccion: '', 
-    open_time: '', 
-    close_time: '', 
-    is_24h: 0, 
-    estado: 'abierto' 
-  });
-
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [paymentPlatforms, setPaymentPlatforms] = useState<any[]>([]);
   const toast = useToast();
   const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
 
+  // Hook de geolocalizacion centralizado
+  const geo = useGeolocation({
+    onCoordsConfirmed: () => {},
+    onCoordsFromPermission: () => {}
+  });
+
+  useModalScroll(isModalOpen);
+  useModalScroll(geo.showMapPicker);
+  useModalScroll(geo.showGeoWarning);
+
   useEffect(() => {
     setModalTarget(document.getElementById('modal-portal-root'));
+    fetchPlatforms();
   }, []);
-
-  useEffect(() => {
-    if (!isModalOpen) setIsSubmitted(false);
-  }, [isModalOpen]);
-
 
   useEffect(() => {
     fetchStores();
   }, [params.commerceId]);
+
+  const fetchPlatforms = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/manage/payment-platforms`, {
+        headers: getAuthHeaders()
+      });
+      setPaymentPlatforms(res.data);
+    } catch (e) { console.error(e); }
+  };
 
   const fetchStores = async () => {
     setLoading(true);
@@ -62,47 +70,6 @@ export default function StoresManagementPage({ params }: { params: { commerceId:
       console.error(e);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCreateStore = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSubmitted(true);
-
-    if (!e.currentTarget.checkValidity()) {
-      toast.error('Por favor completa todos los campos obligatorios.');
-      return;
-    }
-
-    const is24h = formData.is_24h === 1;
-    // Si no es 24h, validamos que el horario sea coherente (no cruce medianoche en una fila)
-    if (!is24h && formData.open_time && formData.close_time) {
-      const isTimeInvalid = (formData.open_time >= formData.close_time && formData.close_time !== '00:00') || (formData.open_time === formData.close_time);
-      if (isTimeInvalid) {
-        toast.error('Horario inválido. La hora inicial debe ser menor a la final.');
-        return;
-      }
-    }
-
-    try {
-      await axios.post(`${API_URL}/api/manage/stores`, { ...formData, latitud: 0, longitud: 0 }, {
-        headers: getAuthHeaders()
-      });
-      setIsModalOpen(false);
-      setFormData({ 
-        commerce_id: params.commerceId, 
-        nombre_sucursal: '', 
-        direccion: '', 
-        open_time: '', 
-        close_time: '', 
-        is_24h: 0, 
-        estado: 'abierto' 
-      });
-      toast.success('Sede creada exitosamente');
-      fetchStores();
-    } catch (e) {
-      console.error(e);
-      toast.error('Error al crear la sede');
     }
   };
 
@@ -190,60 +157,38 @@ export default function StoresManagementPage({ params }: { params: { commerceId:
         </StoresGrid>
       )}
 
-      {isModalOpen && (
-        <ModalOverlay onClick={() => setIsModalOpen(false)}>
-          <ModalContent onClick={e => e.stopPropagation()}>
-            <CloseModal onClick={() => setIsModalOpen(false)}>✕</CloseModal>
-            <h2 className="text-xl font-bold mb-6">Añadir Sucursal</h2>
-            
-            <form 
-              onSubmit={handleCreateStore} 
-              noValidate 
-              className={`space-y-4 ${isSubmitted ? 'was-validated' : ''}`}
-            >
-              <InputGroup>
-                <label>Nombre (Ej: Sede Centro)</label>
-                <Input required type="text" value={formData.nombre_sucursal} onChange={e => setFormData({...formData, nombre_sucursal: e.target.value})} />
-              </InputGroup>
-              <InputGroup>
-                <label>Dirección Exacta</label>
-                <Input required type="text" value={formData.direccion} onChange={e => setFormData({...formData, direccion: e.target.value})} />
-              </InputGroup>
-              <CheckboxGroup>
-                <input 
-                  type="checkbox" 
-                  id="is_24h_sub" 
-                  checked={formData.is_24h === 1} 
-                  onChange={e => setFormData({...formData, is_24h: e.target.checked ? 1 : 0})} 
-                />
-                <label htmlFor="is_24h_sub">Abierto 24 Horas</label>
-              </CheckboxGroup>
+      <StoreFormModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={() => {
+          fetchStores();
+        }}
+        initialData={undefined}
+        commerceId={Number(params.commerceId)}
+        paymentPlatforms={paymentPlatforms}
+        modalTarget={modalTarget}
+        onOpenMapPicker={geo.handleOpenMapPicker}
+        lat={undefined}
+        lng={undefined}
+      />
 
-              {formData.is_24h === 0 && (
-                <div className="grid grid-cols-2 gap-4">
-                  <InputGroup>
-                    <label>Apertura</label>
-                    <Input type="time" value={formData.open_time} onChange={e => setFormData({...formData, open_time: e.target.value})} />
-                  </InputGroup>
-                  <InputGroup>
-                    <label>Cierre</label>
-                    <Input type="time" value={formData.close_time} onChange={e => setFormData({...formData, close_time: e.target.value})} />
-                  </InputGroup>
-                </div>
-              )}
-              <InputGroup>
-                <label>Estado</label>
-                <Select value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value})}>
-                  <option value="abierto">Operando (Abierto)</option>
-                  <option value="cerrado">Pausado (Cerrado temporalmente)</option>
-                </Select>
-              </InputGroup>
-              <SubmitButton type="submit">
-                Guardar Sucursal
-              </SubmitButton>
-            </form>
-          </ModalContent>
-        </ModalOverlay>
+      {geo.showMapPicker && modalTarget && createPortal(
+        <MapPickerModal
+          onClose={() => geo.setShowMapPicker(false)}
+          onConfirm={geo.handleConfirmCoords}
+          initialLat={undefined}
+          initialLng={undefined}
+        />,
+        modalTarget
+      )}
+
+      {geo.showGeoWarning && modalTarget && createPortal(
+        <GeoPermissionModal
+          status={geo.geoStatus}
+          onContinue={geo.handleContinueGeoFlow}
+          onClose={() => geo.setShowGeoWarning(false)}
+        />,
+        modalTarget
       )}
 
     </PageWrapper>

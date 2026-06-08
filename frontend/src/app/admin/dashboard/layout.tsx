@@ -8,11 +8,12 @@ import { useAuth } from '@/context/AuthContext';
 
 const NAV_ITEMS = [
   { label: 'Inicio', path: '/admin/dashboard', icon: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z' },
-  { label: 'Catálogo Comercios', path: '/admin/dashboard/commerce', icon: 'M12 2L2 22h20L12 2zm0 3.83L18.17 19H5.83L12 5.83z', permission: 'menu_commerce' },
-  { label: 'Sedes', path: '/admin/dashboard/stores', icon: 'M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z', permission: 'menu_stores' },
-  { label: 'Inteligencia', path: '/admin/dashboard/intelligence', icon: 'M21 16.5c0 .38-.21.71-.53.88l-7.97 4.44c-.31.17-.69.17-1 0L3.53 17.38c-.32-.17-.53-.5-.53-.88V7.5c0-.38.21-.71.53-.88l7.97-4.44c.31-.17.69-.17 1 0l7.97 4.44c.32 1.7.53.5.53.88v9zM12 4.15L5.33 7.85 12 11.56l6.67-3.71L12 4.15z', permission: 'menu_intelligence' },
-  { label: 'Usuarios y Permisos', path: '/admin/dashboard/users', icon: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z', permission: 'manage_users' },
-  { label: 'Auditoría de Seguridad', path: '/admin/dashboard/security', icon: 'M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z', permission: 'manage_users' }
+  { label: 'Catálogo Comercios', path: '/admin/dashboard/commerce', icon: 'M12 2L2 22h20L12 2zm0 3.83L18.17 19H5.83L12 5.83z', permission: 'view_commerces' },
+  { label: 'Sedes', path: '/admin/dashboard/stores', icon: 'M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z', permission: 'view_stores' },
+  { label: 'Inteligencia', path: '/admin/dashboard/intelligence', icon: 'M21 16.5c0 .38-.21.71-.53.88l-7.97 4.44c-.31.17-.69.17-1 0L3.53 17.38c-.32-.17-.53-.5-.53-.88V7.5c0-.38.21-.71.53-.88l7.97-4.44c.31-.17.69-.17 1 0l7.97 4.44c.32 1.7.53.5.53.88v9zM12 4.15L5.33 7.85 12 11.56l6.67-3.71L12 4.15z', permission: 'manage_intelligence' },
+  { label: 'Usuarios y Permisos', path: '/admin/dashboard/users', icon: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z', permission: 'create_system_user' },
+  { label: 'Roles y Accesos', path: '/admin/dashboard/roles', icon: 'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 15h-2v-2h2v2zm0-4h-2V7h2v5z', permission: 'manage_rbac' },
+  { label: 'Auditoría de Seguridad', path: '/admin/dashboard/security', icon: 'M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z', permission: 'view_security_logs' }
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (path.includes('/commerce/')) return 'Detalle del Comercio';
     if (path.endsWith('/commerce')) return ''; 
     if (path.includes('/stores')) return 'Sedes / Sucursales';
+    if (path.endsWith('/roles')) return 'Configuración de Roles';
     return 'Panel de Administración';
   };
 
@@ -47,9 +49,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <NavList>
           {NAV_ITEMS.map((item) => {
-            // Filtrar según permisos del usuario. Si no tiene property permission, siempre se muestra.
-            if (item.permission && (!user?.permissions || !user.permissions.includes(item.permission))) {
-              return null;
+            // Filtrar según permisos atómicos reales del sistema RBAC
+            if (item.permission) {
+              if (!user?.permissions || !user.permissions.includes(item.permission)) {
+                return null;
+              }
             }
 
             const isActive = pathname === item.path;

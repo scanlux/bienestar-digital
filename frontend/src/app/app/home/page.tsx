@@ -2,8 +2,6 @@
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-
 export default function CustomerDashboard() {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -46,11 +44,13 @@ export default function CustomerDashboard() {
       </nav>
 
       <main className="max-w-5xl mx-auto px-4 py-8 pb-24 sm:pb-8">
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        >
+        <style>{`
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+        `}</style>
+        <div style={{ animation: 'fadeIn 0.5s ease forwards' }}>
           <header className="mb-8">
             <p className="text-white/50 text-sm mb-1">Entregar en</p>
             <div className="flex items-center gap-2">
@@ -77,10 +77,7 @@ export default function CustomerDashboard() {
           <h2 className="text-2xl font-light mt-8 mb-6">Para ti, <span className="font-medium">{user.nombre}</span></h2>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
-            <motion.div 
-                whileHover={{ scale: 1.02 }}
-                className="rounded-[2rem] bg-neutral-900 border border-white/10 overflow-hidden relative group cursor-pointer"
-            >
+            <div className="rounded-[2rem] bg-neutral-900 border border-white/10 overflow-hidden relative group cursor-pointer hover:scale-[1.02] transition-transform duration-300">
               <div className="aspect-[4/3] w-full">
                  <img src="https://picsum.photos/seed/restaurant1/800/600" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Restaurant placeholder" />
               </div>
@@ -92,12 +89,9 @@ export default function CustomerDashboard() {
                     <span className="bg-white/10 backdrop-blur-md px-3 py-1 rounded-lg text-sm text-fuchsia-400 font-medium border border-fuchsia-500/30">⭐⭐⭐⭐ 4.8</span>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div 
-                whileHover={{ scale: 1.02 }}
-                className="rounded-[2rem] bg-neutral-900 border border-white/10 overflow-hidden relative group cursor-pointer"
-            >
+            <div className="rounded-[2rem] bg-neutral-900 border border-white/10 overflow-hidden relative group cursor-pointer hover:scale-[1.02] transition-transform duration-300">
               <div className="aspect-[4/3] w-full">
                  <img src="https://picsum.photos/seed/restaurant2/800/600" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Restaurant placeholder" />
               </div>
@@ -109,9 +103,9 @@ export default function CustomerDashboard() {
                     <span className="bg-white/10 backdrop-blur-md px-3 py-1 rounded-lg text-sm text-fuchsia-400 font-medium border border-fuchsia-500/30">⭐⭐⭐⭐ 4.5</span>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
-        </motion.div>
+        </div>
       </main>
     </div>
   );

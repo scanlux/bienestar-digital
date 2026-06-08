@@ -37,3 +37,13 @@ backend/uploads/
 
 # Dependencias locales
 pnpm-debug.log*
+
+# Archivos y carpetas temporales de desarrollo (IA / Scratch)
+scratch/
+**/scratch/
+backend/check_permissions.js
+backend/test_db.js
+backend/test_phase_5.js
+backend/test_root_security.js
+backend/check_permissions.js
+

@@ -8,8 +8,8 @@ async function migrate() {
     // Conectar como root para poder alterar tablas
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
-      user: 'root',
-      password: 'Kh#azr9b!yvP27_mQ*rT5x',
+      user: process.env.DB_ROOT_USER || 'root',
+      password: process.env.DB_ROOT_PASSWORD,
       database: process.env.DB_NAME
     });
 
@@ -43,7 +43,7 @@ async function migrate() {
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6);
       `, [table]);
-      console.log(`✓ Tabla ${table} actualizada.`);
+      console.log(`Tabla ${table} actualizada.`);
     }
 
     console.log('\n--- 2. Añadiendo solo updated_at ---');
@@ -53,7 +53,7 @@ async function migrate() {
         ALTER TABLE ?? 
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6);
       `, [table]);
-      console.log(`✓ Tabla ${table} actualizada.`);
+      console.log(`Tabla ${table} actualizada.`);
     }
 
     console.log('\nMigración completada con éxito.');

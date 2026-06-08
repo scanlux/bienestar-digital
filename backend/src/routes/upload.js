@@ -4,7 +4,7 @@ const multer = require('multer');
 const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
-const { auth, adminOnly } = require('../middleware/auth');
+const { auth, hasPermission } = require('../middleware/auth');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
@@ -31,13 +31,28 @@ const upload = multer({
  * @desc    Sube y optimiza una imagen (entityType: store, commerce, product)
  * @access  Admin
  */
-router.post('/:entityType', auth, adminOnly, upload.single('image'), async (req, res) => {
+router.post('/:entityType', auth, upload.single('image'), async (req, res) => {
   try {
     const { entityType } = req.params;
     const allowedTypes = ['store', 'commerce', 'product'];
     
     if (!allowedTypes.includes(entityType)) {
       return res.status(400).json({ error: 'Tipo de entidad no válido para subida de imágenes' });
+    }
+
+    // Validar permisos dinámicos según el tipo de entidad
+    if (entityType === 'product') {
+      if (!req.user.permissions?.includes('write_catalog')) {
+        return res.status(403).json({ error: 'No tienes permisos para modificar el catálogo (write_catalog).' });
+      }
+    } else if (entityType === 'store') {
+      if (!req.user.permissions?.includes('edit_store_basic') && !req.user.permissions?.includes('edit_store_advanced')) {
+        return res.status(403).json({ error: 'No tienes permisos para modificar los datos básicos de la sede (edit_store_basic).' });
+      }
+    } else if (entityType === 'commerce') {
+      if (!req.user.permissions?.includes('edit_commerce')) {
+        return res.status(403).json({ error: 'No tienes permisos para editar el comercio (edit_commerce).' });
+      }
     }
 
     if (!req.file) {
@@ -84,29 +99,6 @@ router.post('/:entityType', auth, adminOnly, upload.single('image'), async (req,
       .webp({ quality: 85 }) // Formato Next-Gen ultra ligero
       .toFile(uploadPath);
     
-    // --- HACKER BRIDGE: Sincronización SSH con Producción (Solo Dev Local) ---
-    if (process.env.USE_SSH_UPLOAD === 'true') {
-      try {
-        // Normalizar rutas para SCP (Windows usa \ pero el cliente SSH prefiere / o rutas escapadas)
-        const localPathNormalized = uploadPath.replace(/\\/g, '/');
-        const remoteFolder = folderName; 
-        const remoteBase = process.env.SSH_REMOTE_PATH.replace(/\\/g, '/');
-        const remoteFullDir = `${remoteBase}/${remoteFolder}`;
-        
-        // Opciones de robustez:
-        // -o StrictHostKeyChecking=no: Evita bloqueos por hosts no conocidos en dev
-        // -o BatchMode=yes: Desactiva prompts interactivos
-        const sshOptions = '-o StrictHostKeyChecking=no -o BatchMode=yes';
-        const scpCommand = `scp ${sshOptions} -i "${process.env.SSH_KEY_PATH}" "${localPathNormalized}" ${process.env.SSH_USER}@${process.env.SSH_HOST}:${remoteFullDir}/`;
-        
-        console.log(`[HACKER_BRIDGE] Sincronizando: ${fileName} -> Producción...`);
-        await execPromise(scpCommand);
-        console.log(`[HACKER_BRIDGE] ¡Sincronización exitosa!`);
-      } catch (sshError) {
-        console.error('[HACKER_BRIDGE_ERROR] Fallo crítico en SCP:', sshError.message);
-      }
-    }
-    
     // --- PRODUCCION: Reenvio de imagen a arm-bogota via API HTTP (Opcion A) ---
     if (process.env.NODE_ENV === 'production') {
       try {
@@ -143,15 +135,12 @@ router.post('/:entityType', auth, adminOnly, upload.single('image'), async (req,
       }
     }
 
-    // 3. Responder con la URL completa (Siempre Producción)
-    const baseUrl = process.env.NODE_ENV === 'production'
-      ? 'https://trendy-telemetry.sytes.net'
-      : 'https://trendy.sytes.net';
-    const absoluteUrl = `${baseUrl}/uploads/${folderName}/${fileName}`;
+    // 3. Responder con la ruta relativa de la imagen (portable y segura)
+    const relativeUrl = `/uploads/${folderName}/${fileName}`;
     
     res.json({
       success: true,
-      url: absoluteUrl,
+      url: relativeUrl,
       width: metadata.width,
       height: metadata.height,
       format: 'webp'

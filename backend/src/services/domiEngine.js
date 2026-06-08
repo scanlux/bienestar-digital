@@ -174,20 +174,54 @@ async function mintDomis(ownerType, ownerId, fiatAmount, paymentRef) {
  * Bloquea el dinero ultrarrápido y encola el cobro para MariaDB.
  */
 async function chargeForOrder(orderId, storeId, driverUserId, storeCost, driverCost) {
-  // 1. Validar saldos en la Caché de Redis (ultrarrápido)
-  const storeBalance = await domiRedis.getWalletBalance('store', storeId);
-  const driverBalance = await domiRedis.getWalletBalance('user', driverUserId);
+  // 1. Asegurar que los saldos están en caché (evita fallos de lectura en Lua)
+  await domiRedis.getWalletBalance('store', storeId);
+  await domiRedis.getWalletBalance('user', driverUserId);
 
-  if (storeBalance < storeCost) {
-    throw new Error(`DOMI: Saldo insuficiente tienda. Disponible: ${storeBalance}, Requerido: ${storeCost}`);
-  }
-  if (driverBalance < driverCost) {
-    throw new Error(`DOMI: Saldo insuficiente repartidor. Disponible: ${driverBalance}, Requerido: ${driverCost}`);
-  }
+  // 2. Ejecutar descuento atómico usando un script de Lua (previene doble gasto y race conditions)
+  const storeKey = `domi:balance:store:${storeId}`;
+  const driverKey = `domi:balance:user:${driverUserId}`;
 
-  // 2. Descuento Atómico en Redis (Previene doble gasto)
-  await domiRedis.decrementBalance('store', storeId, storeCost);
-  await domiRedis.decrementBalance('user', driverUserId, driverCost);
+  const luaScript = `
+    local storeKey = KEYS[1]
+    local driverKey = KEYS[2]
+    local storeCost = tonumber(ARGV[1])
+    local driverCost = tonumber(ARGV[2])
+
+    local storeBal = tonumber(redis.call('GET', storeKey) or '0')
+    local driverBal = tonumber(redis.call('GET', driverKey) or '0')
+
+    if storeBal < storeCost then
+      return {0, 'INSUFFICIENT_STORE_BALANCE', tostring(storeBal)}
+    end
+    if driverBal < driverCost then
+      return {0, 'INSUFFICIENT_DRIVER_BALANCE', tostring(driverBal)}
+    end
+
+    local newStore = tonumber(string.format("%.4f", storeBal - storeCost))
+    local newDriver = tonumber(string.format("%.4f", driverBal - driverCost))
+
+    redis.call('SET', storeKey, tostring(newStore))
+    redis.call('SET', driverKey, tostring(newDriver))
+
+    return {1, tostring(newStore), tostring(newDriver)}
+  `;
+
+  const result = await redisClient.eval(luaScript, {
+    keys: [storeKey, driverKey],
+    arguments: [String(storeCost), String(driverCost)]
+  });
+
+  const success = result[0];
+  if (success === 0) {
+    const errorType = result[1];
+    const balance = parseFloat(result[2]);
+    if (errorType === 'INSUFFICIENT_STORE_BALANCE') {
+      throw new Error(`DOMI: Saldo insuficiente tienda. Disponible: ${balance}, Requerido: ${storeCost}`);
+    } else {
+      throw new Error(`DOMI: Saldo insuficiente repartidor. Disponible: ${balance}, Requerido: ${driverCost}`);
+    }
+  }
 
   // 3. Encolar la transacción para que el Worker la procese en MariaDB
   const payload = {
@@ -513,6 +547,49 @@ async function completeRescue(rescueId, resolution) {
   }
 }
 
+async function chargeStoreSubscription(commerceId, storeId, amountDomis) {
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const rules = await getProtocolRules(conn);
+    const token = await getTokenRegistry(conn);
+    const wallet = await getOrCreateStoreWallet(conn, storeId);
+    const systemWallet = await getSystemWallet(conn);
+
+    const balance = parseFloat(wallet.balance_custody);
+    if (balance < amountDomis) {
+      throw new Error(`DOMI: Saldo insuficiente para suscripción. Disponible: ${balance}, Requerido: ${amountDomis}`);
+    }
+
+    // Descontar de la custodia de la tienda y depositar en la utilidad del sistema
+    await conn.query('UPDATE wallets SET balance_custody = balance_custody - ? WHERE id = ?', [amountDomis, wallet.id]);
+    await conn.query('UPDATE wallets SET balance_utility = balance_utility + ? WHERE id = ?', [amountDomis, systemWallet.id]);
+
+    const txHash = await appendLedger(conn, {
+      txType: 'burn_service',
+      fromWalletId: wallet.id,
+      toWalletId: systemWallet.id,
+      amountDomis,
+      referenceType: 'subscription',
+      referenceId: commerceId,
+      protocolSnapshot: { token, rules },
+      notes: `Cobro suscripción mensual plan Empresarial para comercio #${commerceId} debitado de sede #${storeId}`
+    });
+
+    await conn.commit();
+
+    // Sincronizar Caché de Redis
+    await domiRedis.decrementBalance('store', storeId, amountDomis);
+
+    return { success: true, txHash, amountDomis };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 module.exports = {
   verifyIntegrity,
   calculateOrderCost,
@@ -522,5 +599,6 @@ module.exports = {
   reportIncident,
   resolvePrePickupIncident,
   assignRescue,
-  completeRescue
+  completeRescue,
+  chargeStoreSubscription
 };

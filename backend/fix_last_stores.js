@@ -1,10 +1,11 @@
+require('dotenv').config();
 const mysql = require('mysql2/promise');
 async function run() {
   const conn = await mysql.createConnection({
-    host: '100.127.144.125',
-    user: 'bienestar_admin_prod',
-    password: '7hda}rGb_yuX2@pL9*qN4!zB1vM8',
-    database: 'marketplace_db'
+    host: process.env.DB_HOST || '127.0.0.1',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME || 'marketplace_db'
   });
 
   const targetIds = [9, 10, 11];

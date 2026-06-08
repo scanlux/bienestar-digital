@@ -1,14 +1,15 @@
+require('dotenv').config();
 const mysql = require('mysql2/promise');
 
 async function setup() {
-    const rootPass = 'Kh#azr9b!yvP27_mQ*rT5x';
-    const deployerPass = 'D3pl0y3r_2026_Secure';
+    const rootPass = process.env.DB_ROOT_PASSWORD;
+    const deployerPass = process.env.DB_DEPLOYER_PASSWORD || 'D3pl0y3r_2026_Secure';
     
     const connection = await mysql.createConnection({
-        host: '100.127.144.125',
-        user: 'root',
+        host: process.env.DB_HOST || '127.0.0.1',
+        user: process.env.DB_ROOT_USER || 'root',
         password: rootPass,
-        database: 'marketplace_db'
+        database: process.env.DB_NAME || 'marketplace_db'
     });
 
     try {

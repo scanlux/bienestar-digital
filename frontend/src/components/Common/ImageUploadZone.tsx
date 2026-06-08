@@ -10,21 +10,25 @@ import { API_URL } from '@/constants';
 
 
 interface ImageUploadZoneProps {
-  onUploadSuccess: (url: string) => void;
+  onUploadSuccess?: (url: string) => void;
+  onFileSelected?: (file: File | null) => void;
   initialImage?: string;
   label?: string;
   endpoint?: string;
   placeholderText?: string;
   helperText?: string;
+  disabled?: boolean;
 }
 
 export const ImageUploadZone: React.FC<ImageUploadZoneProps> = ({ 
   onUploadSuccess, 
+  onFileSelected,
   initialImage,
   label = "Imagen",
   endpoint = "/api/upload/store",
   placeholderText = "Subir Imagen",
-  helperText = "Haz clic o arrastra una imagen aquí"
+  helperText = "Haz clic o arrastra una imagen aquí",
+  disabled = false
 }) => {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<string | null>(initialImage || null);
@@ -41,6 +45,14 @@ export const ImageUploadZone: React.FC<ImageUploadZoneProps> = ({
     
     // Reset estado
     setError(null);
+
+    if (onFileSelected) {
+      // Modo diferido: previsualización local y pasar el archivo al padre
+      const localUrl = URL.createObjectURL(file);
+      setPreview(localUrl);
+      onFileSelected(file);
+      return;
+    }
     setLoading(true);
 
     const formData = new FormData();
@@ -57,23 +69,9 @@ export const ImageUploadZone: React.FC<ImageUploadZoneProps> = ({
       });
 
       if (response.data.success) {
-        let newUrl = response.data.url;
-        
-        // Sanitización: Si el servidor devuelve una URL con localhost o relativa, la forzamos a producción
-        if (!newUrl.startsWith('https://')) {
-          // Si es localhost o relativa, la convertimos a la URL oficial de producción
-          const PRODUCTION_DOMAIN = 'https://trendy.sytes.net';
-          if (newUrl.includes('/uploads/')) {
-             const pathParts = newUrl.split('/uploads/');
-             newUrl = `${PRODUCTION_DOMAIN}/uploads/${pathParts[pathParts.length - 1]}`;
-          }
-        }
-        
-        // Doble check: reemplazo explícito de localhost
-        newUrl = newUrl.replace(/http:\/\/(localhost|127\.0\.0\.1):[0-9]+/, 'https://trendy.sytes.net');
-
+        const newUrl = response.data.url;
         setPreview(newUrl);
-        onUploadSuccess(newUrl);
+        onUploadSuccess?.(newUrl);
       }
     } catch (err: any) {
       console.error('Upload error:', err);
@@ -91,6 +89,7 @@ export const ImageUploadZone: React.FC<ImageUploadZoneProps> = ({
   };
 
   const onContainerClick = () => {
+    if (disabled) return;
     fileInputRef.current?.click();
   };
 
@@ -103,6 +102,7 @@ export const ImageUploadZone: React.FC<ImageUploadZoneProps> = ({
         onClick={onContainerClick} 
         $hasError={!!error}
         $isLoading={loading}
+        $disabled={disabled}
       >
         <input 
           type="file" 
@@ -152,7 +152,7 @@ const Label = styled.label`
   letter-spacing: 0.5px;
 `;
 
-const DropZone = styled.div<{ $hasError: boolean; $isLoading: boolean }>`
+const DropZone = styled.div<{ $hasError: boolean; $isLoading: boolean; $disabled?: boolean }>`
   width: 100%;
   height: 200px;
   border-radius: 16px;
@@ -161,19 +161,25 @@ const DropZone = styled.div<{ $hasError: boolean; $isLoading: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: ${props => props.$disabled ? 'not-allowed' : 'pointer'};
   overflow: hidden;
   transition: all 0.3s ease;
   position: relative;
 
   &:hover {
-    border-color: ${props => props.$hasError ? '#ef4444' : 'var(--emerald, #10b981)'};
-    background: rgba(255, 255, 255, 0.04);
+    border-color: ${props => props.$hasError ? '#ef4444' : props.$disabled ? 'rgba(255, 255, 255, 0.1)' : 'var(--emerald, #10b981)'};
+    background: ${props => props.$disabled ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.04)'};
   }
 
   ${props => props.$isLoading && css`
     pointer-events: none;
     cursor: default;
+  `}
+
+  ${props => props.$disabled && css`
+    pointer-events: none;
+    opacity: 0.6;
+    background: rgba(0, 0, 0, 0.15);
   `}
 
   .status-box {

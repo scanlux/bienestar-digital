@@ -1,14 +1,18 @@
 # dashboard_loop.ps1
-# Panel de monitoreo del entorno de desarrollo
-# Verifica: Tailscale (DB/Redis), Backend, Frontend cada 10 segundos
+# Panel de monitoreo del entorno de desarrollo local aislado
+# Verifica: MariaDB y Redis locales, Backend y Frontend cada 10 segundos
 
-$ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LOCAL_DEV_DIR = $PSScriptRoot
+if (-not $LOCAL_DEV_DIR) { $LOCAL_DEV_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path }
+$SCRIPTS_DIR = Split-Path -Parent $LOCAL_DEV_DIR
+$ROOT = Split-Path -Parent $SCRIPTS_DIR
+
 $backendDir = "$ROOT\backend"
 $envFile = "$backendDir\.env"
 
 # Cargar configuración desde .env
-$dbHost = "100.127.144.125"      # Fallback
-$redisHost = "100.127.144.125"   # Fallback
+$dbHost = "127.0.0.1"      # Fallback local aislado
+$redisHost = "127.0.0.1"   # Fallback local aislado
 
 if (Test-Path $envFile) {
     $envContent = Get-Content $envFile
@@ -97,11 +101,11 @@ while ($true) {
     Write-Host "  Hora: $now  |  Activo: ${uptimeMin} min  |  Check #$iteration" -ForegroundColor DarkGray
     Write-Host ""
 
-    Write-Host "  --- TAILSCALE VPN (Oracle Cloud) -----------------" -ForegroundColor Yellow
+    Write-Host "  --- ENTORNO LOCAL (Bases de datos) ---------------" -ForegroundColor Yellow
     $mariaOk = Test-Port -TargetHost $dbHost -Port $PORT_MARIADB
     $redisOk = Test-Port -TargetHost $redisHost -Port $PORT_REDIS
-    Write-Status "MariaDB  -> ${dbHost}:${PORT_MARIADB}" $mariaOk
-    Write-Status "Redis    -> ${redisHost}:${PORT_REDIS}" $redisOk
+    Write-Status "MariaDB Local -> ${dbHost}:${PORT_MARIADB}" $mariaOk
+    Write-Status "Redis Local   -> ${redisHost}:${PORT_REDIS}" $redisOk
 
     Write-Host ""
     Write-Host "  --- BACKEND (Node.js) ---------------------------" -ForegroundColor Yellow
@@ -110,7 +114,7 @@ while ($true) {
     $backInGrace   = (-not $backOk) -and ($elapsed -lt $GRACE_SECONDS_BACKEND)
     $backGraceLeft = [math]::Max(0, [int]($GRACE_SECONDS_BACKEND - $elapsed))
     $backExtra     = if ($backFirstOk) { "listo en $([math]::Round(($backFirstOk - $startTime).TotalSeconds, 1))s" } else { "" }
-    Write-Status "Backend  -> localhost:4000" $backOk $backExtra $backInGrace $backGraceLeft
+    Write-Status "Backend       -> localhost:4000" $backOk $backExtra $backInGrace $backGraceLeft
 
     Write-Host ""
     Write-Host "  --- FRONTEND (Next.js) --------------------------" -ForegroundColor Yellow
@@ -119,25 +123,26 @@ while ($true) {
     $frontInGrace   = (-not $frontOk) -and ($elapsed -lt $GRACE_SECONDS_FRONTEND)
     $frontGraceLeft = [math]::Max(0, [int]($GRACE_SECONDS_FRONTEND - $elapsed))
     $frontExtra     = if ($frontFirstOk) { "listo en $([math]::Round(($frontFirstOk - $startTime).TotalSeconds, 1))s" } else { "" }
-    Write-Status "Frontend -> localhost:3000" $frontOk $frontExtra $frontInGrace $frontGraceLeft
+    Write-Status "Frontend      -> localhost:3000" $frontOk $frontExtra $frontInGrace $frontGraceLeft
 
     Write-Host ""
     # Para el estado global, ignorar servicios en gracia de arranque
-    $svcsDown = (-not $backOk -and -not $backInGrace) -or (-not $frontOk -and -not $frontInGrace)
+    $svcsDown = (-not $backOk -and -not $backInGrace) -or (-not $frontOk -and -not $frontInGrace) -or -not $mariaOk -or -not $redisOk
 
     if ($mariaOk -and $redisOk -and $backOk -and $frontOk) {
         Write-Host "  >> SISTEMA COMPLETO OPERATIVO <<" -ForegroundColor Green
     } elseif ($svcsDown) {
-        Write-Host "  >> HAY SERVICIOS CAIDOS - revisar paneles <<" -ForegroundColor Red
+        Write-Host "  >> ENTORNO INCOMPLETO O CON FALLOS - revisar paneles <<" -ForegroundColor Red
     } else {
         Write-Host "  >> Servicios arrancando, espera un momento... <<" -ForegroundColor Yellow
     }
 
     Write-Host ""
     Write-Host "  --- ACCESOS RAPIDOS -----------------------------" -ForegroundColor DarkGray
-    Write-Host "  Frontend  : http://localhost:3000" -ForegroundColor White
-    Write-Host "  Backend   : http://localhost:4000" -ForegroundColor White
-    Write-Host "  Produccion: https://trendy.sytes.net" -ForegroundColor White
+    Write-Host "  Frontend    : http://localhost:3000" -ForegroundColor White
+    Write-Host "  Backend     : http://localhost:4000" -ForegroundColor White
+    Write-Host "  DB Local    : ${dbHost}:${PORT_MARIADB}" -ForegroundColor White
+    Write-Host "  Redis Local : ${redisHost}:${PORT_REDIS}" -ForegroundColor White
     Write-Host ""
     Write-Host "  --- COMANDOS UTILES (en el panel del servicio) --" -ForegroundColor DarkGray
     Write-Host "  Next.js devmode : r + Enter = recarga manual" -ForegroundColor DarkGray

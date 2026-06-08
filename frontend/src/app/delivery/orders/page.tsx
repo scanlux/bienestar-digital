@@ -2,8 +2,6 @@
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-
 export default function DeliveryDashboard() {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -38,11 +36,13 @@ export default function DeliveryDashboard() {
       </nav>
 
       <main className="max-w-lg mx-auto px-4 py-8">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
+        <style>{`
+          @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
+        <div style={{ animation: 'fadeInUp 0.5s ease forwards' }}>
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl font-light">Hola, <span className="font-medium text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-500">{user.nombre}</span></h1>
@@ -96,7 +96,7 @@ export default function DeliveryDashboard() {
             </div>
           </div>
 
-        </motion.div>
+        </div>
       </main>
     </div>
   );

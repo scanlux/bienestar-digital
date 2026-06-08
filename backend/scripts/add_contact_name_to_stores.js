@@ -8,8 +8,8 @@ async function migrate() {
     console.log('Agregando columna contacto_directo a la tabla stores...');
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
-      user: 'root',
-      password: 'Kh#azr9b!yvP27_mQ*rT5x',
+      user: process.env.DB_ROOT_USER || 'root',
+      password: process.env.DB_ROOT_PASSWORD,
       database: process.env.DB_NAME
     });
 

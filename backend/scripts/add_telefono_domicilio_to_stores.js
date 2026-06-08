@@ -8,8 +8,8 @@ async function migrate() {
     // Conectar como root para la migración
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
-      user: 'root',
-      password: 'Kh#azr9b!yvP27_mQ*rT5x',
+      user: process.env.DB_ROOT_USER || 'root',
+      password: process.env.DB_ROOT_PASSWORD,
       database: process.env.DB_NAME
     });
 

@@ -534,6 +534,12 @@ const StyledSwitch = styled(SwitchPrimitive.Root)`
   &:focus-visible {
     box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.6);
   }
+
+  &[data-disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
 `;
 
 const StyledThumb = styled(SwitchPrimitive.Thumb)`
@@ -552,8 +558,8 @@ const StyledThumb = styled(SwitchPrimitive.Thumb)`
   }
 `;
 
-export const PremiumSwitch = ({ id, checked, onCheckedChange }: { id?: string, checked: boolean, onCheckedChange: (c: boolean) => void }) => (
-  <StyledSwitch id={id} checked={checked} onCheckedChange={onCheckedChange}>
+export const PremiumSwitch = ({ id, checked, onCheckedChange, disabled = false }: { id?: string, checked: boolean, onCheckedChange: (c: boolean) => void, disabled?: boolean }) => (
+  <StyledSwitch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled}>
     <StyledThumb />
   </StyledSwitch>
 );

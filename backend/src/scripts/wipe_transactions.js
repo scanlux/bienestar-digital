@@ -68,8 +68,8 @@ async function wipe() {
       WHERE TRIGGER_SCHEMA = ?
     `, [process.env.DB_NAME]);
     
-    console.log(`  - Triggers activos: ${triggers.length} de 6 esperados.`);
-    if (triggers.length < 6) {
+    console.log(`  - Triggers activos: ${triggers.length} de 18 esperados.`);
+    if (triggers.length < 18) {
       console.warn('  WARNING: Faltan triggers de seguridad. Ejecute scripts/db_security/restore_security.sh');
     }
 

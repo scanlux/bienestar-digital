@@ -1,8 +1,9 @@
+require('dotenv').config();
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
-const API_KEY = 'AIzaSyAtn-NDbnv1T0pDG1A4D7Y5EPAiwUYKUQE'; // API KEY del usuario
+const API_KEY = process.env.GEMINI_API_KEY; // API KEY del usuario
 const TEMP_DIR = path.join(__dirname, '../temp_assets');
 
 async function generateImage(prompt, fileName) {

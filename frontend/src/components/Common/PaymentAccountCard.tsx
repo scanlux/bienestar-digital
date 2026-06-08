@@ -11,6 +11,7 @@ interface PaymentAccountCardProps {
   onUpdate: (index: number, field: string, value: any) => void;
   onRemove: (index: number) => void;
   onSetPrincipal: (index: number) => void;
+  disabled?: boolean;
 }
 
 export const PaymentAccountCard = ({ 
@@ -19,7 +20,8 @@ export const PaymentAccountCard = ({
   paymentPlatforms, 
   onUpdate, 
   onRemove, 
-  onSetPrincipal 
+  onSetPrincipal,
+  disabled = false
 }: PaymentAccountCardProps) => {
   return (
     <CardContainer>
@@ -33,15 +35,18 @@ export const PaymentAccountCard = ({
               type="checkbox" 
               id={`principal-${index}`} 
               checked={!!account.es_principal}
+              disabled={disabled}
               onChange={(e) => {
                 if (e.target.checked) onSetPrincipal(index);
               }} 
             />
-            <label htmlFor={`principal-${index}`} style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+            <label htmlFor={`principal-${index}`} style={{ fontSize: '0.75rem', fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer' }}>
               {account.es_principal ? 'Principal' : 'Hacer Principal'}
             </label>
           </CheckboxGroup>
-          <button type="button" className="remove-btn" onClick={() => onRemove(index)}>✕</button>
+          {!disabled && (
+            <button type="button" className="remove-btn" onClick={() => onRemove(index)}>✕</button>
+          )}
         </div>
       </div>
       
@@ -50,6 +55,7 @@ export const PaymentAccountCard = ({
           <Label>Banco / Plataforma</Label>
           <Select 
             required 
+            disabled={disabled}
             value={account.platform_id || ''} 
             onChange={e => {
               const platformId = Number(e.target.value);
@@ -74,7 +80,7 @@ export const PaymentAccountCard = ({
             value={account.tipo_cuenta || 'Ahorros'} 
             onChange={e => onUpdate(index, 'tipo_cuenta', e.target.value)} 
             disabled={
-              (() => {
+              disabled || (() => {
                 const selected = paymentPlatforms.find(p => p.id === account.platform_id);
                 return selected && (selected.tipo_entidad === 'monedero' || selected.tipo_entidad === 'transferencia_rapida');
               })()
@@ -91,6 +97,7 @@ export const PaymentAccountCard = ({
         <InputGroup>
           <Label>Número de Cuenta</Label>
           <Input 
+            disabled={disabled}
             value={account.numero_cuenta || ''} 
             onChange={e => onUpdate(index, 'numero_cuenta', e.target.value)} 
             placeholder="Sólo números" 
@@ -99,6 +106,7 @@ export const PaymentAccountCard = ({
         <InputGroup>
           <Label>Llave (Celular, Token, etc)</Label>
           <Input 
+            disabled={disabled}
             value={account.llave || ''} 
             onChange={e => onUpdate(index, 'llave', e.target.value)} 
             placeholder="Si es Nequi o Daviplata" 
@@ -110,6 +118,7 @@ export const PaymentAccountCard = ({
         <InputGroup>
           <Label>Titular (Nombre)</Label>
           <Input 
+            disabled={disabled}
             value={account.titular_nombre || ''} 
             onChange={e => onUpdate(index, 'titular_nombre', e.target.value)} 
             placeholder="Nombre en cuenta/tarjeta" 
@@ -118,6 +127,7 @@ export const PaymentAccountCard = ({
         <InputGroup>
           <Label>Documento Titular (CC/NIT)</Label>
           <Input 
+            disabled={disabled}
             type="text"
             inputMode="numeric"
             value={account.titular_documento || ''} 
@@ -133,6 +143,7 @@ export const PaymentAccountCard = ({
       <InputGroup>
         <Label>Detalle / Nota Extra</Label>
         <Input 
+          disabled={disabled}
           value={account.detalle || ''} 
           onChange={e => onUpdate(index, 'detalle', e.target.value)} 
           placeholder="Opcional. Ej: Transferir sólo de 8 a 8" 
@@ -165,6 +176,12 @@ const CardContainer = styled.div`
 
     &::placeholder {
       color: rgba(255, 255, 255, 0.2);
+    }
+    
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: rgba(0, 0, 0, 0.15);
     }
   }
 

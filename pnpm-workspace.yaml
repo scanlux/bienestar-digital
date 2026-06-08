@@ -3,5 +3,7 @@ packages:
   - 'backend'
   - 'telemetry'
 allowBuilds:
+  '@firebase/util': false
+  protobufjs: false
   sharp: true
   unrs-resolver: true

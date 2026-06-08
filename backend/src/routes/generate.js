@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const { auth, hasPermission } = require('../middleware/auth');
 
 // POST /api/generate
-router.post('/', async (req, res) => {
+router.post('/', auth, hasPermission('use_ai_generation'), async (req, res) => {
     const { prompt } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
 
