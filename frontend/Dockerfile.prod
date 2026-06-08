@@ -9,4 +9,6 @@ RUN pnpm install --filter frontend --frozen-lockfile
 COPY frontend ./frontend
 WORKDIR /app/frontend
 RUN pnpm build
-CMD ["true"]
+EXPOSE 3000
+CMD ["pnpm", "start"]
+
