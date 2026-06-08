@@ -49,3 +49,73 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy-to-micro-usa:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      # Conectar a la VPN para acceder a la instancia micro-usa
+      - name: Connect to Tailscale VPN
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      # Preparar la llave SSH y verificar formato
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY_MICRO }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -l -f ~/.ssh/id_rsa
+          echo "Llave SSH configurada correctamente."
+
+      # Registrar la huella del servidor y verificar conectividad
+      - name: Verify Tailscale Connectivity
+        run: |
+          echo "Verificando conectividad Tailscale hacia Micro-USA..."
+          ping -c 3 "${{ secrets.MICRO_US_TAILSCALE_IP }}" || echo "ADVERTENCIA: ping fallo, intentando SSH de todas formas"
+          ssh-keyscan -H "${{ secrets.MICRO_US_TAILSCALE_IP }}" >> ~/.ssh/known_hosts 2>/dev/null && echo "Host key registrado OK" || echo "ssh-keyscan fallo"
+
+      # Desplegar en Micro-USA via SSH sobre la VPN Tailscale
+      - name: Execute Deploy in Micro-USA
+        env:
+          DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+        run: |
+          # Escribir el token en un archivo temporal (evita fugas en logs)
+          TOKEN_FILE=$(mktemp)
+          printf '%s' "${DEPLOY_TOKEN}" > "${TOKEN_FILE}"
+
+          # Copiar el archivo de token al servidor de forma segura
+          scp -o BatchMode=yes \
+              -o ConnectTimeout=30 \
+              -i ~/.ssh/id_rsa \
+              "${TOKEN_FILE}" \
+              "${{ secrets.SSH_USER }}@${{ secrets.MICRO_US_TAILSCALE_IP }}:/tmp/.ghcr_token"
+
+          # Ejecutar deploy remoto utilizando safe_service_update.sh
+          ssh -o BatchMode=yes \
+              -o ConnectTimeout=30 \
+              -o ServerAliveInterval=10 \
+              -i ~/.ssh/id_rsa \
+              "${{ secrets.SSH_USER }}@${{ secrets.MICRO_US_TAILSCALE_IP }}" \
+              "cat /tmp/.ghcr_token | sudo docker login ghcr.io -u '${DEPLOY_ACTOR}' --password-stdin && \
+               rm -f /tmp/.ghcr_token && \
+               cd /opt/bienestar && \
+               if [ -f docker-compose.yml ]; then \
+                 sudo docker compose pull frontend && \
+                 sudo docker compose stop frontend && \
+                 sudo docker compose up -d --no-deps frontend && \
+                 sudo docker image prune -f && \
+                 echo 'Deploy frontend completado.'; \
+               else \
+                 echo '[ERROR] docker-compose.yml no encontrado en /opt/bienestar'; \
+                 exit 1; \
+               fi"
+
+          # Limpiar archivo local
+          rm -f "${TOKEN_FILE}"
+
