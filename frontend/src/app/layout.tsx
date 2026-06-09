@@ -1,3 +1,4 @@
+// Deploy trigger test - Verification of automated CI/CD pipeline
 import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/context/AuthContext';
