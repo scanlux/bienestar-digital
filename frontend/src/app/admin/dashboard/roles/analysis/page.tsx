@@ -6,8 +6,10 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants';
+import { useToast } from '@/context/ToastContext';
 
 export default function PermissionsAnalysisPage() {
+  const toast = useToast();
   const [analysisData, setAnalysisData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { token } = useAuth();
@@ -34,7 +36,7 @@ export default function PermissionsAnalysisPage() {
       setAnalysisData(res.data);
     } catch (err) {
       console.error('Error fetching analysis data:', err);
-      alert('No autorizado para ver el análisis de permisos.');
+      toast.error('No autorizado para ver el análisis de permisos.');
       router.push('/admin/dashboard/roles');
     } finally {
       setLoading(false);

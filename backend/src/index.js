@@ -115,45 +115,118 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Guardián global del modo mantenimiento
+const maintenanceGuard = require('./middleware/maintenanceGuard');
+app.use(maintenanceGuard);
 
-const generateRoutes = require('./routes/generate');
-app.use('/api/generate', generateRoutes);
+const generateDomainRouter = require('./domains/intelligence/generate.router');
+app.use('/api/generate', generateDomainRouter);
 
-const authRoutes = require('./routes/auth');
-app.use('/api/auth', authRoutes);
+const authDomainRouter = require('./domains/auth/auth.router');
+app.use('/api/auth', authDomainRouter);
 
-const homeRoutes = require('./routes/home');
-app.use('/api', homeRoutes);
+const publicHomeRouter = require('./domains/public/public.home.router');
+app.use('/api', publicHomeRouter);
 
-const usersRoutes = require('./routes/users');
-app.use('/api/manage/users', usersRoutes);
 
-const rolesRoutes = require('./routes/roles');
-app.use('/api/manage', rolesRoutes);
+const roleDomainRouter = require('./domains/role/role.router');
+app.use('/api/manage', roleDomainRouter);
 
-const managementRoutes = require('./routes/management');
-app.use('/api/manage', managementRoutes);
+// Routers Modulares por Capas (Fase 1-4)
+const commerceDomainRouter = require('./domains/commerce/commerce.router');
+app.use('/api/manage/commerces', commerceDomainRouter);
 
-const uploadRoutes = require('./routes/upload');
-app.use('/api/upload', uploadRoutes);
+const storeDomainRouter = require('./domains/store/store.router');
+app.use('/api/manage', storeDomainRouter);
 
-const publicRoutes = require('./routes/public');
-app.use('/api/public', publicRoutes);
+const catalogDomainRouter = require('./domains/catalog/catalog.router');
+app.use('/api/manage', catalogDomainRouter);
 
-const domiRoutes = require('./routes/domi');
-app.use('/api/domi', domiRoutes);
+const userDomainRouter = require('./domains/user/user.router');
+app.use('/api/manage', userDomainRouter);
 
-const ordersRoutes = require('./routes/orders');
-app.use('/api/public/orders', ordersRoutes);
+const orderDomainRouter = require('./domains/order/order.router');
+app.use('/api/manage', orderDomainRouter);
 
-const paymentsRoutes = require('./routes/payments');
-app.use('/api/payments', paymentsRoutes);
+const intelligenceDomainRouter = require('./domains/intelligence/intelligence.router');
+app.use('/api/manage', intelligenceDomainRouter);
 
-const deliveryCompanyRoutes = require('./routes/deliveryCompany');
-app.use('/api/delivery-company', deliveryCompanyRoutes);
+const adminDomainRouter = require('./domains/admin/admin.router');
+app.use('/api/manage', adminDomainRouter);
 
-const server = app.listen(port, '0.0.0.0', () => {
+const uploadDomainRouter = require('./domains/upload/upload.router');
+app.use('/api/upload', uploadDomainRouter);
+
+const publicDomainRouter = require('./domains/public/public.router');
+app.use('/api/public', publicDomainRouter);
+
+const domiDomainRouter = require('./domains/domi/domi.router');
+app.use('/api/domi', domiDomainRouter);
+
+const orderPublicRouter = require('./domains/order/order.public.router');
+app.use('/api/public/orders', orderPublicRouter);
+
+const domiPaymentRouter = require('./domains/domi/domi.payment.router');
+app.use('/api/payments', domiPaymentRouter);
+
+const deliveryCompanyDomainRouter = require('./domains/delivery-company/delivery-company.router');
+app.use('/api/delivery-company', deliveryCompanyDomainRouter);
+
+const onStartup = async () => {
+  const appLogger = require('./utils/appLogger');
+  const redisClient = require('./config/redis');
+  const db = require('./config/db');
+
+  appLogger.info('Iniciando arranque seguro del servidor arm-usa...');
+
+  try {
+    // 1. Forzar modo mantenimiento
+    await redisClient.set('system:maintenance_mode', 'true');
+    const details = {
+      message: 'El sistema se encuentra en modo mantenimiento por reinicio de servicios.',
+      estimated_end: new Date(Date.now() + 2 * 60 * 1000).toISOString(), // 2 minutos por defecto para desarrollo
+      started_at: new Date().toISOString()
+    };
+    await redisClient.set('system:maintenance_details', JSON.stringify(details));
+    appLogger.info('Estado de mantenimiento forzado a: ACTIVO (Bloqueo de Arranque).');
+
+    // 2. Revocación global de sesiones (Epoch en segundos)
+    const currentEpoch = Math.floor(Date.now() / 1000);
+    await redisClient.set('system:global_revocation_epoch', currentEpoch.toString());
+    appLogger.info(`Epoca de revocacion global establecida a: ${currentEpoch} (${new Date(currentEpoch * 1000).toISOString()}). Todos los tokens previos quedan invalidados.`);
+
+    // 3. Loop de diagnóstico de conectividad con la Base de Datos
+    let dbConnected = false;
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      try {
+        appLogger.info(`Verificando conexion a MariaDB (Intento ${attempt}/10)...`);
+        const [rows] = await db.query('SELECT 1');
+        if (rows) {
+          dbConnected = true;
+          appLogger.info('Diagnostico MariaDB: CONEXION EXITOSA.');
+          break;
+        }
+      } catch (err) {
+        appLogger.warn(`Diagnostico MariaDB fallido: ${err.message}`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    if (!dbConnected) {
+      appLogger.error('[CRITICAL] No se pudo establecer conexion con MariaDB tras 10 intentos.');
+    } else {
+      appLogger.info('Chequeo de arranque seguro finalizado con exito. El sistema permanece bloqueado para revision administrativa.');
+    }
+  } catch (err) {
+    appLogger.error(`Error critico en la inicializacion de arranque seguro: ${err.message}`);
+  }
+};
+
+const server = app.listen(port, () => {
   console.log(`Backend running on port ${port}`);
+
+  // Ejecutar inicialización de arranque seguro
+  onStartup().catch(err => console.error('[STARTUP_ERROR] Fallo en onStartup:', err));
 
   // Verificar integridad del token DOMI al arrancar (no-bloqueante)
   const domiEngine = require('./services/domiEngine');

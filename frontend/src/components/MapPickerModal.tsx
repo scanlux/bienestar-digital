@@ -8,6 +8,7 @@ import {
 } from './Common/ModalStyles';
 import { Spinner } from './Common/UIElements';
 import { useModalScroll } from '@/hooks/useModalScroll';
+import { GOOGLE_MAPS_API_KEY } from '@/constants';
 
 interface MapPickerProps {
   onClose: () => void;
@@ -30,7 +31,7 @@ export default function MapPickerModal({ onClose, onConfirm, initialLat, initial
       // @ts-ignore
       if (!window.google) {
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}`;
         script.async = true;
         document.head.appendChild(script);
         script.onload = () => initMap();

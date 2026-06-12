@@ -13,7 +13,7 @@ async function testRolesTriggers() {
 
   const rootConfig = {
     host: process.env.DB_HOST || '100.127.144.125',
-    user: 'root',
+    user: process.env.DB_USER || 'bienestar_admin_prod',
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME || 'marketplace_db'
   };

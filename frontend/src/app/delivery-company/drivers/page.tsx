@@ -5,6 +5,7 @@ import styled, { keyframes } from 'styled-components';
 import axios from 'axios';
 import { getAuthHeaders } from '@/utils/auth';
 import { API_URL } from '@/constants';
+import { useAlert } from '@/context/AlertContext';
 
 interface Driver {
   id: number;
@@ -16,6 +17,7 @@ interface Driver {
 }
 
 export default function DeliveryDriversPage() {
+  const { showConfirm } = useAlert();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [cedulaInput, setCedulaInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -69,22 +71,28 @@ export default function DeliveryDriversPage() {
     }
   };
 
-  const handleDeaffiliate = async (driverId: number) => {
-    if (!confirm('¿Estás seguro de que deseas desafiliar a este repartidor?')) return;
-
-    setActionLoading(true);
-    setMessage(null);
-
-    try {
-      const headers = getAuthHeaders();
-      await axios.delete(`${API_URL}/api/delivery-company/drivers/${driverId}`, { headers });
-      setMessage({ text: 'Repartidor desafiliado exitosamente', type: 'success' });
-      fetchDrivers();
-    } catch (error: any) {
-      const errMsg = error.response?.data?.error || 'Error al desafiliar el repartidor';
-      setMessage({ text: errMsg, type: 'error' });
-      setActionLoading(false);
-    }
+  const handleDeaffiliate = (driverId: number) => {
+    showConfirm({
+      title: 'Confirmar Desafiliacion',
+      message: '¿Estás seguro de que deseas desafiliar a este repartidor?',
+      confirmText: 'Desafiliar',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        setActionLoading(true);
+        setMessage(null);
+        try {
+          const headers = getAuthHeaders();
+          await axios.delete(`${API_URL}/api/delivery-company/drivers/${driverId}`, { headers });
+          setMessage({ text: 'Repartidor desafiliado exitosamente', type: 'success' });
+          fetchDrivers();
+        } catch (error: any) {
+          const errMsg = error.response?.data?.error || 'Error al desafiliar el repartidor';
+          setMessage({ text: errMsg, type: 'error' });
+        } finally {
+          setActionLoading(false);
+        }
+      }
+    });
   };
 
   return (

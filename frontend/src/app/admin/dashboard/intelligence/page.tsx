@@ -1,10 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import styled from 'styled-components';
+import {
+  Container, Header, TitleGroup, Title, Subtitle, Actions, StatusMsg,
+  ActionButton, Grid, Card, CardHeader, CardTitle, Badge, Table,
+  ProductCell, ProductImg, ProductName, StoreTag, Count, DateText,
+  LoadingText, StatsContainer, StatCard, StatTitle, StatValue,
+  StatDesc, ProgressWrapper, ProgressBar, ProgressText
+} from './IntelligenceStyles';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { AlertModal } from '@/components/Common/AlertModal';
+import { useAlert } from '@/context/AlertContext';
 import { API_URL } from '@/constants';
 
 
@@ -20,20 +26,13 @@ interface PopularProduct {
 export default function IntelligencePage() {
   const router = useRouter();
   const { token } = useAuth();
+  const { showConfirm } = useAlert();
   const [ranking, setRanking] = useState<PopularProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState('');
-  
-  // Modal State
-  const [modal, setModal] = useState({
-    isOpen: false,
-    title: '',
-    message: '',
-    confirmAction: null as (() => void) | null
-  });
 
   const fetchRanking = async () => {
     try {
@@ -72,12 +71,13 @@ export default function IntelligencePage() {
     }
   };
 
-  const handleGenerateTags = async () => {
-    setModal({
-      isOpen: true,
+  const handleGenerateTags = () => {
+    showConfirm({
       title: 'Confirmar Normalización',
       message: '¿Seguro que deseas normalizar y auto-generar los tags de todo el catálogo?\n\nEste proceso puede tardar unos minutos dependiendo del tamaño del catálogo.',
-      confirmAction: executeTagGeneration
+      confirmText: 'Iniciar Proceso',
+      cancelText: 'Cancelar',
+      onConfirm: executeTagGeneration
     });
   };
 
@@ -221,235 +221,9 @@ export default function IntelligencePage() {
         </StatsContainer>
       </Grid>
 
-      <AlertModal 
-        isOpen={modal.isOpen}
-        title={modal.title}
-        message={modal.message}
-        onClose={() => setModal({ ...modal, isOpen: false })}
-        onConfirm={modal.confirmAction || undefined}
-        onCancel={modal.confirmAction ? (() => setModal({ ...modal, isOpen: false })) : undefined}
-        confirmText={modal.confirmAction ? 'Iniciar Proceso' : 'Aceptar'}
-      />
+
     </Container>
   );
 }
 
-// ------------- STYLED COMPONENTS -------------
 
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-`;
-
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
-
-const TitleGroup = styled.div``;
-
-const Title = styled.h1`
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 0.5rem;
-`;
-
-const Subtitle = styled.p`
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.95rem;
-`;
-
-const Actions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-`;
-
-const StatusMsg = styled.span`
-  color: var(--emerald);
-  font-size: 0.9rem;
-  font-weight: 500;
-`;
-
-const ActionButton = styled.button`
-  background: var(--emerald);
-  color: #000;
-  border: none;
-  padding: 0.8rem 1.5rem;
-  border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(72, 214, 76, 0.3);
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 2rem;
-`;
-
-const Card = styled.div`
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 1.5rem;
-  padding: 1.5rem;
-`;
-
-const CardHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-`;
-
-const CardTitle = styled.h3`
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #fff;
-`;
-
-const Badge = styled.span`
-  background: rgba(255, 255, 255, 0.05);
-  padding: 0.4rem 0.8rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-`;
-
-const Table = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  
-  th {
-    text-align: left;
-    padding: 1rem;
-    color: rgba(255, 255, 255, 0.3);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  }
-  
-  td {
-    padding: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-    color: #fff;
-    font-size: 0.9rem;
-  }
-`;
-
-const ProductCell = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-`;
-
-const ProductImg = styled.img`
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  object-fit: cover;
-`;
-
-const ProductName = styled.span`
-  font-weight: 500;
-`;
-
-const StoreTag = styled.span`
-  background: rgba(72, 214, 76, 0.1);
-  color: var(--emerald);
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-`;
-
-const Count = styled.span`
-  font-weight: 700;
-  font-family: 'JetBrains Mono', monospace;
-`;
-
-const DateText = styled.span`
-  color: rgba(255, 255, 255, 0.4);
-`;
-
-const LoadingText = styled.div`
-  padding: 4rem;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.2);
-`;
-
-const StatsContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-`;
-
-const StatCard = styled.div`
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 1.2rem;
-  padding: 1.5rem;
-  border-left: 4px solid var(--emerald);
-`;
-
-const StatTitle = styled.div`
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.4);
-  margin-bottom: 0.5rem;
-`;
-
-const StatValue = styled.div<{ color?: string }>`
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: ${props => props.color || '#fff'};
-  margin-bottom: 0.25rem;
-`;
-
-const StatDesc = styled.div`
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.2);
-`;
-
-const ProgressWrapper = styled.div`
-  margin-bottom: 1rem;
-`;
-
-const ProgressBar = styled.div<{ width: number }>`
-  height: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-  position: relative;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: ${props => props.width}%;
-    background: var(--emerald);
-    transition: width 0.3s ease;
-    box-shadow: 0 0 10px rgba(72, 214, 76, 0.5);
-  }
-`;
-
-const ProgressText = styled.div`
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.4);
-  text-align: center;
-  font-family: 'JetBrains Mono', monospace;
-`;

@@ -14,9 +14,12 @@ CREATE TABLE `categorias` (
   `nombre` varchar(100) NOT NULL,
   `descripcion` text DEFAULT NULL,
   `orden_visual` int(11) DEFAULT 0,
+  `disponible` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp(6) NULL DEFAULT current_timestamp(6),
   `updated_at` timestamp(6) NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `fk_categorias_menu` (`menu_id`),
+  CONSTRAINT `fk_categorias_menu` FOREIGN KEY (`menu_id`) REFERENCES `menus` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=106 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `commerce_plans`;
@@ -158,15 +161,16 @@ CREATE TABLE `ingredients` (
 DROP TABLE IF EXISTS `menus`;
 CREATE TABLE `menus` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `commerce_id` int(11) NOT NULL,
+  `store_id` int(11) NOT NULL,
   `nombre` varchar(100) NOT NULL,
   `descripcion` text DEFAULT NULL,
   `orden` int(11) DEFAULT 0,
+  `disponible` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp(6) NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
   PRIMARY KEY (`id`),
-  KEY `idx_menus_commerce` (`commerce_id`),
-  CONSTRAINT `fk_menus_commerce` FOREIGN KEY (`commerce_id`) REFERENCES `commerces` (`id`) ON DELETE CASCADE
+  KEY `idx_menus_store` (`store_id`),
+  CONSTRAINT `fk_menus_store` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=60 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `order_incidents`;
@@ -287,7 +291,7 @@ CREATE TABLE `product_popularity` (
 DROP TABLE IF EXISTS `products`;
 CREATE TABLE `products` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `commerce_id` int(11) DEFAULT NULL,
+  `store_id` int(11) NOT NULL,
   `nombre` varchar(150) NOT NULL,
   `descripcion_larga` text DEFAULT NULL,
   `precio_base` decimal(10,2) NOT NULL,
@@ -302,10 +306,12 @@ CREATE TABLE `products` (
   `image_url` varchar(255) DEFAULT NULL,
   `tags` text DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `idx_product_name` (`commerce_id`,`nombre`),
+  UNIQUE KEY `idx_product_name` (`store_id`,`nombre`),
   KEY `fk_menu` (`menu_id`),
+  KEY `fk_category` (`categoria_id`),
   CONSTRAINT `fk_menu` FOREIGN KEY (`menu_id`) REFERENCES `menus` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `products_ibfk_1` FOREIGN KEY (`commerce_id`) REFERENCES `commerces` (`id`) ON DELETE CASCADE
+  CONSTRAINT `fk_category` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_products_store` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=368 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `profiles`;
@@ -411,37 +417,6 @@ CREATE TABLE `store_accounts` (
   CONSTRAINT `store_accounts_ibfk_1` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DROP TABLE IF EXISTS `store_categories`;
-CREATE TABLE `store_categories` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `store_id` int(11) NOT NULL,
-  `categoria_id` int(11) NOT NULL,
-  `disponible` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` datetime DEFAULT current_timestamp(),
-  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_store_cat` (`store_id`,`categoria_id`),
-  KEY `fk_sc_cat` (`categoria_id`),
-  KEY `idx_sc_store` (`store_id`),
-  CONSTRAINT `fk_sc_cat` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_sc_store` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=164 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-DROP TABLE IF EXISTS `store_menus`;
-CREATE TABLE `store_menus` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `store_id` int(11) NOT NULL,
-  `menu_id` int(11) NOT NULL,
-  `disponible` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` datetime DEFAULT current_timestamp(),
-  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_store_menu` (`store_id`,`menu_id`),
-  KEY `fk_sm_menu` (`menu_id`),
-  KEY `idx_sm_store` (`store_id`),
-  CONSTRAINT `fk_sm_menu` FOREIGN KEY (`menu_id`) REFERENCES `menus` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_sm_store` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=62 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `store_operating_hours`;
 CREATE TABLE `store_operating_hours` (
@@ -459,23 +434,6 @@ CREATE TABLE `store_operating_hours` (
   CONSTRAINT `store_operating_hours_ibfk_1` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=757 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-DROP TABLE IF EXISTS `store_products`;
-CREATE TABLE `store_products` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `store_id` int(11) NOT NULL,
-  `product_id` int(11) NOT NULL,
-  `precio_local` decimal(12,2) DEFAULT NULL COMMENT 'NULL = usar precio_base del producto maestro',
-  `tiempo_prep_local` int(11) DEFAULT NULL COMMENT 'NULL = usar tiempo_prep_estimado del producto maestro',
-  `disponible` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` datetime DEFAULT current_timestamp(),
-  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_store_product` (`store_id`,`product_id`),
-  KEY `idx_sp_store` (`store_id`),
-  KEY `idx_sp_product` (`product_id`),
-  CONSTRAINT `fk_sp_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_sp_store` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=820 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `stores`;
 CREATE TABLE `stores` (

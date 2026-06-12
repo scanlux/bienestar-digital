@@ -20,8 +20,8 @@ async function run() {
   console.log(`Conectando como root a: ${process.env.DB_HOST || '100.127.144.125'}`);
 
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || '100.127.144.125',
-    user: 'root',
+    host: process.env.DB_HOST || '127.0.0.1',
+    user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME || 'marketplace_db',
     multipleStatements: true
@@ -73,8 +73,16 @@ async function run() {
       try {
         await connection.query(stmt);
       } catch (err) {
-        console.error(`Error en sentencia v12:\n${stmt}\n`);
-        throw err;
+        if (stmt.toUpperCase().includes('GRANT')) {
+          console.warn(`[WARN] Ignorando error en GRANT local: ${err.message}`);
+        } else if (stmt.toUpperCase().includes('FLUSH PRIVILEGES')) {
+          console.warn(`[WARN] Ignorando error en FLUSH PRIVILEGES local: ${err.message}`);
+        } else if (err.code === 'ER_DUP_FIELDNAME' || err.code === 'ER_DUP_KEYNAME' || err.message.includes('Duplicate column')) {
+          console.warn(`[WARN] Column/Key already exists, skipping: ${err.message}`);
+        } else {
+          console.error(`Error en sentencia v12:\n${stmt}\n`);
+          throw err;
+        }
       }
     }
     console.log('Actualizaciones v12 aplicadas exitosamente.');

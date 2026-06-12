@@ -51,8 +51,8 @@ export const SeparatorLine = styled.div`
 `;
 
 export const SectionTitle = styled.h2`
-  font-size: 1.3rem;
-  font-weight: 400;
+  font-size: 1.4rem;
+  font-weight: 600;
   color: #fff;
   margin: 0 0 8px 0;
   letter-spacing: -0.01em;

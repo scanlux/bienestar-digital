@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useToast } from '@/context/ToastContext';
 
 interface UseGeolocationOptions {
   onCoordsConfirmed: (lat: number, lng: number) => void;
@@ -13,13 +14,14 @@ interface UseGeolocationOptions {
  * 4. Confirmar coordenadas seleccionadas
  */
 export const useGeolocation = ({ onCoordsConfirmed, onCoordsFromPermission }: UseGeolocationOptions) => {
+  const toast = useToast();
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showGeoWarning, setShowGeoWarning] = useState(false);
   const [geoStatus, setGeoStatus] = useState<'prompt' | 'denied' | 'default'>('default');
 
   const handleOpenMapPicker = async () => {
     if (!navigator.geolocation) {
-      alert('Tu navegador no soporta geolocalizacion');
+      toast.error('Tu navegador no soporta geolocalizacion');
       return;
     }
 

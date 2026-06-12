@@ -53,9 +53,11 @@ interface AlertModalProps {
   onConfirm?: () => void;
   onCancel?: () => void;
   title?: string;
-  message: string;
+  message?: string;
   confirmText?: string;
   cancelText?: string;
+  zIndex?: number;
+  isDismissible?: boolean;
 }
 
 /**
@@ -72,19 +74,33 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   title = 'Atención', 
   message,
   confirmText = 'Aceptar',
-  cancelText = 'Cancelar'
+  cancelText = 'Cancelar',
+  zIndex = 3000,
+  isDismissible = true
 }) => {
-  if (!isOpen) return null;
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const handleConfirm = () => {
     if (onConfirm) onConfirm();
     onClose();
   };
 
+  const handleOverlayClick = () => {
+    if (!isDismissible) return;
+    if (onCancel) onCancel();
+    else onClose();
+  };
+
   const isConfirm = !!onCancel;
 
   return createPortal(
-    <ModalOverlay onClick={onCancel || onClose} style={{ zIndex: 3000 }}>
+    <ModalOverlay onClick={handleOverlayClick} style={{ zIndex }}>
       <ModalContent 
         onClick={e => e.stopPropagation()} 
         $maxWidth="450px" 
@@ -101,9 +117,11 @@ export const AlertModal: React.FC<AlertModalProps> = ({
           <ModalTitle style={{ fontSize: '1.4rem', textAlign: 'center' }}>{title}</ModalTitle>
         </ModalHeader>
         
-        <AlertMessage>
-          {message}
-        </AlertMessage>
+        {message && (
+          <AlertMessage>
+            {message}
+          </AlertMessage>
+        )}
 
         <ButtonGroup>
           {isConfirm && (
@@ -120,3 +138,4 @@ export const AlertModal: React.FC<AlertModalProps> = ({
     document.body
   );
 };
+

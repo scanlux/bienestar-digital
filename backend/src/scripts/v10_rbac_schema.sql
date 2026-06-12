@@ -55,44 +55,4 @@ CREATE TABLE IF NOT EXISTS `user_roles` (
   FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-
--- 6. Triggers de Inmutabilidad de Datos Legales
-
-DELIMITER //
-
--- Protege la Cédula de Identidad de personas naturales
-DROP TRIGGER IF EXISTS protect_profile_cedula_immutability//
-CREATE TRIGGER protect_profile_cedula_immutability
-BEFORE UPDATE ON `profiles` FOR EACH ROW
-BEGIN
-  IF NEW.cedula <> OLD.cedula THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Seguridad: La Cedula es inmutable y no puede modificarse.';
-  END IF;
-END//
-
--- Protege el NIT de los comercios
-DROP TRIGGER IF EXISTS protect_commerce_nit_immutability//
-CREATE TRIGGER protect_commerce_nit_immutability
-BEFORE UPDATE ON `commerces` FOR EACH ROW
-BEGIN
-  IF NEW.nit <> OLD.nit THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Seguridad: El NIT es inmutable y no puede modificarse.';
-  END IF;
-END//
-
--- Protege la Matrícula Mercantil de las sedes (solo si ya tenía valor)
-DROP TRIGGER IF EXISTS protect_store_matricula_immutability//
-CREATE TRIGGER protect_store_matricula_immutability
-BEFORE UPDATE ON `stores` FOR EACH ROW
-BEGIN
-  IF OLD.matricula IS NOT NULL AND NEW.matricula <> OLD.matricula THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Seguridad: La Matricula Mercantil es inmutable una vez registrada.';
-  END IF;
-END//
-
-DELIMITER ;
-
-SET FOREIGN_KEY_CHECKS = 1;
+-- Note: Triggers are created programmatically by v10_rbac_ddl.js to avoid DELIMITER syntax parsing errors.

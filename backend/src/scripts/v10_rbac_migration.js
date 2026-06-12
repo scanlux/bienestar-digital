@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const mysql = require('mysql2/promise');
 
 const categories = [
@@ -36,6 +37,7 @@ const permissions = [
   { category: 'catalog', name: 'view_catalog', description: 'Ver menús, categorías y productos' },
   { category: 'catalog', name: 'manage_catalog', description: 'Gestionar menús, categorías y productos' },
   { category: 'catalog', name: 'manage_store_catalog', description: 'Gestionar disponibilidad y precios por sede' },
+  { category: 'catalog', name: 'clone_store_catalog', description: 'Clonar el catálogo completo de otra sede' },
   
   // Operaciones
   { category: 'operations', name: 'view_orders', description: 'Ver pedidos de la sede' },
@@ -87,7 +89,7 @@ const rolePermissionsMapping = {
   system_manager: [
     'view_security_logs', 'view_requests', 'approve_requests', 'reject_requests',
     'view_commerces', 'create_commerce', 'edit_commerce', 'view_stores', 'create_store', 'edit_store',
-    'view_catalog', 'manage_catalog', 'manage_store_catalog', 'view_orders', 'manage_orders',
+    'view_catalog', 'manage_catalog', 'manage_store_catalog', 'clone_store_catalog', 'view_orders', 'manage_orders',
     'view_store_admins', 'manage_store_admins', 'manage_order_acceptance', 'upload_videos',
     'delete_videos', 'manage_plans', 'view_analytics', 'manage_intelligence', 'view_ledger',
     'purchase_domis', 'spend_domis', 'manage_drivers', 'use_ai_generation'
@@ -96,7 +98,7 @@ const rolePermissionsMapping = {
     'view_security_logs', 'view_analytics', 'view_ledger'
   ],
   commerce_manager: [
-    'view_stores', 'create_store', 'edit_store', 'manage_store_catalog', 'view_orders', 'manage_orders',
+    'view_catalog', 'view_stores', 'create_store', 'edit_store', 'manage_store_catalog', 'clone_store_catalog', 'view_orders', 'manage_orders',
     'view_store_admins', 'manage_store_admins', 'manage_order_acceptance', 'upload_videos',
     'delete_videos', 'manage_plans'
   ],
@@ -107,7 +109,7 @@ const rolePermissionsMapping = {
     'manage_drivers'
   ],
   operator_full: [
-    'view_orders', 'manage_orders', 'manage_store_catalog', 'upload_videos', 'manage_order_acceptance'
+    'view_catalog', 'view_orders', 'manage_orders', 'manage_store_catalog', 'upload_videos', 'manage_order_acceptance'
   ],
   operator_orders: [
     'view_orders', 'manage_orders', 'manage_order_acceptance'
@@ -133,6 +135,7 @@ async function migrate() {
 
   try {
     await connection.query('SET FOREIGN_KEY_CHECKS = 0;');
+    await connection.query('SET @domi_is_root = 1;');
 
     // 1. Insertar Categorías
     console.log('Insertando categorías de permisos...');

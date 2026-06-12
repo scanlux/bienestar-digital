@@ -65,6 +65,7 @@ async function testAtomicPermissions() {
       console.log(`INFO: Liberada temporalmente la sede ${st.id} administrada por el usuario ${sedeAdminUserId}`);
     }
 
+    await connection.execute("UPDATE stores SET usuario_id = NULL WHERE id = 1");
     await connection.execute("UPDATE stores SET usuario_id = ? WHERE id = 1", [sedeAdminUserId]);
     console.log(`INFO: Asignado usuario ${sedeAdminUserId} como gerente temporal de Sede 1`);
 
@@ -235,10 +236,12 @@ async function testAtomicPermissions() {
 
     // Restaurar base de datos
     console.log('\n--- Restaurando dirección y gerente original de sede ---');
+    await connection.execute("UPDATE stores SET usuario_id = NULL WHERE id = 1");
     await connection.execute(
       "UPDATE stores SET direccion = ?, usuario_id = ? WHERE id = 1",
       [originalStore.direccion, originalStoreManager]
     );
+
 
     // Restaurar sedes liberadas
     for (const st of managedStores) {

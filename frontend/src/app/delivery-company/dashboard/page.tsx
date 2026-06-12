@@ -3,6 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { useAuth } from '@/context/AuthContext';
+import { KpiCard } from '@/components/Common/Dashboard/KpiCard';
+import { KpiGrid } from '@/components/Common/Dashboard/KpiGrid';
+import { StatusBadge } from '@/components/Common/StatusBadge';
 
 interface DeliveryStat {
   activeDrivers: number;
@@ -50,38 +53,33 @@ export default function DeliveryCompanyDashboard() {
 
       {/* KPI Grid */}
       <KpiGrid>
-        <KpiCard className="accent">
-          <div className="icon">🛵</div>
-          <div className="data">
-            <span className="label">Repartidores en Ruta</span>
-            <span className="value">{stats.activeDrivers}</span>
-          </div>
-          <div className="tag">ACTIVOS</div>
-        </KpiCard>
+        <KpiCard
+          icon="🛵"
+          label="Repartidores en Ruta"
+          value={stats.activeDrivers}
+          accent={true}
+          accentColor="blue"
+          tag="ACTIVOS"
+          tagVariant="blue"
+        />
 
-        <KpiCard>
-          <div className="icon">📦</div>
-          <div className="data">
-            <span className="label">Entregas Completadas</span>
-            <span className="value">{stats.completedDeliveries}</span>
-          </div>
-        </KpiCard>
+        <KpiCard
+          icon="📦"
+          label="Entregas Completadas"
+          value={stats.completedDeliveries}
+        />
 
-        <KpiCard>
-          <div className="icon">💵</div>
-          <div className="data">
-            <span className="label">Ingresos por Servicios</span>
-            <span className="value">${stats.totalEarnings.toLocaleString('es-CO')}</span>
-          </div>
-        </KpiCard>
+        <KpiCard
+          icon="💵"
+          label="Ingresos por Servicios"
+          value={`$${stats.totalEarnings.toLocaleString('es-CO')}`}
+        />
 
-        <KpiCard>
-          <div className="icon">⏳</div>
-          <div className="data">
-            <span className="label">Servicios Pendientes</span>
-            <span className="value">{stats.pendingDeliveries}</span>
-          </div>
-        </KpiCard>
+        <KpiCard
+          icon="⏳"
+          label="Servicios Pendientes"
+          value={stats.pendingDeliveries}
+        />
       </KpiGrid>
 
       <MainGrid>
@@ -111,9 +109,7 @@ export default function DeliveryCompanyDashboard() {
                   <div className="d-meta">
                     <span className="d-time">{del.time}</span>
                     <span className="d-val">{del.value}</span>
-                    <StatusBadge $status={del.status}>
-                      {del.status.replace('_', ' ')}
-                    </StatusBadge>
+                    <StatusBadge status={del.status} />
                   </div>
                 </DeliveryItem>
               ))}
@@ -191,66 +187,6 @@ const HeaderSection = styled.div`
   }
 `;
 
-const KpiGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 20px;
-`;
-
-const KpiCard = styled.div`
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 24px;
-  border-radius: 24px;
-  position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(10px);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  transition: transform 0.2s, border-color 0.2s;
-
-  &:hover {
-    transform: translateY(-2px);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
-  &.accent {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
-    border-color: rgba(59, 130, 246, 0.15);
-    .icon { color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
-  }
-
-  .icon {
-    width: 52px;
-    height: 52px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-  }
-
-  .data {
-    display: flex;
-    flex-direction: column;
-    .label { font-size: 11px; font-weight: 700; color: rgba(255, 255, 255, 0.3); text-transform: uppercase; letter-spacing: 0.05em; }
-    .value { font-size: 1.75rem; font-weight: 800; color: #fff; }
-  }
-
-  .tag {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    font-size: 8px;
-    font-weight: 900;
-    padding: 4px 8px;
-    background: #3b82f6;
-    color: #fff;
-    border-radius: 6px;
-  }
-`;
 
 const MainGrid = styled.div`
   display: grid;
@@ -342,37 +278,6 @@ const DeliveryItem = styled.div`
   }
 `;
 
-const StatusBadge = styled.span<{ $status: 'entregado' | 'en_camino' | 'asignado' }>`
-  font-size: 10px;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-
-  ${props => {
-    switch (props.$status) {
-      case 'entregado':
-        return `
-          background: rgba(72, 214, 76, 0.08);
-          color: var(--emerald);
-          border: 1px solid rgba(72, 214, 76, 0.1);
-        `;
-      case 'en_camino':
-        return `
-          background: rgba(245, 158, 11, 0.08);
-          color: #f59e0b;
-          border: 1px solid rgba(245, 158, 11, 0.1);
-        `;
-      case 'asignado':
-        return `
-          background: rgba(59, 130, 246, 0.08);
-          color: #3b82f6;
-          border: 1px solid rgba(59, 130, 246, 0.1);
-        `;
-    }
-  }}
-`;
 
 const SidebarTools = styled.div`
   display: flex;

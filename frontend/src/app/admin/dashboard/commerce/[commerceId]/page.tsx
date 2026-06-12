@@ -31,10 +31,16 @@ export default function StoresManagementPage({ params }: { params: { commerceId:
   const toast = useToast();
   const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
 
+  const [coords, setCoords] = useState<{ lat?: string; lng?: string }>({});
+
   // Hook de geolocalizacion centralizado
   const geo = useGeolocation({
-    onCoordsConfirmed: () => {},
-    onCoordsFromPermission: () => {}
+    onCoordsConfirmed: (lat, lng) => {
+      setCoords({ lat: lat.toString(), lng: lng.toString() });
+    },
+    onCoordsFromPermission: (lat, lng) => {
+      setCoords({ lat: lat.toString(), lng: lng.toString() });
+    }
   });
 
   useModalScroll(isModalOpen);
@@ -159,7 +165,10 @@ export default function StoresManagementPage({ params }: { params: { commerceId:
 
       <StoreFormModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setCoords({});
+        }}
         onSuccess={() => {
           fetchStores();
         }}
@@ -168,16 +177,16 @@ export default function StoresManagementPage({ params }: { params: { commerceId:
         paymentPlatforms={paymentPlatforms}
         modalTarget={modalTarget}
         onOpenMapPicker={geo.handleOpenMapPicker}
-        lat={undefined}
-        lng={undefined}
+        lat={coords.lat}
+        lng={coords.lng}
       />
 
       {geo.showMapPicker && modalTarget && createPortal(
         <MapPickerModal
           onClose={() => geo.setShowMapPicker(false)}
           onConfirm={geo.handleConfirmCoords}
-          initialLat={undefined}
-          initialLng={undefined}
+          initialLat={parseFloat(coords.lat || '') || undefined}
+          initialLng={parseFloat(coords.lng || '') || undefined}
         />,
         modalTarget
       )}

@@ -8,14 +8,9 @@ import MapPickerModal from '@/components/MapPickerModal';
 import GeoPermissionModal from '@/components/Common/GeoPermissionModal';
 import { useModalScroll } from '@/hooks/useModalScroll';
 import { useGeolocation } from '@/hooks/useGeolocation';
-import {
-  ModalOverlay, ModalContent, ModalHeader, ModalTitle, CloseButton,
-  Form, FormGrid, InputGroup, Label, Input, Select, TextArea, SubmitButton
-} from '@/components/Common/ModalStyles';
 import { StoreFormModal } from '@/components/Common/StoreFormModal';
 import { TransitionShield, ActionButton, LoadingState, Spinner } from '@/components/Common/UIElements';
 import { useToast } from '@/context/ToastContext';
-import { ImageUploadZone } from '@/components/Common/ImageUploadZone';
 import { DEFAULT_SCHEDULE, API_URL } from '@/constants';
 import { getAuthHeaders } from '@/utils/auth';
 import { formatTime, getFullImageUrl } from '@/utils';
@@ -24,7 +19,8 @@ import { COMMERCE_HIGHLIGHT_PARAM } from '@/utils/commerceNavigation';
 // Refactored Components
 import { PageContainer, CommercesGrid, EmptyState, SearchInput, SearchIconIcon, SedeGhostCard } from './components/CommerceStyles';
 import { CommerceCard } from './components/CommerceCard';
-import { SedesManagementModal } from './components/SedesManagementModal';
+import { SedesManagementModal } from '@/components/Common/SedesManagementModal';
+import { CommerceFormModal } from '@/components/Common/CommerceFormModal';
 
 // formatTime y getFullImageUrl importados desde @/utils
 
@@ -76,7 +72,6 @@ export default function CommerceManagementPage() {
   // Sedes states
   const [sedesModalOpen, setSedesModalOpen] = useState(false);
   const [createSedeModalOpen, setCreateSedeModalOpen] = useState(false);
-  const [isEditingSede, setIsEditingSede] = useState(false);
   const [sedesDelComercio, setSedesDelComercio] = useState<any[]>([]);
   const [selectedCommerce, setSelectedCommerce] = useState<any>(null);
   const [loadingSedes, setLoadingSedes] = useState(false);
@@ -317,7 +312,6 @@ export default function CommerceManagementPage() {
           longitud: '',
           schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
         });
-        setIsEditingSede(false);
         setCreateSedeModalOpen(true);
         scrollToTop();
       } else if (stores.length === 1) {
@@ -344,14 +338,7 @@ export default function CommerceManagementPage() {
   };
 
   const handleEditSedeFromModal = (sede: any) => {
-    setSedeFormData({
-      ...sede,
-      schedule: (sede.schedule && sede.schedule.length > 0) 
-        ? sede.schedule 
-        : JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
-    });
-    setIsEditingSede(true);
-    setCreateSedeModalOpen(true);
+    router.push(`/commerce/stores/${sede.id}/profile`);
   };
 
   // Logica de geolocalizacion manejada por useGeolocation hook
@@ -414,128 +401,17 @@ export default function CommerceManagementPage() {
       )}
 
       {/* Main Commerce Modal */}
-      {modalTarget && isModalOpen && createPortal(
-        <ModalOverlay onClick={closeMainModal}>
-          <ModalContent onClick={e => e.stopPropagation()}>
-            <ModalHeader>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <ModalTitle>{isEditing ? 'Editar Comercio' : 'Nuevo Comercio'}</ModalTitle>
-                {isEditing && currentCommerceId && (
-                  <ActionButton
-                    $variant="success-solid"
-                    type="button"
-                    style={{ padding: '6px 14px', fontSize: '0.8rem', height: 'auto', borderRadius: '8px' }}
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      router.push(`/admin/dashboard/commerce/${currentCommerceId}/menus`);
-                    }}
-                  >
-                    Gestionar Menús
-                  </ActionButton>
-                )}
-              </div>
-              <CloseButton onClick={closeMainModal}>✕</CloseButton>
-            </ModalHeader>
-            
-            <Form 
-              onSubmit={handleSubmit} 
-              noValidate 
-              className={isSubmitted ? 'was-validated' : ''}
-            >
-              <FormGrid>
-                <InputGroup>
-                  <Label>Nombre Comercial</Label>
-                  <Input required type="text" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} placeholder="Ej: McDonald's" />
-                </InputGroup>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px', gap: '10px', alignItems: 'end' }}>
-                  <InputGroup>
-                    <Label>NIT - CC</Label>
-                    <Input 
-                      required 
-                      type="text" 
-                      value={formData.nit} 
-                      onChange={e => setFormData({...formData, nit: e.target.value.replace(/\D/g, '')})} 
-                      placeholder="900000000" 
-                    />
-                  </InputGroup>
-                  <InputGroup>
-                    <Label>DV</Label>
-                    <Input 
-                      required 
-                      type="text" 
-                      maxLength={1}
-                      style={{ textAlign: 'center', padding: '0.7rem 0.5rem' }}
-                      value={formData.nit_dv} 
-                      onChange={e => setFormData({...formData, nit_dv: e.target.value.replace(/\D/g, '')})} 
-                      placeholder="0" 
-                    />
-                  </InputGroup>
-                </div>
-                <InputGroup>
-                  <Label>Nombres del Administrador</Label>
-                  <Input required type="text" value={formData.admin_nombres} onChange={e => setFormData({...formData, admin_nombres: e.target.value})} placeholder="Nombres" />
-                </InputGroup>
-                <InputGroup>
-                  <Label>Apellidos del Administrador</Label>
-                  <Input required type="text" value={formData.admin_apellidos} onChange={e => setFormData({...formData, admin_apellidos: e.target.value})} placeholder="Apellidos" />
-                </InputGroup>
-                <InputGroup>
-                  <Label>Teléfono contacto</Label>
-                  <Input 
-                    required 
-                    type="text" 
-                    value={formData.telefono} 
-                    onChange={e => setFormData({...formData, telefono: e.target.value.replace(/\D/g, '')})} 
-                    placeholder="3001234567" 
-                  />
-                </InputGroup>
-                <InputGroup>
-                  <Label>Ciudad</Label>
-                  <Select required value={formData.ciudad} onChange={e => setFormData({...formData, ciudad: e.target.value})}>
-                    <option value="">Seleccionar ciudad...</option>
-                    <option value="Yopal">Yopal</option>
-                    <option value="Tunja">Tunja</option>
-                    <option value="Villavicencio">Villavicencio</option>
-                    <option value="Bogotá">Bogotá</option>
-                  </Select>
-                </InputGroup>
-              </FormGrid>
-
-              <InputGroup>
-                <Label>Dirección Principal</Label>
-                <Input required type="text" value={formData.direccion} onChange={e => setFormData({...formData, direccion: e.target.value})} placeholder="Carrera 7 # 100 - 01" />
-              </InputGroup>
-
-              <ImageUploadZone 
-                label="Logo del Comercio"
-                initialImage={formData.logo_url}
-                endpoint="/api/upload/commerce"
-                placeholderText="Subir Logo"
-                helperText="JPG/PNG/WebP, formato libre."
-                onUploadSuccess={(url) => setFormData({ ...formData, logo_url: url })}
-              />
-
-              <InputGroup>
-                <Label>Descripción</Label>
-                <TextArea value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} placeholder="Breve reseña del negocio (Opcional)..." />
-              </InputGroup>
-
-              <InputGroup>
-                <Label>Tipo de Interfaz</Label>
-                <Select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                  <option value="Empresarial">Empresarial (TikTok Style / Videos)</option>
-                  <option value="Comercial">Comercial (Clasica)</option>
-                </Select>
-              </InputGroup>
-
-              <SubmitButton type="submit">
-                {isEditing ? 'Guardar Cambios' : 'Crear Comercio'}
-              </SubmitButton>
-            </Form>
-          </ModalContent>
-        </ModalOverlay>,
-        modalTarget
-      )}
+      <CommerceFormModal
+        isOpen={isModalOpen}
+        onClose={closeMainModal}
+        isEditing={isEditing}
+        currentCommerceId={currentCommerceId}
+        formData={formData}
+        setFormData={setFormData}
+        onSubmit={handleSubmit}
+        isSubmitted={isSubmitted}
+        modalTarget={modalTarget}
+      />
 
       {/* Sedes Management Modal */}
       <SedesManagementModal 
@@ -550,7 +426,6 @@ export default function CommerceManagementPage() {
         onEditSede={handleEditSedeFromModal}
         onNewSede={() => {
           setSedeFormData({ id: null, nombre_sucursal: '', telefono: '', direccion: '', open_time: '', close_time: '', is_24h: 0, estado: 'no_disponible', image_url: '', latitud: '', longitud: '' });
-          setIsEditingSede(false);
           setCreateSedeModalOpen(true);
         }}
         onSelectSede={(sedeId) => router.push(`/admin/dashboard/stores/${sedeId}`)}

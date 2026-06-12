@@ -1,7 +1,7 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const mysql = require('mysql2/promise');
 const fs = require('fs');
-const path = require('path');
 
 async function run() {
   console.log('=== APLICANDO DDL DEL SISTEMA RBAC (FASE 1) ===');
@@ -14,14 +14,14 @@ async function run() {
 
   const rawSql = fs.readFileSync(sqlPath, 'utf8');
 
-  // Usamos el usuario deployer que tiene permisos DDL (CREATE, DROP, ALTER)
-  const dbUser = 'bienestar_deployer';
-  const dbPassword = process.env.DB_DEPLOYER_PASSWORD || 'D3pl0y3r_2026_Secure';
+  // Usamos el usuario de administración configurado
+  const dbUser = process.env.DB_USER || 'root';
+  const dbPassword = process.env.DB_PASSWORD || process.env.DB_ROOT_PASSWORD || '';
 
-  console.log(`Conectando como usuario: ${dbUser} al host: ${process.env.DB_HOST || '100.127.144.125'}`);
+  console.log(`Conectando como usuario: ${dbUser} al host: ${process.env.DB_HOST || '127.0.0.1'}`);
 
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || '100.127.144.125',
+    host: process.env.DB_HOST || '127.0.0.1',
     user: dbUser,
     password: dbPassword,
     database: process.env.DB_NAME || 'marketplace_db',
@@ -86,6 +86,41 @@ async function run() {
         console.error(`Error en sentencia: \n${stmt}\n`);
         throw err;
       }
+    }
+
+    console.log('Creando triggers de inmutabilidad de datos legales...');
+    const triggersList = [
+      "DROP TRIGGER IF EXISTS protect_profile_cedula_immutability",
+      `CREATE TRIGGER protect_profile_cedula_immutability
+       BEFORE UPDATE ON \`profiles\` FOR EACH ROW
+       BEGIN
+         IF NEW.cedula <> OLD.cedula THEN
+           SIGNAL SQLSTATE '45000'
+             SET MESSAGE_TEXT = 'Seguridad: La Cedula es inmutable y no puede modificarse.';
+         END IF;
+       END`,
+      "DROP TRIGGER IF EXISTS protect_commerce_nit_immutability",
+      `CREATE TRIGGER protect_commerce_nit_immutability
+       BEFORE UPDATE ON \`commerces\` FOR EACH ROW
+       BEGIN
+         IF NEW.nit <> OLD.nit THEN
+           SIGNAL SQLSTATE '45000'
+             SET MESSAGE_TEXT = 'Seguridad: El NIT es inmutable y no puede modificarse.';
+         END IF;
+       END`,
+      "DROP TRIGGER IF EXISTS protect_store_matricula_immutability",
+      `CREATE TRIGGER protect_store_matricula_immutability
+       BEFORE UPDATE ON \`stores\` FOR EACH ROW
+       BEGIN
+         IF OLD.matricula IS NOT NULL AND NEW.matricula <> OLD.matricula THEN
+           SIGNAL SQLSTATE '45000'
+             SET MESSAGE_TEXT = 'Seguridad: La Matricula Mercantil es inmutable una vez registrada.';
+         END IF;
+       END`
+    ];
+
+    for (const trig of triggersList) {
+      await connection.query(trig);
     }
 
     await connection.query('SET FOREIGN_KEY_CHECKS = 1;');

@@ -7,6 +7,7 @@ import { Spinner } from './UIElements';
 import { getAuthToken } from '@/utils/auth';
 import { getFullImageUrl } from '@/utils';
 import { API_URL } from '@/constants';
+import { useAlert } from '@/context/AlertContext';
 
 
 interface ImageUploadZoneProps {
@@ -34,29 +35,17 @@ export const ImageUploadZone: React.FC<ImageUploadZoneProps> = ({
   const [preview, setPreview] = useState<string | null>(initialImage || null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { showAlert } = useAlert();
 
   // Sincronizar previsualización cuando cambia la imagen inicial (ej. al editar diferentes sedes)
   React.useEffect(() => {
     setPreview(initialImage || null);
   }, [initialImage]);
 
-  const handleFile = async (file: File) => {
-    if (!file) return;
-    
-    // Reset estado
-    setError(null);
-
-    if (onFileSelected) {
-      // Modo diferido: previsualización local y pasar el archivo al padre
-      const localUrl = URL.createObjectURL(file);
-      setPreview(localUrl);
-      onFileSelected(file);
-      return;
-    }
+  const uploadFile = async (fileToUpload: File) => {
     setLoading(true);
-
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('image', fileToUpload);
 
     try {
       const token = getAuthToken();
@@ -79,6 +68,107 @@ export const ImageUploadZone: React.FC<ImageUploadZoneProps> = ({
       setError(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFile = async (file: File) => {
+    if (!file) return;
+    
+    // Reset estado
+    setError(null);
+
+    // 1. Validar formato de archivo
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = ['jpeg', 'jpg', 'png', 'webp', 'heic'];
+    const isValidType = file.type.startsWith('image/') || (extension && allowedExtensions.includes(extension));
+    if (!isValidType) {
+      showAlert({
+        title: 'Formato no permitido',
+        message: 'Solo se permiten archivos de imagen (jpg, png, webp, heic).'
+      });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // 2. Validar tamaño (máximo 15MB)
+    if (file.size > 15 * 1024 * 1024) {
+      showAlert({
+        title: 'Archivo demasiado grande',
+        message: 'El tamaño de la imagen no puede superar los 15 MB.'
+      });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // 3. Validar dimensiones y orientación (solo para sedes)
+    const isStore = endpoint?.includes('store');
+    if (isStore) {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+      
+      img.onload = () => {
+        const width = img.naturalWidth || img.width;
+        const height = img.naturalHeight || img.height;
+        
+        if (width < 1080 || height < 1080) {
+          URL.revokeObjectURL(objectUrl);
+          showAlert({
+            title: 'Dimensión insuficiente',
+            message: `La foto seleccionada tiene dimensiones de ${width}x${height}px. Para garantizar la calidad en el diseño de la sede, la foto debe tener al menos 1080x1080 píxeles.`
+          });
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+          return;
+        }
+        
+        if (width <= height) {
+          URL.revokeObjectURL(objectUrl);
+          showAlert({
+            title: 'Orientación incorrecta',
+            message: `La imagen debe estar en orientación horizontal (landscape). Orientación actual: ${width}x${height} (vertical o cuadrada).`
+          });
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+          return;
+        }
+
+        // Si es válida, asignar preview local y notificar al padre
+        if (onFileSelected) {
+          setPreview(objectUrl);
+          onFileSelected(file);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+          uploadFile(file);
+        }
+      };
+      
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        showAlert({
+          title: 'Error de imagen',
+          message: 'No se pudo cargar la imagen para validar sus dimensiones. Asegúrese de que es un archivo de imagen válido.'
+        });
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
+      
+      img.src = objectUrl;
+    } else {
+      // Si no es de tipo store, proceder normalmente sin chequeo de dimensiones
+      if (onFileSelected) {
+        const localUrl = URL.createObjectURL(file);
+        setPreview(localUrl);
+        onFileSelected(file);
+      } else {
+        uploadFile(file);
+      }
     }
   };
 

@@ -383,8 +383,43 @@ const permissionsAnalysis = [
     impactedTables: ['products'],
     endpoints: ['POST /api/generate/'],
     scope: 'Utiliza el consumo de cuotas del backend para invocar a Gemini.'
+  },
+  {
+    code: 'view_maintenance_status',
+    name: 'Ver Estado Mantenimiento',
+    category: 'Seguridad',
+    criticidad: 'Baja',
+    tipo: 'Lectura',
+    impactedTables: [],
+    endpoints: ['GET /api/system/maintenance/status'],
+    scope: 'Ver el estado de diagnosticos del sistema y si esta activo el modo mantenimiento.'
+  },
+  {
+    code: 'manage_maintenance',
+    name: 'Gestionar Mantenimiento',
+    category: 'Seguridad',
+    criticidad: 'Crítica',
+    tipo: 'Escritura',
+    impactedTables: [],
+    endpoints: [
+      'POST /api/system/maintenance/enable',
+      'POST /api/system/maintenance/disable',
+      'POST /api/system/maintenance/panic'
+    ],
+    scope: 'Activar o desactivar el modo mantenimiento del sistema, asi como realizar una revocacion critica global (panico).'
+  },
+  {
+    code: 'view_system_logs',
+    name: 'Ver Logs del Sistema',
+    category: 'Seguridad',
+    criticidad: 'Alta',
+    tipo: 'Lectura',
+    impactedTables: [],
+    endpoints: ['GET /api/system/maintenance/logs'],
+    scope: 'Lectura directa de las ultimas lineas del archivo combined.log del backend.'
   }
 ];
+
 
 module.exports = {
   permissionsAnalysis

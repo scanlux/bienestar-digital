@@ -8,14 +8,20 @@ import axios from 'axios';
 import { API_URL } from '@/constants';
 import { getAuthHeaders } from '@/utils/auth';
 import { useToast } from '@/context/ToastContext';
+import { useAlert } from '@/context/AlertContext';
 import { getFullImageUrl } from '@/utils';
-import { SedesManagementModal } from '@/app/admin/dashboard/commerce/components/SedesManagementModal';
+import { SedesManagementModal } from '@/components/Common/SedesManagementModal';
+import { TransitionShield } from '@/components/Common/UIElements';
+import { KpiCard } from '@/components/Common/Dashboard/KpiCard';
+import { KpiGrid } from '@/components/Common/Dashboard/KpiGrid';
+import { EmptyState } from '@/components/Common/EmptyState';
+import { StatusBadge } from '@/components/Common/StatusBadge';
 
 interface Store {
   id: number;
   nombre_sucursal: string;
   direccion: string;
-  estado: 'activo' | 'inactivo';
+  estado: 'operativo' | 'mantenimiento' | 'vacaciones' | 'no_disponible' | 'remodelacion';
   acceptance_mode: 'automatico' | 'manual';
   image_url?: string;
 }
@@ -39,6 +45,7 @@ export default function CommerceDashboard() {
   const { user, token } = useAuth();
   const router = useRouter();
   const toast = useToast();
+  const { showConfirm } = useAlert();
 
   const [stores, setStores] = useState<Store[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -51,6 +58,7 @@ export default function CommerceDashboard() {
   const [selectedConfigStoreId, setSelectedConfigStoreId] = useState<number | null>(null);
   const [isStoreSelectModalOpen, setIsStoreSelectModalOpen] = useState(false);
   const [togglingAcceptance, setTogglingAcceptance] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const fetchData = async () => {
     if (!token) return;
@@ -92,35 +100,52 @@ export default function CommerceDashboard() {
 
   const handleManageSedesClick = () => {
     if (stores.length === 1) {
+      setIsNavigating(true);
       router.push(`/commerce/stores/${stores[0].id}`);
     } else if (stores.length > 1) {
       setIsStoreSelectModalOpen(true);
     }
   };
 
-  const handleUpdateOrderStatus = async (orderId: number, nextStatus: 'preparando' | 'listo_para_envio' | 'cancelado') => {
+  const handleUpdateOrderStatus = (orderId: number, nextStatus: 'preparando' | 'listo_para_envio' | 'cancelado') => {
     let confirmMsg = '';
+    let confirmBtn = 'Aceptar';
     if (nextStatus === 'cancelado') {
       confirmMsg = '¿Estás seguro de que deseas rechazar este pedido?';
+      confirmBtn = 'Rechazar';
     } else if (nextStatus === 'preparando') {
       confirmMsg = '¿Deseas aceptar este pedido e iniciar la preparación?';
+      confirmBtn = 'Aceptar Pedido';
     } else if (nextStatus === 'listo_para_envio') {
       confirmMsg = '¿Marcar pedido como listo para que lo retire el repartidor?';
+      confirmBtn = 'Listo';
     }
 
-    if (confirmMsg && !confirm(confirmMsg)) return;
+    const proceed = async () => {
+      setProcessingOrderId(orderId);
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+        await axios.patch(`${API_URL}/api/manage/orders/${orderId}/status`, { status: nextStatus }, { headers });
+        toast.success(`Pedido actualizado con éxito.`);
+        fetchData();
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err.response?.data?.error || 'Error al actualizar pedido.');
+      } finally {
+        setProcessingOrderId(null);
+      }
+    };
 
-    setProcessingOrderId(orderId);
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      await axios.patch(`${API_URL}/api/manage/orders/${orderId}/status`, { status: nextStatus }, { headers });
-      toast.success(`Pedido actualizado con éxito.`);
-      fetchData();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.response?.data?.error || 'Error al actualizar pedido.');
-    } finally {
-      setProcessingOrderId(null);
+    if (confirmMsg) {
+      showConfirm({
+        title: 'Confirmar Actualizacion de Pedido',
+        message: confirmMsg,
+        confirmText: confirmBtn,
+        cancelText: 'Cancelar',
+        onConfirm: proceed
+      });
+    } else {
+      proceed();
     }
   };
 
@@ -153,7 +178,7 @@ export default function CommerceDashboard() {
 
   // Cálculos de KPI
   const totalStores = stores.length;
-  const activeStores = stores.filter(s => s.estado === 'activo').length;
+  const activeStores = stores.filter(s => s.estado === 'operativo').length;
   
   const pendingOrders = orders.filter(o => o.status === 'pendiente');
   const preparingOrders = orders.filter(o => o.status === 'preparando');
@@ -180,40 +205,38 @@ export default function CommerceDashboard() {
 
       {/* KPI Grid */}
       <KpiGrid>
-        <KpiCard className="interactive" onClick={handleManageSedesClick}>
-          <div className="icon">🏪</div>
-          <div className="data">
-            <span className="label">Sedes Activas</span>
-            <span className="value">{activeStores}/{totalStores}</span>
-          </div>
-          <div className="tag-click">CONFIGURAR</div>
-        </KpiCard>
+        <KpiCard
+          icon="🏪"
+          label="Sedes Activas"
+          value={`${activeStores}/${totalStores}`}
+          onClick={handleManageSedesClick}
+        />
 
-        <KpiCard className="accent red-pulse">
-          <div className="icon">🥡</div>
-          <div className="data">
-            <span className="label">Pedidos Pendientes</span>
-            <span className="value">{pendingOrders.length}</span>
-          </div>
-          {pendingOrders.length > 0 && <div className="tag">POR ACEPTAR</div>}
-        </KpiCard>
+        <KpiCard
+          icon="🥡"
+          label="Pedidos Pendientes"
+          value={pendingOrders.length}
+          accent={true}
+          pulse={pendingOrders.length > 0 ? 'red' : undefined}
+          tag={pendingOrders.length > 0 ? 'POR ACEPTAR' : undefined}
+          tagVariant="error"
+        />
 
-        <KpiCard className="accent green-pulse">
-          <div className="icon">🍳</div>
-          <div className="data">
-            <span className="label">Pedidos Marchando</span>
-            <span className="value">{preparingOrders.length}</span>
-          </div>
-          {preparingOrders.length > 0 && <div className="tag info">PREPARANDO</div>}
-        </KpiCard>
+        <KpiCard
+          icon="🍳"
+          label="Pedidos Marchando"
+          value={preparingOrders.length}
+          accent={true}
+          pulse={preparingOrders.length > 0 ? 'green' : undefined}
+          tag={preparingOrders.length > 0 ? 'PREPARANDO' : undefined}
+          tagVariant="info"
+        />
 
-        <KpiCard>
-          <div className="icon">🍔</div>
-          <div className="data">
-            <span className="label">Productos Activos</span>
-            <span className="value">{productsCount}</span>
-          </div>
-        </KpiCard>
+        <KpiCard
+          icon="🍔"
+          label="Productos Activos"
+          value={productsCount}
+        />
       </KpiGrid>
 
       <MainGrid>
@@ -240,10 +263,10 @@ export default function CommerceDashboard() {
             {activeTab === 'prep' ? (
               <OrderList>
                 {activeDashboardOrders.length === 0 ? (
-                  <EmptyState>
-                    <span className="e-icon">✔</span>
-                    <p>No hay pedidos en preparación en este momento.</p>
-                  </EmptyState>
+                  <EmptyState
+                    icon="✔"
+                    message="No hay pedidos en preparación en este momento."
+                  />
                 ) : (
                   activeDashboardOrders.map((order) => (
                     <OrderItem key={order.id} className={order.status}>
@@ -300,9 +323,7 @@ export default function CommerceDashboard() {
             ) : (
               <OrderList>
                 {historyOrders.length === 0 ? (
-                  <EmptyState>
-                    <p>No se registran pedidos procesados hoy.</p>
-                  </EmptyState>
+                  <EmptyState message="No se registran pedidos procesados hoy." />
                 ) : (
                   historyOrders.map((order) => (
                     <OrderItem key={order.id} className="history-item">
@@ -310,12 +331,7 @@ export default function CommerceDashboard() {
                         <div className="order-top-row">
                           <span className="order-id">Pedido #{order.id}</span>
                           <span className="order-store">{order.store_name}</span>
-                          <span className={`status-badge ${order.status}`}>
-                            {order.status === 'listo_para_envio' && 'Listo para envío'}
-                            {order.status === 'en_camino' && 'En Camino'}
-                            {order.status === 'entregado' && 'Entregado'}
-                            {order.status === 'cancelado' && 'Cancelado'}
-                          </span>
+                          <StatusBadge status={order.status} />
                         </div>
                         <p className="customer-info">
                           Cliente: {order.customer_nombres} {order.customer_apellidos}
@@ -404,9 +420,11 @@ export default function CommerceDashboard() {
         sedes={stores}
         onSelectSede={(sedeId) => {
           setIsStoreSelectModalOpen(false);
+          setIsNavigating(true);
           router.push(`/commerce/stores/${sedeId}`);
         }}
       />
+      {isNavigating && <TransitionShield message="Cargando panel de la sede..." />}
     </Container>
   );
 }
@@ -417,17 +435,6 @@ const fadeIn = keyframes`
   to { opacity: 1; transform: translateY(0); }
 `;
 
-const pulseGreen = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-`;
-
-const pulseRed = keyframes`
-  0% { box-shadow: 0 0 0 0 rgba(255, 95, 95, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(255, 95, 95, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 95, 95, 0); }
-`;
 
 // ------------- STYLED COMPONENTS -------------
 const Container = styled.div`
@@ -468,97 +475,6 @@ const HeaderSection = styled.div`
   }
 `;
 
-const KpiGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 20px;
-`;
-
-const KpiCard = styled.div`
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 24px;
-  border-radius: 24px;
-  position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(10px);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  transition: all 0.2s ease;
-
-  &.interactive {
-    cursor: pointer;
-    &:hover {
-      background: rgba(16, 185, 129, 0.04);
-      border-color: rgba(16, 185, 129, 0.25);
-      transform: translateY(-2px);
-    }
-  }
-
-  &.accent {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
-    border-color: rgba(16, 185, 129, 0.15);
-    .icon { color: var(--emerald); background: rgba(16, 185, 129, 0.1); }
-  }
-
-  &.red-pulse {
-    border-color: rgba(255, 95, 95, 0.2);
-    animation: ${pulseRed} 2s infinite;
-    .icon { color: #ff5f5f; background: rgba(255, 95, 95, 0.1); }
-  }
-
-  &.green-pulse {
-    border-color: rgba(16, 185, 129, 0.2);
-    animation: ${pulseGreen} 2s infinite;
-  }
-
-  .icon {
-    width: 52px;
-    height: 52px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-  }
-
-  .data {
-    display: flex;
-    flex-direction: column;
-    .label { font-size: 11px; font-weight: 700; color: rgba(255, 255, 255, 0.3); text-transform: uppercase; letter-spacing: 0.05em; }
-    .value { font-size: 1.75rem; font-weight: 800; color: #fff; }
-  }
-
-  .tag {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    font-size: 8px;
-    font-weight: 900;
-    padding: 4px 8px;
-    background: #ff5f5f;
-    color: #fff;
-    border-radius: 6px;
-    &.info {
-      background: var(--emerald);
-    }
-  }
-
-  .tag-click {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    font-size: 8px;
-    font-weight: 900;
-    padding: 4px 8px;
-    background: rgba(16, 185, 129, 0.15);
-    color: #6ee7b7;
-    border-radius: 6px;
-    border: 1px solid rgba(16, 185, 129, 0.2);
-  }
-`;
 
 const MainGrid = styled.div`
   display: grid;
@@ -939,13 +855,3 @@ const Spinner = styled.div`
   @keyframes spin { to { transform: rotate(360deg); } }
 `;
 
-const EmptyState = styled.div`
-  text-align: center;
-  padding: 60px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  .e-icon { font-size: 2rem; opacity: 0.1; }
-  p { color: rgba(255, 255, 255, 0.2); font-size: 0.9rem; font-weight: 600; }
-`;

@@ -6,8 +6,10 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants';
+import { useToast } from '@/context/ToastContext';
 
 export default function UsersManagementPage() {
+  const toast = useToast();
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,10 +87,11 @@ export default function UsersManagementPage() {
         permissions: allPermissions
       } : u));
 
+      toast.success('Roles asignados con éxito.');
       closeModal();
     } catch (error: any) {
       console.error('Error saving user roles:', error);
-      alert(error.response?.data?.error || 'Error al guardar los roles del usuario');
+      toast.error(error.response?.data?.error || 'Error al guardar los roles del usuario');
     } finally {
       setIsSaving(false);
     }

@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { logSecurityEvent } = require('../utils/securityLogger');
-const db = require('../config/db');
+const userRepository = require('../domains/user/user.repository');
+const sessionStampService = require('../services/sessionStampService');
+const redisClient = require('../config/redis');
 
 
 if (!process.env.JWT_SECRET) {
@@ -8,7 +10,7 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-const auth = (req, res, next) => {
+const auth = async (req, res, next) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
 
   if (!token) {
@@ -17,10 +19,46 @@ const auth = (req, res, next) => {
 
   try {
     const verified = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Validacion de revocacion global de sesiones (Boot Lock / Reinicio)
+    const globalRevocationEpochStr = await redisClient.get('system:global_revocation_epoch');
+    if (globalRevocationEpochStr) {
+      const globalRevocationEpoch = parseInt(globalRevocationEpochStr, 10);
+      if (verified.iat && verified.iat < globalRevocationEpoch && verified.actorType !== 'system_user') {
+        console.warn(`[AUTH] Token rechazado por reinicio de servicios. Usuario: ${verified.id} (${verified.actorType})`);
+        return res.status(440).json({ code: 'SESSION_INVALIDATED', error: 'Sesion expirada por reinicio o mantenimiento del sistema.' });
+      }
+    }
+
+    // Validacion de revocacion critica (Boton de Panico)
+    const criticalRevocationEpochStr = await redisClient.get('system:critical_revocation_epoch');
+    if (criticalRevocationEpochStr) {
+      const criticalRevocationEpoch = parseInt(criticalRevocationEpochStr, 10);
+      if (verified.iat && verified.iat < criticalRevocationEpoch) {
+        console.warn(`[AUTH] Token rechazado por revocacion critica (Boton de Panico). Usuario: ${verified.id} (${verified.actorType})`);
+        return res.status(440).json({ code: 'SESSION_INVALIDATED', error: 'Sesión invalidada por emergencia de seguridad.' });
+      }
+    }
+    
+    if (!verified.session_stamp) {
+      console.warn(`[AUTH] Token rechazado: falta session_stamp en payload. Usuario: ${verified.id} (${verified.actorType})`);
+      return res.status(440).json({ code: 'SESSION_INVALIDATED', error: 'Sesión invalidada. Por favor inicie sesión de nuevo.' });
+    }
+
+    const currentStamp = await sessionStampService.getStamp(verified.actorType, verified.id);
+    if (currentStamp && currentStamp !== verified.session_stamp) {
+      console.warn(`[AUTH] Token rechazado: mismatch de session_stamp. Esperado: ${currentStamp}, recibido: ${verified.session_stamp}. Usuario: ${verified.id} (${verified.actorType})`);
+      return res.status(440).json({ code: 'SESSION_INVALIDATED', error: 'Sesión invalidada por cambios en la cuenta o permisos.' });
+    }
+
     req.user = verified;
     next();
   } catch (error) {
-    res.status(400).json({ error: 'Token inválido' });
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(400).json({ error: 'Token inválido' });
+    }
+    console.error('[AUTH ERROR]', error);
+    res.status(500).json({ error: 'Error interno del servidor al autenticar.' });
   }
 };
 
@@ -90,15 +128,9 @@ const hasPermission = (permissionName) => async (req, res, next) => {
     }
 
     // Consultar permisos activos del usuario en tiempo real desde la DB
-    const [permissionsData] = await db.query(`
-      SELECT 1
-      FROM user_roles ur
-      JOIN role_permissions rp ON rp.role_id = ur.role_id
-      JOIN permissions p ON p.id = rp.permission_id
-      WHERE ur.user_type = ? AND ur.user_id = ? AND p.name = ?
-    `, [req.user.actorType, req.user.id, permissionName]);
+    const hasPermission = await userRepository.checkUserPermission(req.user.actorType, req.user.id, permissionName);
 
-    if (permissionsData.length > 0) {
+    if (hasPermission) {
       next();
     } else {
       const userId = req.user.id;

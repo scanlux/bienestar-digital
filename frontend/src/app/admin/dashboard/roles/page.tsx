@@ -7,8 +7,12 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { API_URL } from '@/constants';
+import { useToast } from '@/context/ToastContext';
+import { useAlert } from '@/context/AlertContext';
 
 export default function RolesManagementPage() {
+  const toast = useToast();
+  const { showConfirm } = useAlert();
   const [roles, setRoles] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +90,7 @@ export default function RolesManagementPage() {
 
   const saveRole = async () => {
     if (isNew && (!roleName || !roleCode)) {
-      alert('Nombre y código de rol son requeridos.');
+      toast.error('Nombre y codigo de rol son requeridos.');
       return;
     }
     
@@ -101,6 +105,7 @@ export default function RolesManagementPage() {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        toast.success('Rol creado con éxito.');
       } else {
         await axios.put(`${API_URL}/api/manage/roles/${selectedRole.id}`, {
           name: roleName,
@@ -109,32 +114,38 @@ export default function RolesManagementPage() {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        toast.success('Rol actualizado con éxito.');
       }
 
       await fetchData();
       closeModal();
     } catch (error: any) {
       console.error('Error saving role:', error);
-      alert(error.response?.data?.error || 'Error al guardar el rol');
+      toast.error(error.response?.data?.error || 'Error al guardar el rol');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const deleteRole = async (roleId: number) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este rol? Esta acción no se puede deshacer.')) {
-      return;
-    }
-
-    try {
-      await axios.delete(`${API_URL}/api/manage/roles/${roleId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      await fetchData();
-    } catch (error: any) {
-      console.error('Error deleting role:', error);
-      alert(error.response?.data?.error || 'Error al eliminar el rol');
-    }
+  const deleteRole = (roleId: number) => {
+    showConfirm({
+      title: 'Confirmar Eliminacion',
+      message: '¿Estás seguro de que deseas eliminar este rol? Esta acción no se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        try {
+          await axios.delete(`${API_URL}/api/manage/roles/${roleId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          await fetchData();
+          toast.success('Rol eliminado con éxito.');
+        } catch (error: any) {
+          console.error('Error deleting role:', error);
+          toast.error(error.response?.data?.error || 'Error al eliminar el rol');
+        }
+      }
+    });
   };
 
   if (loading) return <Container><p>Cargando catálogo de roles...</p></Container>;

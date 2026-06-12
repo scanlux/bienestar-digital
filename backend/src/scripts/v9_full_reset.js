@@ -212,32 +212,63 @@ async function main() {
 
         // I. Sembrar Menús, Categorías y Productos para las sedes
         console.log('  -> Sembrando menús, categorías y productos para tiendas...');
-        const seedMenuData = async (storeId, commerceId, storeSuffix) => {
+        const seedMenuData = async (storeId, storeSuffix) => {
             const [mResult] = await connection.query(`
-                INSERT INTO menus (commerce_id, nombre, descripcion, orden) VALUES (?, 'Menú Principal', 'Nuestra selección exclusiva', 0)
-            `, [commerceId]);
+                INSERT INTO menus (store_id, nombre, descripcion, orden, disponible) VALUES (?, 'Menú Principal', 'Nuestra selección exclusiva', 0, 1)
+            `, [storeId]);
             const menuId = mResult.insertId;
 
+            // 1. Platos Fuertes
             const [catResult] = await connection.query(`
-                INSERT INTO categorias (menu_id, nombre, descripcion, orden_visual) VALUES (?, 'Platos Fuertes', 'Nuestros platos insignia', 0)
+                INSERT INTO categorias (menu_id, nombre, descripcion, orden_visual, disponible) VALUES (?, 'Platos Fuertes', 'Nuestros platos insignia', 0, 1)
             `, [menuId]);
             const catId = catResult.insertId;
 
-            const [pResult] = await connection.query(`
-                INSERT INTO products (commerce_id, categoria_id, menu_id, nombre, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible) 
+            await connection.query(`
+                INSERT INTO products (store_id, categoria_id, menu_id, nombre, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible) 
                 VALUES (?, ?, ?, ?, 'Preparado fresco en el local.', 22000.00, 25, 'https://picsum.photos/600/400/food', 1)
-            `, [commerceId, catId, menuId, `Bandeja Paisa - ${storeSuffix}`]);
-            const productId = pResult.insertId;
+            `, [storeId, catId, menuId, `Bandeja Paisa - ${storeSuffix}`]);
 
-            // Pivotes
-            await connection.query(`INSERT INTO store_menus (store_id, menu_id, disponible) VALUES (?, ?, 1)`, [storeId, menuId]);
-            await connection.query(`INSERT INTO store_categories (store_id, categoria_id, disponible) VALUES (?, ?, 1)`, [storeId, catId]);
-            await connection.query(`INSERT INTO store_products (store_id, product_id, precio_local, disponible) VALUES (?, ?, NULL, 1)`, [storeId, productId]);
+            // 2. Bebidas
+            const [bebCatResult] = await connection.query(`
+                INSERT INTO categorias (menu_id, nombre, descripcion, orden_visual, disponible) VALUES (?, 'Bebidas', 'Refrescos y jugos naturales', 1, 1)
+            `, [menuId]);
+            const bebCatId = bebCatResult.insertId;
+
+            const bebidas = [
+                { nombre: `Limonada Cerezada - ${storeSuffix}`, desc: 'Refrescante limonada natural licuada con cerezas dulces y hielo.', precio: 7500.00, tiempo: 5, img: 'https://picsum.photos/600/400/beverage' },
+                { nombre: `Jugo de Maracuyá - ${storeSuffix}`, desc: 'Jugo natural de maracuyá preparado en agua o leche a elección.', precio: 6800.00, tiempo: 5, img: 'https://picsum.photos/600/400/beverage' },
+                { nombre: `Té Hatsu Rojo - ${storeSuffix}`, desc: 'Té helado Hatsu sabor a frutos rojos, sin azúcar añadida.', precio: 8200.00, tiempo: 2, img: 'https://picsum.photos/600/400/beverage' }
+            ];
+            for (const b of bebidas) {
+                await connection.query(`
+                    INSERT INTO products (store_id, categoria_id, menu_id, nombre, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                `, [storeId, bebCatId, menuId, b.nombre, b.desc, b.precio, b.tiempo, b.img]);
+            }
+
+            // 3. Postres
+            const [posCatResult] = await connection.query(`
+                INSERT INTO categorias (menu_id, nombre, descripcion, orden_visual, disponible) VALUES (?, 'Postres', 'Postres dulces para acompañar tu comida', 2, 1)
+            `, [menuId]);
+            const posCatId = posCatResult.insertId;
+
+            const postres = [
+                { nombre: `Tres Leches Tradicional - ${storeSuffix}`, desc: 'Esponjoso bizcocho bañado en tres tipos de leche con crema y canela.', precio: 9500.00, tiempo: 5, img: 'https://picsum.photos/600/400/dessert' },
+                { nombre: `Flan de Caramelo - ${storeSuffix}`, desc: 'Postre clásico suave y cremoso con salsa de caramelo artesanal.', precio: 8000.00, tiempo: 5, img: 'https://picsum.photos/600/400/dessert' },
+                { nombre: `Brownie con Helado - ${storeSuffix}`, desc: 'Brownie tibio de chocolate con una bola de helado de vainilla y fudge.', precio: 11000.00, tiempo: 8, img: 'https://picsum.photos/600/400/dessert' }
+            ];
+            for (const p of postres) {
+                await connection.query(`
+                    INSERT INTO products (store_id, categoria_id, menu_id, nombre, descripcion_larga, precio_base, tiempo_prep_estimado, image_url, disponible)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                `, [storeId, posCatId, menuId, p.nombre, p.desc, p.precio, p.tiempo, p.img]);
+            }
         };
 
-        await seedMenuData(store1Id, commerce1Id, 'Chapinero');
-        await seedMenuData(store2Id, commerce1Id, 'Centro');
-        await seedMenuData(store3Id, commerce2Id, 'Yopal');
+        await seedMenuData(store1Id, 'Chapinero');
+        await seedMenuData(store2Id, 'Centro');
+        await seedMenuData(store3Id, 'Yopal');
 
         // J. Cargar saldos de prueba en las wallets (Mints virtuales de simulación)
         console.log('  -> Asignando saldos iniciales (Mint DOMIs)...');
@@ -285,7 +316,7 @@ async function main() {
         const adminProdTables = [
             'commerces', 'stores', 'products', 'product_images', 'categorias', 'menus', 
             'ingredients', 'product_ingredients', 'payment_platforms', 'store_accounts', 
-            'store_operating_hours', 'store_menus', 'store_categories', 'store_products', 
+            'store_operating_hours', 
             'users', 'profiles', 'store_operators', 'delivery_companies', 'registration_requests',
             'user_permissions'
         ];

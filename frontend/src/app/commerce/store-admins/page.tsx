@@ -40,7 +40,6 @@ export default function CommerceStoresManagementPage() {
 
   // Modal states
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [storeFormData, setStoreFormData] = useState<any>({
     id: null,
     nombre_sucursal: '',
@@ -123,7 +122,6 @@ export default function CommerceStoresManagementPage() {
   };
 
   const handleOpenCreateModal = () => {
-    setIsEditing(false);
     setStoreFormData({
       id: null,
       nombre_sucursal: '',
@@ -134,17 +132,6 @@ export default function CommerceStoresManagementPage() {
       latitud: '',
       longitud: '',
       schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
-    });
-    setIsStoreModalOpen(true);
-  };
-
-  const handleOpenEditModal = (store: any) => {
-    setIsEditing(true);
-    setStoreFormData({
-      ...store,
-      schedule: (store.schedule && store.schedule.length > 0)
-        ? store.schedule
-        : JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
     });
     setIsStoreModalOpen(true);
   };
@@ -200,7 +187,7 @@ export default function CommerceStoresManagementPage() {
             store={store}
             isHighlighted={highlightedStoreId === store.id}
             onSelect={() => handleSelectStore(store.id)}
-            onEdit={canEdit ? () => handleOpenEditModal(store) : undefined}
+            onEdit={canEdit ? () => router.push(`/commerce/stores/${store.id}/profile`) : undefined}
           />
         ))}
 
