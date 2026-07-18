@@ -65,11 +65,19 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
+    # Bloquear ejecución de scripts en uploads
+    location ~* ^/uploads/.*\.(php|pl|py|jsp|sh|cgi|asp|aspx|js|exe)$ {
+        deny all;
+    }
+
     # Servir imágenes estáticas desde el directorio de subidas
     location /uploads/ {
         alias /var/www/bienestar/uploads/;
         add_header Cache-Control "public, max-age=31536000, immutable";
         add_header Access-Control-Allow-Origin *;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Content-Security-Policy "default-src 'none'; sandbox" always;
         try_files $uri =404;
     }
 

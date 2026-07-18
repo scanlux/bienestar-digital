@@ -32,17 +32,18 @@ export const ModalOverlay = styled.div`
 `;
 
 export const ModalContent = styled.div<{ $maxWidth?: string }>`
-  background: #121212;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(18, 22, 19, 0.95);
+  border: 1px solid rgba(16, 185, 129, 0.35);
   width: 100%;
   max-width: ${props => props.$maxWidth || '650px'};
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 2.5rem;
   position: relative;
   height: auto;
   margin: 0 auto;
-  animation: ${fadeIn} 0.3s ease;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  animation: ${fadeIn} 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 45px rgba(16, 185, 129, 0.15);
+  backdrop-filter: blur(12px);
 `;
 
 export const ModalHeader = styled.div`

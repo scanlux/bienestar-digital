@@ -1,6 +1,10 @@
 const publicRepository = require('./public.repository');
+const adminRepository = require('../admin/admin.repository');
+const db = require('../../config/db');
+const jwt = require('jsonwebtoken');
 const { isStoreCurrentlyOpen } = require('../../utils/timeUtils');
 const { BusinessError, NotFoundError } = require('../../utils/errors');
+const { logSecurityEvent } = require('../../utils/securityLogger');
 
 class PublicService {
   async getHomeData() {
@@ -105,18 +109,29 @@ class PublicService {
     storeData.schedule = schedule;
     storeData.is_currently_open = isStoreCurrentlyOpen(storeData.estado, schedule);
 
+    // Consultar si tiene el upgrade 'estado_empresarial' activo
+    const [[activeUpgradeRow]] = await db.query(
+      'SELECT COUNT(*) as activeCount FROM commerce_upgrades WHERE commerce_id = ? AND upgrade_type = "estado_empresarial" AND expires_at > NOW()',
+      [storeData.commerce_id]
+    );
+    const hasBusinessStatus = Number(activeUpgradeRow.activeCount) > 0;
+
     const menus = await publicRepository.findMenusByStoreId(storeId);
     const menuStructure = [];
 
     for (const menu of menus) {
       const categorias = await publicRepository.findCategoriesByMenuAndStore(menu.id, storeId);
+      // Sin estado empresarial, se limita a las 3 primeras categorias
+      const limitedCategorias = hasBusinessStatus ? categorias : categorias.slice(0, 3);
       const categoriasConProductos = [];
 
-      for (const cat of categorias) {
+      for (const cat of limitedCategorias) {
         const products = await publicRepository.findProductsByCategoryAndStore(cat.id, storeId);
+        // Sin estado empresarial, se limita a los 5 primeros productos por categoria
+        const limitedProducts = hasBusinessStatus ? products : products.slice(0, 5);
         categoriasConProductos.push({
           ...cat,
-          products
+          products: limitedProducts
         });
       }
 
@@ -179,22 +194,51 @@ class PublicService {
     };
   }
 
-  async createRequest(requestData) {
-    const { tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, apellidos_contacto, celular_contacto } = requestData;
+  async createRequest(requestData, req = null) {
+    const { 
+      tipo_solicitud, nit, nit_dv, razon_social, email_contacto, nombres_contacto, 
+      apellidos_contacto, celular_contacto, logo_url, documento_camara_comercio, 
+      documento_rut, documento_cedula_frente, documento_cedula_dorso,
+      telefono, ciudad, direccion, descripcion
+    } = requestData;
 
-    if (!tipo_solicitud || !nit || !razon_social || !email_contacto || !nombres_contacto || !apellidos_contacto || !celular_contacto) {
-      throw new BusinessError('Todos los campos son obligatorios.');
+    if (
+      !tipo_solicitud || !nit || !nit_dv || !razon_social || !email_contacto || 
+      !nombres_contacto || !apellidos_contacto || !celular_contacto || 
+      !logo_url || !documento_camara_comercio || !documento_rut || 
+      !documento_cedula_frente || !documento_cedula_dorso ||
+      !telefono || !ciudad || !direccion
+    ) {
+      throw new BusinessError('Todos los campos son obligatorios, incluyendo los documentos adjuntos.');
     }
 
     if (!['commerce', 'delivery_company'].includes(tipo_solicitud)) {
       throw new BusinessError('Tipo de solicitud inválido.');
     }
 
+    // Validar formato de las URLs del servidor de medios en Bogotá
+    const pdfUrlRegex = /^(https?:\/\/)(localhost:4001|127\.0\.0\.1:4001|trendy-telemetry\.sytes\.net)\/uploads\/requests\/req_doc_.*\.(pdf)$/i;
+    const imageUrlRegex = /^(https?:\/\/)(localhost:4001|127\.0\.0\.1:4001|trendy-telemetry\.sytes\.net)\/uploads\/requests\/req_doc_.*\.(jpe?g|png|webp)$/i;
+
+    const pdfsToValidate = [documento_camara_comercio, documento_rut];
+    for (const url of pdfsToValidate) {
+      if (!url || !pdfUrlRegex.test(url)) {
+        throw new BusinessError('Formato o procedencia de documento adjunto inválido (se esperaba PDF). Debe provenir del servidor de medios autorizado.');
+      }
+    }
+
+    const imagesToValidate = [logo_url, documento_cedula_frente, documento_cedula_dorso];
+    for (const url of imagesToValidate) {
+      if (!url || !imageUrlRegex.test(url)) {
+        throw new BusinessError('Formato o procedencia de documento adjunto inválido (se esperaba Imagen). Debe provenir del servidor de medios autorizado.');
+      }
+    }
+
     const existingRequest = await publicRepository.findRegistrationRequestByNitOrEmail(nit, email_contacto);
     if (existingRequest.length > 0) {
       const reqState = existingRequest[0].estado;
-      if (reqState === 'pendiente') {
-        throw new BusinessError('Ya existe una solicitud pendiente con este NIT o Correo.');
+      if (reqState === 'pendiente' || reqState === 'espera_informacion') {
+        throw new BusinessError('Ya existe una solicitud pendiente o en revisión con este NIT o Correo.');
       } else if (reqState === 'aprobado') {
         throw new BusinessError('Este NIT o Correo ya cuenta con una solicitud aprobada y una cuenta de negocio.');
       }
@@ -205,9 +249,97 @@ class PublicService {
       throw new BusinessError('El correo electrónico ya se encuentra registrado en el sistema.');
     }
 
-    await publicRepository.insertRegistrationRequest(requestData);
+    const insertId = await publicRepository.insertRegistrationRequest(requestData);
+
+    await logSecurityEvent(
+      null,
+      'SUBMIT_REGISTRATION_REQUEST',
+      'LOW',
+      req,
+      { email: email_contacto, razon_social },
+      'request',
+      insertId
+    );
 
     return { success: true, message: 'Solicitud de registro enviada con éxito.' };
+  }
+
+  async verifyRequestToken(token) {
+    if (!token) throw new BusinessError('Token no provisto.');
+    try {
+      const verified = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+      const { requestId, missingFields } = verified;
+      
+      const request = await adminRepository.findRequestById(requestId);
+      if (!request) throw new NotFoundError('Solicitud de registro asociada al token no encontrada.');
+      if (request.estado !== 'espera_informacion') {
+        throw new BusinessError('Esta solicitud ya ha sido procesada o no se encuentra en espera de informacion.');
+      }
+
+      return { request, missingFields };
+    } catch (err) {
+      if (err instanceof BusinessError || err instanceof NotFoundError) throw err;
+      throw new BusinessError('Token de solicitud invalido o expirado.');
+    }
+  }
+
+  async updateRequestWithCorrections(token, requestData, req = null) {
+    const { request } = await this.verifyRequestToken(token);
+    
+    const { 
+      tipo_solicitud, nit, nit_dv, razon_social, email_contacto, nombres_contacto, 
+      apellidos_contacto, celular_contacto, logo_url, documento_camara_comercio, 
+      documento_rut, documento_cedula_frente, documento_cedula_dorso,
+      telefono, ciudad, direccion, descripcion
+    } = requestData;
+
+    if (
+      !tipo_solicitud || !nit || !nit_dv || !razon_social || !email_contacto || 
+      !nombres_contacto || !apellidos_contacto || !celular_contacto || 
+      !logo_url || !documento_camara_comercio || !documento_rut || 
+      !documento_cedula_frente || !documento_cedula_dorso ||
+      !telefono || !ciudad || !direccion
+    ) {
+      throw new BusinessError('Todos los campos son obligatorios, incluyendo los documentos adjuntos.');
+    }
+
+    const pdfUrlRegex = /^(https?:\/\/)(localhost:4001|127\.0\.0\.1:4001|trendy-telemetry\.sytes\.net)\/uploads\/requests\/req_doc_.*\.(pdf)$/i;
+    const imageUrlRegex = /^(https?:\/\/)(localhost:4001|127\.0\.0\.1:4001|trendy-telemetry\.sytes\.net)\/uploads\/requests\/req_doc_.*\.(jpe?g|png|webp)$/i;
+
+    const pdfsToValidate = [documento_camara_comercio, documento_rut];
+    for (const url of pdfsToValidate) {
+      if (!url || !pdfUrlRegex.test(url)) {
+        throw new BusinessError('Formato o procedencia de documento adjunto inválido.');
+      }
+    }
+
+    const imagesToValidate = [logo_url, documento_cedula_frente, documento_cedula_dorso];
+    for (const url of imagesToValidate) {
+      if (!url || !imageUrlRegex.test(url)) {
+        throw new BusinessError('Formato o procedencia de imagen adjunta inválida.');
+      }
+    }
+
+    if (email_contacto !== request.email_contacto) {
+      const existingUser = await publicRepository.findUserByEmail(email_contacto);
+      if (existingUser.length > 0) {
+        throw new BusinessError('El nuevo correo electrónico ya se encuentra registrado.');
+      }
+    }
+
+    await publicRepository.updateRegistrationRequest(request.id, requestData);
+
+    await logSecurityEvent(
+      null,
+      'SUBMIT_CORRECTIONS',
+      'LOW',
+      req,
+      { email: request.email_contacto, razon_social: request.razon_social },
+      'request',
+      request.id
+    );
+
+    return { success: true, message: 'Solicitud corregida y enviada a revision con exito.' };
   }
 
   async getMaintenanceStatus() {
@@ -219,6 +351,16 @@ class PublicService {
     return {
       maintenanceMode: isMaintenance === 'true',
       details
+    };
+  }
+
+  async getMaintenanceBypassRules() {
+    const redisClient = require('../../config/redis');
+    const pageRulesJson = await redisClient.get('system:maintenance_bypass_pages');
+    const pageRules = pageRulesJson ? JSON.parse(pageRulesJson) : ['/login', '/'];
+    return {
+      success: true,
+      rules: pageRules
     };
   }
 }

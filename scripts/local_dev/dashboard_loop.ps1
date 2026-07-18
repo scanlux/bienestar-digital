@@ -26,18 +26,21 @@ if (Test-Path $envFile) {
     }
 }
 
-$HOST_BACKEND  = "http://localhost:4000"
-$HOST_FRONTEND = "http://localhost:3000"
-$PORT_MARIADB  = 3306
-$PORT_REDIS    = 6379
+$HOST_BACKEND   = "http://localhost:4000"
+$HOST_FRONTEND  = "http://localhost:3000"
+$HOST_TELEMETRY = "http://localhost:4001/health"
+$PORT_MARIADB   = 3306
+$PORT_REDIS     = 6379
 
 # Gracia de arranque: primeros N segundos un FAIL se muestra como STARTING
-$GRACE_SECONDS_BACKEND  = 15
-$GRACE_SECONDS_FRONTEND = 60
+$GRACE_SECONDS_BACKEND   = 15
+$GRACE_SECONDS_FRONTEND  = 60
+$GRACE_SECONDS_TELEMETRY = 20
 
 # Tracking de cuando vio OK por primera vez cada servicio
-$backFirstOk  = $null
-$frontFirstOk = $null
+$backFirstOk      = $null
+$frontFirstOk     = $null
+$telemetryFirstOk = $null
 
 function Test-Port {
     param([string]$TargetHost, [int]$Port)
@@ -126,10 +129,19 @@ while ($true) {
     Write-Status "Frontend      -> localhost:3000" $frontOk $frontExtra $frontInGrace $frontGraceLeft
 
     Write-Host ""
-    # Para el estado global, ignorar servicios en gracia de arranque
-    $svcsDown = (-not $backOk -and -not $backInGrace) -or (-not $frontOk -and -not $frontInGrace) -or -not $mariaOk -or -not $redisOk
+    Write-Host "  --- TELEMETRIA & MEDIOS (Node.js) ---------------" -ForegroundColor Yellow
+    $telemetryOk = Test-Http -Url $HOST_TELEMETRY
+    if ($telemetryOk -and -not $telemetryFirstOk) { $telemetryFirstOk = Get-Date }
+    $telemetryInGrace   = (-not $telemetryOk) -and ($elapsed -lt $GRACE_SECONDS_TELEMETRY)
+    $telemetryGraceLeft = [math]::Max(0, [int]($GRACE_SECONDS_TELEMETRY - $elapsed))
+    $telemetryExtra     = if ($telemetryFirstOk) { "listo en $([math]::Round(($telemetryFirstOk - $startTime).TotalSeconds, 1))s" } else { "" }
+    Write-Status "Telemetry     -> localhost:4001" $telemetryOk $telemetryExtra $telemetryInGrace $telemetryGraceLeft
 
-    if ($mariaOk -and $redisOk -and $backOk -and $frontOk) {
+    Write-Host ""
+    # Para el estado global, ignorar servicios en gracia de arranque
+    $svcsDown = (-not $backOk -and -not $backInGrace) -or (-not $frontOk -and -not $frontInGrace) -or (-not $telemetryOk -and -not $telemetryInGrace) -or -not $mariaOk -or -not $redisOk
+
+    if ($mariaOk -and $redisOk -and $backOk -and $frontOk -and $telemetryOk) {
         Write-Host "  >> SISTEMA COMPLETO OPERATIVO <<" -ForegroundColor Green
     } elseif ($svcsDown) {
         Write-Host "  >> ENTORNO INCOMPLETO O CON FALLOS - revisar paneles <<" -ForegroundColor Red
@@ -141,6 +153,7 @@ while ($true) {
     Write-Host "  --- ACCESOS RAPIDOS -----------------------------" -ForegroundColor DarkGray
     Write-Host "  Frontend    : http://localhost:3000" -ForegroundColor White
     Write-Host "  Backend     : http://localhost:4000" -ForegroundColor White
+    Write-Host "  Telemetry   : http://localhost:4001" -ForegroundColor White
     Write-Host "  DB Local    : ${dbHost}:${PORT_MARIADB}" -ForegroundColor White
     Write-Host "  Redis Local : ${redisHost}:${PORT_REDIS}" -ForegroundColor White
     Write-Host ""

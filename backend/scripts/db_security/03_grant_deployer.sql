@@ -25,4 +25,17 @@ GRANT SELECT, INSERT, UPDATE ON `marketplace_db`.`rescue_assignments` TO 'bienes
 GRANT SELECT, INSERT, UPDATE ON `marketplace_db`.`orders` TO 'bienestar_deployer'@'%';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`product_popularity` TO 'bienestar_deployer'@'%';
 
+-- 3. Permisos Estructurales sobre tablas v7 y v8
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`store_menus` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`store_categories` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`store_products` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`wallet_aliases` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`protocol_rules_history` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`domi_peg_history` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`domi_price_snapshots` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`domi_price_basket` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`catalog_product_types` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`domi_withdrawal_requests` TO 'bienestar_deployer'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `marketplace_db`.`domi_tier_rules` TO 'bienestar_deployer'@'%';
+
 FLUSH PRIVILEGES;

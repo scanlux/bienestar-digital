@@ -5,22 +5,14 @@ const loginSchema = {
 
 const tokenSyncSchema = {
   email: { type: 'string', required: true },
-  firebaseUid: { type: 'string', required: true }
-};
-
-const operatorLoginSchema = {
-  email: { type: 'string', required: true },
-  password: { type: 'string', required: true }
-};
-
-const systemLoginSchema = {
-  email: { type: 'string', required: true },
-  password: { type: 'string', required: true }
+  firebaseUid: { type: 'string', required: true },
+  firebaseIdToken: { type: 'string', required: true }
 };
 
 const mobileRegisterSchema = {
   email: { type: 'string', required: true },
-  firebaseUid: { type: 'string', required: true }
+  firebaseUid: { type: 'string', required: true },
+  firebaseIdToken: { type: 'string', required: true }
 };
 
 const mobileRegisterFullSchema = {
@@ -40,8 +32,6 @@ const driverStatusSchema = {
 module.exports = {
   loginSchema,
   tokenSyncSchema,
-  operatorLoginSchema,
-  systemLoginSchema,
   mobileRegisterSchema,
   mobileRegisterFullSchema,
   activateDriverSchema,

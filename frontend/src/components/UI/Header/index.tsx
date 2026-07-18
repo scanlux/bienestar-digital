@@ -41,6 +41,9 @@ const Header = () => {
           ))}
         </Nav>
         <CallToActions className={isOpen ? 'active' : ''}>
+          <Link href="/registro-solicitud">
+            <AnimatedLink title="Afiliar Negocio" />
+          </Link>
           <Link href="/login">
             <AnimatedLink title="Login" />
           </Link>

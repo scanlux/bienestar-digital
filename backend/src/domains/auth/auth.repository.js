@@ -2,30 +2,45 @@ const db = require('../../config/db');
 
 class AuthRepository {
   async getUserRolesAndPermissions(userType, userId) {
+    let colName = 'user_id';
+    if (userType === 'system_user') {
+      colName = 'system_user_id';
+    } else if (userType === 'operator') {
+      colName = 'operator_id';
+    }
+
     const [permissionsData] = await db.query(`
       SELECT DISTINCT p.name
       FROM user_roles ur
       JOIN role_permissions rp ON rp.role_id = ur.role_id
       JOIN permissions p ON p.id = rp.permission_id
-      WHERE ur.user_type = ? AND ur.user_id = ?
-    `, [userType, userId]);
+      WHERE ur.${colName} = ?
+    `, [userId]);
+    
+    const [allPermissionsData] = await db.query(`
+      SELECT name, ui_restriction_mode
+      FROM permissions
+    `);
     
     const [rolesData] = await db.query(`
       SELECT r.code
       FROM user_roles ur
       JOIN roles r ON r.id = ur.role_id
-      WHERE ur.user_type = ? AND ur.user_id = ?
-    `, [userType, userId]);
+      WHERE ur.${colName} = ?
+    `, [userId]);
     
     return {
       permissions: permissionsData.map(p => p.name),
+      permissionModes: Object.fromEntries(
+        allPermissionsData.map(p => [p.name, p.ui_restriction_mode])
+      ),
       roles: rolesData.map(r => r.code)
     };
   }
 
   async findUserByEmail(email) {
     const [rows] = await db.query(`
-      SELECT u.id, u.email, u.password_hash, u.rol, u.estado, 
+      SELECT u.id, u.email, u.password_hash, u.rol, u.estado, u.password_locked, 
              u.es_repartidor, u.repartidor_activo,
              p.nombres, p.apellidos, p.telefono,
              c.id AS commerce_id,
@@ -44,7 +59,7 @@ class AuthRepository {
 
   async findUserById(userId) {
     const [rows] = await db.query(`
-      SELECT u.id, u.email, u.rol, u.estado, u.es_repartidor, u.repartidor_activo,
+      SELECT u.id, u.email, u.rol, u.estado, u.password_locked, u.es_repartidor, u.repartidor_activo,
              p.nombres, p.apellidos,
              c.id AS commerce_id,
              s.id AS store_id,

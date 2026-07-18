@@ -40,9 +40,17 @@ export default function IntelligencePage() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      setRanking(data);
+      if (Array.isArray(data)) {
+        setRanking(data);
+      } else {
+        setRanking([]);
+        if (data && data.error) {
+          setMessage(data.error);
+        }
+      }
     } catch (e) {
       console.error(e);
+      setRanking([]);
     } finally {
       setLoading(false);
     }

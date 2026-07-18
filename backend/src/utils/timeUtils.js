@@ -20,7 +20,7 @@ function isStoreCurrentlyOpen(globalStatus, scheduleArray) {
     // 2. Si no hay horario detallado configurado pero el estado global es 'operativo',
     // asumimos que está abierta por retrocompatibilidad.
     if (!scheduleArray || !Array.isArray(scheduleArray) || scheduleArray.length === 0) {
-        return true;
+        return false;
     }
 
     // 3. Obtener la hora actual exacta en la zona horaria de operación (Colombia)
@@ -41,7 +41,7 @@ function isStoreCurrentlyOpen(globalStatus, scheduleArray) {
 
     if (!todaySchedule) {
         // No hay configuración para este día en específico
-        return true;
+        return false;
     }
 
     // 5. Verificar el estado específico del día

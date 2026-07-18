@@ -22,30 +22,10 @@ class AuthController {
     }
   }
 
-  async operatorLogin(req, res) {
-    try {
-      const { email, password } = req.body;
-      const result = await authService.operatorLogin(email, password, req);
-      res.json(result);
-    } catch (error) {
-      handleControllerError(res, error);
-    }
-  }
-
-  async systemLogin(req, res) {
-    try {
-      const { email, password } = req.body;
-      const result = await authService.systemLogin(email, password, req);
-      res.json(result);
-    } catch (error) {
-      handleControllerError(res, error);
-    }
-  }
-
   async mobileRegister(req, res) {
     try {
-      const { email, nombre, firebaseUid } = req.body;
-      const result = await authService.mobileRegister(email, nombre, firebaseUid);
+      const { email, nombre, firebaseUid, firebaseIdToken } = req.body;
+      const result = await authService.mobileRegister(email, nombre, firebaseUid, firebaseIdToken, req);
       res.status(201).json(result);
     } catch (error) {
       handleControllerError(res, error);
@@ -74,7 +54,7 @@ class AuthController {
   async activateDriver(req, res) {
     try {
       const { aceptar_terminos } = req.body;
-      const result = await authService.activateDriver(req.user, aceptar_terminos);
+      const result = await authService.activateDriver(req.user, aceptar_terminos, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);
@@ -84,7 +64,7 @@ class AuthController {
   async driverStatus(req, res) {
     try {
       const { activo } = req.body;
-      const result = await authService.driverStatus(req.user, activo);
+      const result = await authService.driverStatus(req.user, activo, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);
@@ -94,6 +74,35 @@ class AuthController {
   async refreshSession(req, res) {
     try {
       const result = await authService.refreshSession(req.user);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async resetPassword(req, res) {
+    try {
+      const { token, password } = req.body;
+      const result = await authService.resetPassword(token, password, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async savePushToken(req, res) {
+    try {
+      const { token, platform } = req.body;
+      const result = await authService.savePushToken(req.user, token, platform);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async getMyNav(req, res) {
+    try {
+      const result = await authService.getMyNavigation(req.user, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

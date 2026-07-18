@@ -1,4 +1,5 @@
 const { createClient } = require('redis');
+const appLogger = require('../utils/appLogger');
 
 const redisClient = createClient({
   password: process.env.REDIS_PASSWORD,
@@ -9,15 +10,15 @@ const redisClient = createClient({
 });
 
 redisClient.on('error', (err) => {
-  console.error('[REDIS ERROR]', err);
+  appLogger.error(`[REDIS ERROR] ${err.message}`);
 });
 
 redisClient.on('connect', () => {
-  console.log('[REDIS] Conectado exitosamente');
+  appLogger.info('[REDIS] Conectado exitosamente');
 });
 
 redisClient.on('ready', () => {
-  console.log('[REDIS] Cliente listo para recibir comandos');
+  appLogger.info('[REDIS] Cliente listo para recibir comandos');
 });
 
 // Autoconectar
@@ -25,7 +26,7 @@ redisClient.on('ready', () => {
   try {
     await redisClient.connect();
   } catch (error) {
-    console.error('[REDIS INIT ERROR]', error);
+    appLogger.error(`[REDIS INIT ERROR] ${error.message}`);
   }
 })();
 

@@ -6,6 +6,7 @@ import { ToastProvider } from '@/context/ToastContext';
 import { AlertProvider } from '@/context/AlertContext';
 import StyledComponentsRegistry from '../../libs/registry';
 import { GlobalStyles } from '@/components/Layout/GlobalStyles';
+import QueryProvider from '@/components/Common/QueryProvider';
 
 export const metadata: Metadata = {
   title: 'TrendyTech Marketplace',
@@ -22,14 +23,16 @@ export default function RootLayout({
       <body>
         <StyledComponentsRegistry>
           <GlobalStyles />
-          <ToastProvider>
-            <AlertProvider>
-              <AuthProvider>
-                {children}
-                <div id="modal-portal-root" />
-              </AuthProvider>
-            </AlertProvider>
-          </ToastProvider>
+          <QueryProvider>
+            <ToastProvider>
+              <AlertProvider>
+                <AuthProvider>
+                  {children}
+                  <div id="modal-portal-root" />
+                </AuthProvider>
+              </AlertProvider>
+            </ToastProvider>
+          </QueryProvider>
         </StyledComponentsRegistry>
       </body>
     </html>

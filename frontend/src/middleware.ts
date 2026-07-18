@@ -18,7 +18,7 @@ export function middleware(request: NextRequest) {
 
   if (!token) {
     if (isAdminDashboard) {
-      return NextResponse.redirect(new URL('/logins', request.url));
+      return NextResponse.redirect(new URL('/login', request.url));
     }
     return NextResponse.redirect(new URL('/login', request.url));
   }
@@ -43,7 +43,7 @@ export function middleware(request: NextRequest) {
     // 1. Admin Dashboard (/admin/dashboard/*)
     if (isAdminDashboard) {
       if (user.actorType !== 'system_user') {
-        return NextResponse.redirect(new URL('/logins', request.url));
+        return NextResponse.redirect(new URL('/login', request.url));
       }
     }
 
@@ -81,7 +81,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error('Error parseando JWT en middleware:', error);
-    const response = NextResponse.redirect(new URL(isAdminDashboard ? '/logins' : '/login', request.url));
+    const response = NextResponse.redirect(new URL('/login', request.url));
     response.cookies.delete('auth_token');
     return response;
   }

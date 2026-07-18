@@ -1,4 +1,6 @@
 const db = require('../config/db');
+const appLogger = require('./appLogger');
+const redisClient = require('../config/redis');
 
 /**
  * Registra un evento de seguridad en la base de datos y la consola del sistema.
@@ -20,12 +22,8 @@ async function logSecurityEvent(
 
   if (req) {
     // Intentar obtener la IP real (detrás de proxies como Nginx)
-    ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-    if (ipAddress && ipAddress.includes(',')) {
-      // Si viene una cadena de proxies, tomar el primer elemento (IP real cliente)
-      ipAddress = ipAddress.split(',')[0].trim();
-    }
-    userAgent = req.headers['user-agent'] || null;
+    ipAddress = req.ip || req.socket?.remoteAddress || null;
+    userAgent = req.headers?.['user-agent'] || null;
 
     // Enriquecer detalles automáticamente con la URL de la petición si no se especificó
     if (!details) details = {};
@@ -33,7 +31,21 @@ async function logSecurityEvent(
     if (!details.method) details.method = req.method;
   }
 
+  let actualSeverity = severity;
+
   try {
+    const isMaintenance = await redisClient.get('system:maintenance_mode');
+    const isUnderMaintenance = isMaintenance === 'true' || isMaintenance === 'quiescing';
+
+    if (isUnderMaintenance) {
+      if (!details) details = {};
+      details.maintenanceMode = true;
+      details.maintenanceState = isMaintenance;
+      if (eventType === 'FAILED_LOGIN_ATTEMPT' || eventType === 'SUCCESSFUL_LOGIN') {
+        actualSeverity = 'ALERT';
+      }
+    }
+
     const detailsJson = details ? JSON.stringify(details) : null;
 
     // Resolver actor de forma polimórfica
@@ -52,7 +64,7 @@ async function logSecurityEvent(
         actorType,
         actorId,
         eventType,
-        severity,
+        actualSeverity,
         ipAddress,
         userAgent,
         detailsJson,
@@ -61,12 +73,14 @@ async function logSecurityEvent(
       ]
     );
 
-    // Escribir en logs del sistema con un formato premium y llamativo
+    // Escribir en logs del sistema a traves del canal de seguridad de appLogger
     const resourceInfo = resourceType ? ` - Resource: ${resourceType} #${resourceId}` : '';
-    console.warn(`\x1b[33m[SECURITY_ALERT] [${severity}] [${eventType}] - Actor: ${actorType} #${actorId || 'ANONYMOUS'}${resourceInfo} - IP: ${ipAddress || 'unknown'} - Details: ${JSON.stringify(details)}\x1b[0m`);
+    const securityMessage = `[SECURITY_ALERT] [${actualSeverity}] [${eventType}] - Actor: ${actorType} #${actorId || 'ANONYMOUS'}${resourceInfo} - IP: ${ipAddress || 'unknown'} - Details: ${JSON.stringify(details)}`;
+    appLogger.security(securityMessage);
   } catch (error) {
-    console.error('❌ Error guardando log de auditoría de seguridad:', error.message);
+    appLogger.error(`Error guardando log de auditoría de seguridad: ${error.message}`);
   }
 }
 
 module.exports = { logSecurityEvent };
+

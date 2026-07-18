@@ -2,7 +2,6 @@ const db = require('../../config/db');
 const roleRepository = require('./role.repository');
 const { BusinessError, ForbiddenError, NotFoundError } = require('../../utils/errors');
 const { logSecurityEvent } = require('../../utils/securityLogger');
-const { permissionsAnalysis } = require('../../utils/permissionsRegistry');
 const sessionStampService = require('../../services/sessionStampService');
 
 class RoleService {
@@ -44,7 +43,26 @@ class RoleService {
       'LOW',
       req
     );
-    return permissionsAnalysis;
+
+    const dbRows = await roleRepository.findPermissionsAnalysis();
+
+    return dbRows.map(p => {
+      const endpoints = p.endpoints_raw ? p.endpoints_raw.split('||') : [];
+      const impactedTables = p.tables_raw ? p.tables_raw.split('||') : [];
+      
+      return {
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        category: p.category,
+        criticidad: p.criticidad,
+        tipo: p.tipo,
+        scope: p.scope,
+        ui_restriction_mode: p.ui_restriction_mode || 'hidden',
+        endpoints,
+        impactedTables
+      };
+    });
   }
 
   async createRole(userContext, data, req) {

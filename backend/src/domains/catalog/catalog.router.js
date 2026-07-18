@@ -22,17 +22,20 @@ router.get('/menus', hasPermission('view_catalog'), catalogController.getMenus);
 router.get('/menus/:commerceId', hasPermission('view_catalog'), catalogController.getMenusByCommerceId);
 router.post('/menus', hasPermission('write_catalog'), validateBody(saveMenuSchema), catalogController.saveMenu);
 router.delete('/menus/:id', hasPermission('delete_catalog'), catalogController.deleteMenu);
+router.get('/menus/:id/delete-preview', hasPermission('delete_catalog'), catalogController.getMenuDeletePreview);
 router.get('/store-menus/:storeId', hasPermission('view_catalog'), catalogController.getStoreMenus);
 router.post('/store-menus', hasPermission('enable_store_catalog'), validateBody(toggleStoreMenuSchema), catalogController.toggleStoreMenu);
 
 // --- CATEGORIAS ---
-router.get('/categorias/:menuId', hasPermission('view_catalog'), catalogController.getCategories);
-router.post('/categorias', hasPermission('write_catalog'), validateBody(saveCategorySchema), catalogController.saveCategory);
-router.delete('/categorias/:id', hasPermission('delete_catalog'), catalogController.deleteCategory);
+router.get('/categories/:menuId', hasPermission('view_catalog'), catalogController.getCategories);
+router.post('/categories', hasPermission('write_catalog'), validateBody(saveCategorySchema), catalogController.saveCategory);
+router.delete('/categories/:id', hasPermission('delete_catalog'), catalogController.deleteCategory);
+router.get('/categories/:id/delete-preview', hasPermission('delete_catalog'), catalogController.getCategoryDeletePreview);
 router.get('/store-categories/:storeId/:menuId', hasPermission('view_catalog'), catalogController.getStoreCategories);
 router.post('/store-categories', hasPermission('enable_store_catalog'), validateBody(toggleStoreCategorySchema), catalogController.toggleStoreCategory);
 
 // --- PRODUCTOS ---
+router.get('/categories/:categoryId/products', hasPermission('view_catalog'), catalogController.getProducts);
 router.get('/products', hasPermission('view_catalog'), catalogController.getProducts);
 router.post('/products', hasPermission('write_catalog'), validateBody(saveProductSchema), catalogController.saveProduct);
 router.delete('/products/:id', hasPermission('delete_catalog'), catalogController.deleteProduct);

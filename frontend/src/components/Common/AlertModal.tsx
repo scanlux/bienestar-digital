@@ -42,9 +42,17 @@ const SecondaryButton = styled.button`
   }
 `;
 
-const PrimaryButton = styled(SubmitButton)`
+const PrimaryButton = styled(SubmitButton)<{ $destructive?: boolean }>`
   flex: 1;
   margin-top: 0;
+  ${({ $destructive }) => $destructive && `
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    border-color: rgba(220, 38, 38, 0.3);
+    &:hover {
+      background: linear-gradient(135deg, #b91c1c, #991b1b);
+      box-shadow: 0 0 15px rgba(220, 38, 38, 0.4);
+    }
+  `}
 `;
 
 interface AlertModalProps {
@@ -58,6 +66,7 @@ interface AlertModalProps {
   cancelText?: string;
   zIndex?: number;
   isDismissible?: boolean;
+  isDestructive?: boolean;
 }
 
 /**
@@ -76,7 +85,8 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   confirmText = 'Aceptar',
   cancelText = 'Cancelar',
   zIndex = 3000,
-  isDismissible = true
+  isDismissible = true,
+  isDestructive = false
 }) => {
   const [mounted, setMounted] = React.useState(false);
 
@@ -129,7 +139,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
               {cancelText}
             </SecondaryButton>
           )}
-          <PrimaryButton onClick={onConfirm ? handleConfirm : onClose}>
+          <PrimaryButton onClick={onConfirm ? handleConfirm : onClose} $destructive={isDestructive}>
             {confirmText}
           </PrimaryButton>
         </ButtonGroup>

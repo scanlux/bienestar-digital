@@ -4,7 +4,7 @@ const router = express.Router();
 const storeController = require('./store.controller');
 const { auth, hasPermission } = require('../../middleware/auth');
 const { validateBody } = require('../../utils/validator');
-const { saveStoreSchema, updateOrderAcceptanceSchema, saveVideoSchema, subscribePlanSchema } = require('./store.validation');
+const { saveStoreSchema, updateOrderAcceptanceSchema, saveVideoSchema } = require('./store.validation');
 
 // Rutas protegidas por autenticación
 router.use(auth);
@@ -27,6 +27,9 @@ router.post('/stores', validateBody(saveStoreSchema), storeController.saveStore)
 // Modificar modo de aceptación de pedidos de la sede
 router.patch('/stores/:storeId/order-acceptance', hasPermission('manage_order_acceptance'), validateBody(updateOrderAcceptanceSchema), storeController.updateOrderAcceptance);
 
+// Cambiar estado de la sede física
+router.patch('/stores/:storeId/status', hasPermission('edit_store_basic'), validateBody({ estado: { type: 'string', required: true }, fecha_regreso: { type: 'string', required: false } }), storeController.updateStoreStatus);
+
 // Subir video promocional de la sede
 router.post('/videos', hasPermission('upload_videos'), validateBody(saveVideoSchema), storeController.saveVideo);
 
@@ -36,8 +39,15 @@ router.patch('/videos/:id/active', hasPermission('upload_videos'), storeControll
 // Eliminar video de la sede
 router.delete('/videos/:id', hasPermission('delete_videos'), storeController.deleteVideo);
 
-// Comprar/renovar plan empresarial debitando DOMIs
-router.post('/plans/subscribe', hasPermission('manage_plans'), validateBody(subscribePlanSchema), storeController.subscribePlan);
+// Obtener resumen financiero de una sede específica (BOLA protegido)
+router.get('/store/:id/financial-summary', hasPermission('view_store_financial_summary'), storeController.getStoreFinancialSummary);
+
+// Obtener estado de cuota de sedes del comercio
+router.get('/stores-quota/status', hasPermission('view_stores'), storeController.getStoreQuotaStatus);
+
+// Forzar cumplimiento de la cuota de sedes (enforce-quota)
+const { hasAnyPermission } = require('../../middleware/auth');
+router.post('/stores/:commerceId/enforce-quota', hasAnyPermission(['edit_stores_advanced', 'manage_commerce', 'view_stores']), storeController.enforceStoreQuota);
 
 module.exports = router;
 

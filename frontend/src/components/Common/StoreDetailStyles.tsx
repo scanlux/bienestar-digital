@@ -71,18 +71,31 @@ export const MenuSelectionList = styled.div`
   margin-top: 1rem;
 `;
 
-export const MenuSelectionCard = styled.div<{ $isEnabled: boolean }>`
+export const MenuSelectionCard = styled.div<{ $isEnabled: boolean; $isExceedingCapacity?: boolean }>`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: ${p => p.$isEnabled ? 'rgba(16, 185, 129, 0.02)' : 'rgba(255, 255, 255, 0.02)'};
-  border: 1px solid ${p => p.$isEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)'};
+  background: ${p => {
+    if (p.$isExceedingCapacity) return 'rgba(245, 158, 11, 0.03)';
+    return p.$isEnabled ? 'rgba(16, 185, 129, 0.02)' : 'rgba(255, 255, 255, 0.02)';
+  }};
+  border: 1px solid ${p => {
+    if (p.$isExceedingCapacity) return '#eab308';
+    return p.$isEnabled ? 'rgba(16, 185, 129, 0.15)' : '#ef4444';
+  }};
+  box-shadow: ${p => {
+    if (p.$isExceedingCapacity) return '0 0 15px rgba(234, 179, 8, 0.3)';
+    return p.$isEnabled ? 'none' : '0 0 15px rgba(239, 68, 68, 0.3)';
+  }};
   border-radius: 12px;
   padding: 16px 24px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   &:hover {
     background: rgba(255, 255, 255, 0.04);
-    border-color: ${p => p.$isEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.15)'};
+    border-color: ${p => {
+      if (p.$isExceedingCapacity) return '#eab308';
+      return p.$isEnabled ? 'rgba(16, 185, 129, 0.3)' : '#ef4444';
+    }};
   }
   .menu-info {
     display: flex;

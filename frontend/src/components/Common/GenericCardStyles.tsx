@@ -131,4 +131,12 @@ export const SedeRegresoAlert = styled.div`
   width: fit-content;
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    transform: scale(1.03);
+    background: #DC2626;
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.5);
+  }
 `;

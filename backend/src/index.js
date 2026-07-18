@@ -2,9 +2,12 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const appLogger = require('./utils/appLogger');
 
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { RedisStore } = require('rate-limit-redis');
+const redisClient = require('./config/redis');
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -35,7 +38,14 @@ app.use((req, res, next) => {
         errorMsg.includes('enoent') ||
         errorMsg.includes('stack') ||
         errorMsg.includes('uid') ||
-        errorMsg.includes('key')
+        errorMsg.includes('api_key') ||
+        errorMsg.includes('secret_key') ||
+        errorMsg.includes('private_key') ||
+        errorMsg.includes('password') ||
+        errorMsg.includes('token') ||
+        errorMsg.includes('secret') ||
+        errorMsg.includes('hash') ||
+        errorMsg.includes('cipher')
       ) {
         obj.error = 'Ocurrió un error interno en el servidor. Por favor contacte al soporte.';
       }
@@ -43,33 +53,6 @@ app.use((req, res, next) => {
     return originalJson.call(this, obj);
   };
   next();
-});
-
-// Global rate limiter: 100 requests per minute
-const globalLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 100,
-  message: { error: 'Demasiadas peticiones. Por favor, inténtelo de nuevo más tarde.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use(globalLimiter);
-
-// Specific rate limiters for critical paths
-const authLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { error: 'Demasiados intentos de inicio de sesión. Por favor, espere un minuto.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const registerLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 3,
-  message: { error: 'Demasiados intentos de registro. Por favor, espere un minuto.' },
-  standardHeaders: true,
-  legacyHeaders: false,
 });
 
 // CORS: acepta orígenes desde env var (separados por coma) + localhost:3000 siempre en dev
@@ -98,14 +81,70 @@ app.use(cors({
   credentials: true,
 }));
 
+// Helper factory to create a unique RedisStore instance for each limiter
+const createRedisStore = (prefix) => new RedisStore({
+  sendCommand: (...args) => redisClient.sendCommand(args),
+  prefix: `rl:${prefix}:`,
+});
+
+// Global rate limiter: 300 requests per minute to accommodate rich admin dashboard loops and multi-tab use
+const globalLimiter = rateLimit({
+  store: createRedisStore('global'),
+  windowMs: 60 * 1000,
+  max: 300,
+  message: { error: 'Demasiadas peticiones. Por favor, inténtelo de nuevo más tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
+// Specific rate limiters for critical paths
+const authLimiter = rateLimit({
+  store: createRedisStore('auth'),
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 500 : 10,
+  message: { error: 'Demasiados intentos de inicio de sesión. Por favor, espere un minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const registerLimiter = rateLimit({
+  store: createRedisStore('register'),
+  windowMs: 60 * 1000,
+  max: 3,
+  message: { error: 'Demasiados intentos de registro. Por favor, espere un minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const checkUserLimiter = rateLimit({
+  store: createRedisStore('check_user'),
+  windowMs: 60 * 1000,
+  max: 10, // Max 10 user checks per minute to prevent mass enumeration (VULN-ENUM-01)
+  message: { error: 'Demasiadas comprobaciones de usuario. Por favor, espere un minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const calculateLimiter = rateLimit({
+  store: createRedisStore('calculate'),
+  windowMs: 60 * 1000,
+  max: 30, // Max 30 calculations per minute
+  message: { error: 'Demasiados cálculos solicitados. Por favor, espere un minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Apply specific rate limits
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/mobile/register', registerLimiter);
 app.use('/api/auth/mobile/register-full', registerLimiter);
+app.use('/api/auth/mobile/token-sync', authLimiter);
+app.use('/api/auth/mobile/check-user', checkUserLimiter);
+app.use('/api/domi/calculate', calculateLimiter);
 
 // Limit JSON payload to 1MB to prevent memory exhaustion DoS
 app.use(express.json({ limit: '1mb' }));
-app.use('/uploads', express.static('uploads'));
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -139,11 +178,20 @@ app.use('/api/manage/commerces', commerceDomainRouter);
 const storeDomainRouter = require('./domains/store/store.router');
 app.use('/api/manage', storeDomainRouter);
 
+const upgradesDomainRouter = require('./domains/upgrades/upgrades.router');
+app.use('/api/manage/upgrades', upgradesDomainRouter);
+
 const catalogDomainRouter = require('./domains/catalog/catalog.router');
 app.use('/api/manage', catalogDomainRouter);
 
 const userDomainRouter = require('./domains/user/user.router');
 app.use('/api/manage', userDomainRouter);
+
+const notificationRouter = require('./domains/notification/notification.router');
+app.use('/api/notifications', notificationRouter);
+
+const cashDomainRouter = require('./domains/cash/cash.routes');
+app.use('/api/cash', cashDomainRouter);
 
 const orderDomainRouter = require('./domains/order/order.router');
 app.use('/api/manage', orderDomainRouter);
@@ -163,6 +211,9 @@ app.use('/api/public', publicDomainRouter);
 const domiDomainRouter = require('./domains/domi/domi.router');
 app.use('/api/domi', domiDomainRouter);
 
+const domiTreasuryRouter = require('./domains/domi/domi.treasury.router');
+app.use('/api/domi/treasury', domiTreasuryRouter);
+
 const orderPublicRouter = require('./domains/order/order.public.router');
 app.use('/api/public/orders', orderPublicRouter);
 
@@ -173,7 +224,6 @@ const deliveryCompanyDomainRouter = require('./domains/delivery-company/delivery
 app.use('/api/delivery-company', deliveryCompanyDomainRouter);
 
 const onStartup = async () => {
-  const appLogger = require('./utils/appLogger');
   const redisClient = require('./config/redis');
   const db = require('./config/db');
 
@@ -190,7 +240,7 @@ const onStartup = async () => {
     await redisClient.set('system:maintenance_details', JSON.stringify(details));
     appLogger.info('Estado de mantenimiento forzado a: ACTIVO (Bloqueo de Arranque).');
 
-    // 2. Revocación global de sesiones (Epoch en segundos)
+    // 2. Revocación global de sesiones (Epoch en segundos) - Paridad exacta de desarrollo y producción
     const currentEpoch = Math.floor(Date.now() / 1000);
     await redisClient.set('system:global_revocation_epoch', currentEpoch.toString());
     appLogger.info(`Epoca de revocacion global establecida a: ${currentEpoch} (${new Date(currentEpoch * 1000).toISOString()}). Todos los tokens previos quedan invalidados.`);
@@ -216,32 +266,47 @@ const onStartup = async () => {
       appLogger.error('[CRITICAL] No se pudo establecer conexion con MariaDB tras 10 intentos.');
     } else {
       appLogger.info('Chequeo de arranque seguro finalizado con exito. El sistema permanece bloqueado para revision administrativa.');
+      try {
+        const maintenanceService = require('./domains/admin/maintenance.service');
+        await maintenanceService.syncBypassRulesToRedis();
+      } catch (syncErr) {
+        appLogger.error(`Error al sincronizar reglas de bypass en arranque: ${syncErr.message}`);
+      }
     }
   } catch (err) {
     appLogger.error(`Error critico en la inicializacion de arranque seguro: ${err.message}`);
   }
 };
 
-const server = app.listen(port, () => {
-  console.log(`Backend running on port ${port}`);
+const http = require('http');
+const { initSocketIO } = require('./config/socketio');
+
+const server = http.createServer(app);
+
+initSocketIO(server).catch(err =>
+  appLogger.error(`[SOCKETIO_INIT_ERROR] ${err.message}`)
+);
+
+server.listen(port, () => {
+  appLogger.info(`Backend running on port ${port} (HTTP + WebSockets)`);
 
   // Ejecutar inicialización de arranque seguro
-  onStartup().catch(err => console.error('[STARTUP_ERROR] Fallo en onStartup:', err));
+  onStartup().catch(err => appLogger.error(`[STARTUP_ERROR] Fallo en onStartup: ${err.message}`));
 
   // Verificar integridad del token DOMI al arrancar (no-bloqueante)
   const domiEngine = require('./services/domiEngine');
   domiEngine.verifyIntegrity()
-    .then(() => console.log('[DOMI] Motor financiero listo.'))
-    .catch(err => console.warn('[DOMI] Verificacion de integridad pendiente:', err.message));
+    .then(() => appLogger.info('[DOMI] Motor financiero listo.'))
+    .catch(err => appLogger.warn(`[DOMI] Verificacion de integridad pendiente: ${err.message}`));
 
   // Iniciar worker de Redis de forma asíncrona pero persistente
   const domiQueue = require('./services/domiQueue');
-  domiQueue.startWorker().catch(err => console.error('[WORKER_FATAL_ERROR] El worker falló y salió del loop:', err));
+  domiQueue.startWorker().catch(err => appLogger.error(`[WORKER_FATAL_ERROR] El worker falló y salió del loop: ${err.message}`));
 });
 
 // Manejo de Graceful Shutdown (SIGTERM/SIGINT) para evitar 'zombie workers'
 const gracefulShutdown = () => {
-  console.log('\n[SERVER] Señal de apagado recibida. Iniciando cierre ordenado...');
+  appLogger.info('[SERVER] Señal de apagado recibida. Iniciando cierre ordenado...');
   
   // 1. Detener el Worker de Redis para que no tome más trabajos
   const domiQueue = require('./services/domiQueue');
@@ -249,31 +314,31 @@ const gracefulShutdown = () => {
 
   // 2. Cerrar el servidor HTTP (deja de aceptar nuevas peticiones)
   server.close(async () => {
-    console.log('[SERVER] HTTP server cerrado. Cerrando conexiones...');
+    appLogger.info('[SERVER] HTTP server cerrado. Cerrando conexiones...');
     try {
       const redisClient = require('./config/redis');
       if (redisClient.isOpen) {
          await redisClient.quit();
-         console.log('[REDIS] Conexión cerrada limpiamente.');
+         appLogger.info('[REDIS] Conexión cerrada limpiamente.');
       }
       
       const pool = require('./config/db');
       if (pool) {
          await pool.end();
-         console.log('[MARIADB] Pool de conexiones cerrado.');
+         appLogger.info('[MARIADB] Pool de conexiones cerrado.');
       }
       
-      console.log('[SERVER] Cierre completado. Saliendo...');
+      appLogger.info('[SERVER] Cierre completado. Saliendo...');
       process.exit(0);
     } catch (err) {
-      console.error('[SHUTDOWN_ERROR] Fallo al cerrar conexiones:', err);
+      appLogger.error(`[SHUTDOWN_ERROR] Fallo al cerrar conexiones: ${err.message}`);
       process.exit(1);
     }
   });
   
   // Failsafe timeout: Forzar salida si el cierre ordenado tarda mucho
   setTimeout(() => {
-     console.error('[SHUTDOWN_TIMEOUT] Forzando cierre del proceso...');
+     appLogger.error('[SHUTDOWN_TIMEOUT] Forzando cierre del proceso...');
      process.exit(1);
   }, 10000);
 };

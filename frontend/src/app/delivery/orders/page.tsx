@@ -1,103 +1,431 @@
 'use client';
+
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import styled, { keyframes } from 'styled-components';
+
+const spin = keyframes`
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+`;
+
+const fadeInUp = keyframes`
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const pulse = keyframes`
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(1.1); }
+`;
+
+const LoaderContainer = styled.div`
+  min-h-screen bg-[#0E0E0E] flex items-center justify-center;
+`;
+
+const LoaderSpinner = styled.div`
+  border: 2px solid transparent;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  width: 3rem;
+  height: 3rem;
+  animation: ${spin} 1s linear infinite;
+`;
+
+const PageWrapper = styled.div`
+  min-h-screen bg-[#0E0E0E] text-white font-sans;
+  
+  &::selection {
+    background: rgba(59, 130, 246, 0.3);
+  }
+`;
+
+const Navbar = styled.nav`
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(24px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+`;
+
+const NavbarContainer = styled.div`
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+  
+  @media (min-width: 640px) {
+    padding: 0 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    padding: 0 2rem;
+  }
+`;
+
+const NavbarContent = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 4rem;
+`;
+
+const BrandLink = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+`;
+
+const BrandIcon = styled.div`
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #0891b2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+`;
+
+const BrandName = styled.span`
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+`;
+
+const BrandMuted = styled.span`
+  color: rgba(255, 255, 255, 0.5);
+`;
+
+const NavbarActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const WalletButton = styled(Link)`
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  transition: background-color 0.2s, color 0.2s;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+
+  &:hover {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+  }
+`;
+
+const LogoutButton = styled.button`
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background-color 0.2s;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+`;
+
+const MainContent = styled.main`
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+`;
+
+const DashboardContent = styled.div`
+  animation: ${fadeInUp} 0.5s ease forwards;
+`;
+
+const ProfileRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+`;
+
+const WelcomeTitle = styled.h1`
+  font-size: 1.5rem;
+  font-weight: 300;
+  margin: 0 0 0.25rem 0;
+`;
+
+const WelcomeName = styled.span`
+  font-weight: 500;
+  background: linear-gradient(to right, #60a5fa, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+`;
+
+const ProfileSubtitle = styled.p`
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.875rem;
+  margin: 0;
+`;
+
+const StatusDot = styled.div`
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background-color: #3b82f6;
+  animation: ${pulse} 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+`;
+
+const StatsGrid = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const StatCard = styled.div`
+  flex: 1;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+`;
+
+const StatLabel = styled.p`
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  margin: 0 0 0.25rem 0;
+`;
+
+const StatValue = styled.p<{ $blue?: boolean }>`
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  color: ${props => props.$blue ? '#60a5fa' : '#fff'};
+`;
+
+const SectionTitle = styled.h2`
+  font-size: 1.125rem;
+  font-weight: 500;
+  margin: 0 0 1rem 0;
+`;
+
+const OrderCardOuter = styled.div`
+  padding: 1px;
+  border-radius: 1.5rem;
+  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.05));
+  position: relative;
+  overflow: hidden;
+`;
+
+const OrderCardPattern = styled.div`
+  position: absolute;
+  inset: 0;
+  background-image: url('https://www.transparenttextures.com/patterns/cubes.png');
+  opacity: 0.1;
+  mix-blend-mode: overlay;
+`;
+
+const OrderCardInner = styled.div`
+  background: #121212;
+  border-radius: 22px;
+  padding: 1.5rem;
+  position: relative;
+`;
+
+const CardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+`;
+
+const ActionTag = styled.span`
+  padding: 0.25rem 0.75rem;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  margin-bottom: 0.5rem;
+  display: inline-block;
+`;
+
+const PlaceName = styled.h3`
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+`;
+
+const PlaceAddress = styled.p`
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.875rem;
+  margin: 0;
+`;
+
+const PinIcon = styled.div`
+  width: 3rem;
+  height: 3rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+`;
+
+const DashedLine = styled.div`
+  border-left: 2px dashed rgba(255, 255, 255, 0.1);
+  margin-left: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  position: relative;
+`;
+
+const DashedPin = styled.div`
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.5rem;
+  height: 0.5rem;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+`;
+
+const CardBody = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+`;
+
+const DeliverLabel = styled.span`
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+  display: inline-block;
+`;
+
+const ClientName = styled.h3`
+  font-size: 1.125rem;
+  font-weight: 500;
+  margin: 0 0 0.25rem 0;
+`;
+
+const ClientAddress = styled.p`
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.875rem;
+  margin: 0;
+`;
+
+const ActionButton = styled.button`
+  width: 100%;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background-color: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: #3b82f6;
+  }
+`;
+
 export default function DeliveryDashboard() {
   const { user, logout } = useAuth();
-  const router = useRouter();
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0E0E0E] flex items-center justify-center">
-        <div className="loader border-t-2 border-blue-500 rounded-full w-12 h-12 animate-spin"></div>
-      </div>
+      <LoaderContainer>
+        <LoaderSpinner />
+      </LoaderContainer>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0E0E0E] text-white font-sans selection:bg-blue-500/30">
-      <nav className="border-b border-white/10 bg-black/50 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-600 flex items-center justify-center font-bold">
-                D
-              </div>
-              <span className="text-xl font-medium tracking-tight">Express<span className="text-white/50">Delivery</span></span>
-            </div>
-            <button 
-              onClick={logout}
-              className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-sm font-medium"
-            >
-              Salir
-            </button>
-          </div>
-        </div>
-      </nav>
+    <PageWrapper>
+      <Navbar>
+        <NavbarContainer>
+          <NavbarContent>
+            <BrandLink>
+              <BrandIcon>D</BrandIcon>
+              <BrandName>Express<BrandMuted>Delivery</BrandMuted></BrandName>
+            </BrandLink>
+            <NavbarActions>
+              <WalletButton href="/delivery/wallet">Mi Billetera</WalletButton>
+              <LogoutButton onClick={logout}>Salir</LogoutButton>
+            </NavbarActions>
+          </NavbarContent>
+        </NavbarContainer>
+      </Navbar>
 
-      <main className="max-w-lg mx-auto px-4 py-8">
-        <style>{`
-          @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-        `}</style>
-        <div style={{ animation: 'fadeInUp 0.5s ease forwards' }}>
-          <div className="flex items-center justify-between mb-8">
+      <MainContent>
+        <DashboardContent>
+          <ProfileRow>
             <div>
-              <h1 className="text-2xl font-light">Hola, <span className="font-medium text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-500">{user.nombre}</span></h1>
-              <p className="text-white/50 text-sm">Estás en línea y recibiendo pedidos.</p>
+              <WelcomeTitle>Hola, <WelcomeName>{user.nombre}</WelcomeName></WelcomeTitle>
+              <ProfileSubtitle>Estás en línea y recibiendo pedidos.</ProfileSubtitle>
             </div>
-            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
-          </div>
+            <StatusDot />
+          </ProfileRow>
 
-          <div className="flex gap-4 mb-8">
-            <div className="flex-1 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
-              <p className="text-white/50 text-xs mb-1">Ganancias (Hoy)</p>
-              <p className="text-2xl font-bold text-blue-400">$45,000</p>
-            </div>
-            <div className="flex-1 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
-              <p className="text-white/50 text-xs mb-1">Entregas</p>
-              <p className="text-2xl font-bold">8</p>
-            </div>
-          </div>
+          <StatsGrid>
+            <StatCard>
+              <StatLabel>Ganancias (Hoy)</StatLabel>
+              <StatValue $blue>$45,000</StatValue>
+            </StatCard>
+            <StatCard>
+              <StatLabel>Entregas</StatLabel>
+              <StatValue>8</StatValue>
+            </StatCard>
+          </StatsGrid>
 
-          <h2 className="text-lg font-medium mb-4">Pedido Asignado</h2>
+          <SectionTitle>Pedido Asignado</SectionTitle>
           
-          <div className="p-1 rounded-3xl bg-gradient-to-b from-blue-500/30 to-blue-500/5 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
-            <div className="bg-[#121212] rounded-[22px] p-6 relative">
-              <div className="flex justify-between items-start mb-6">
+          <OrderCardOuter>
+            <OrderCardPattern />
+            <OrderCardInner>
+              <CardHeader>
                 <div>
-                  <span className="px-3 py-1 bg-blue-500/20 text-blue-400 text-xs font-bold rounded-full mb-2 inline-block">RECOGER</span>
-                  <h3 className="text-xl font-bold">Entre Cazuelas Market</h3>
-                  <p className="text-white/50 text-sm">Cll 45 # 12-30</p>
+                  <ActionTag>RECOGER</ActionTag>
+                  <PlaceName>Entre Cazuelas Market</PlaceName>
+                  <PlaceAddress>Cll 45 # 12-30</PlaceAddress>
                 </div>
-                <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center">
-                  📍
-                </div>
-              </div>
+                <PinIcon>📍</PinIcon>
+              </CardHeader>
               
-              <div className="border-l-2 border-dashed border-white/10 ml-6 h-6 my-2 relative">
-                <div className="absolute -left-[5px] top-1/2 -translate-y-1/2 w-2 h-2 bg-white/30 rounded-full"></div>
-              </div>
+              <DashedLine>
+                <DashedPin />
+              </DashedLine>
 
-              <div className="flex justify-between items-start mb-8">
+              <CardBody>
                 <div>
-                  <span className="text-white/40 text-xs font-bold mb-1 inline-block">ENTREGAR A</span>
-                  <h3 className="text-lg font-medium">María López</h3>
-                  <p className="text-white/50 text-sm">Cra 10 # 5-20, Apto 401</p>
+                  <DeliverLabel>ENTREGAR A</DeliverLabel>
+                  <ClientName>María López</ClientName>
+                  <ClientAddress>Cra 10 # 5-20, Apto 401</ClientAddress>
                 </div>
-              </div>
+              </CardBody>
 
-              <button className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-500 transition-colors font-bold text-white shadow-[0_0_20px_rgba(37,99,235,0.3)]">
+              <ActionButton>
                 Llegué al restaurante
-              </button>
-            </div>
-          </div>
+              </ActionButton>
+            </OrderCardInner>
+          </OrderCardOuter>
 
-        </div>
-      </main>
-    </div>
+        </DashboardContent>
+      </MainContent>
+    </PageWrapper>
   );
 }

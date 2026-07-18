@@ -56,7 +56,15 @@ function invalidateRoleUsersAsync(roleId) {
   setImmediate(async () => {
     try {
       const [rows] = await db.query(
-        'SELECT user_type, user_id FROM user_roles WHERE role_id = ?',
+        `SELECT 
+           CASE 
+             WHEN user_id IS NOT NULL THEN 'user'
+             WHEN system_user_id IS NOT NULL THEN 'system_user'
+             WHEN operator_id IS NOT NULL THEN 'operator'
+           END as user_type,
+           COALESCE(user_id, system_user_id, operator_id) as user_id
+         FROM user_roles 
+         WHERE role_id = ?`,
         [roleId]
       );
       

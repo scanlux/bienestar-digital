@@ -37,11 +37,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTimeout(() => removeToast(id), 4000);
   }, [removeToast]);
 
-  const success = (message: string) => addToast(message, 'success');
-  const error = (message: string) => addToast(message, 'error');
+  const success = useCallback((message: string) => addToast(message, 'success'), [addToast]);
+  const error = useCallback((message: string) => addToast(message, 'error'), [addToast]);
+
+  const value = React.useMemo(() => ({ success, error }), [success, error]);
 
   return (
-    <ToastContext.Provider value={{ success, error }}>
+    <ToastContext.Provider value={value}>
       {children}
       {portalTarget && createPortal(
         <div style={{ pointerEvents: 'none' }}>

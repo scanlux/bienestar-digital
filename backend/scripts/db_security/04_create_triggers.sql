@@ -92,33 +92,31 @@ BEGIN
 END;
 //
 
--- Categoria 1: Unicidad de Wallet por Usuario
+-- Categoria 1: Unicidad de Wallet por Propietario (Redesign v8)
 CREATE OR REPLACE TRIGGER enforce_single_wallet_per_user
 BEFORE INSERT ON wallets
 FOR EACH ROW
 BEGIN
   DECLARE wallet_count INT;
-  IF NEW.usuario_id IS NOT NULL THEN
+  IF NEW.owner_type IS NOT NULL AND NEW.owner_id IS NOT NULL THEN
     SELECT COUNT(*) INTO wallet_count
-    FROM wallets WHERE usuario_id = NEW.usuario_id;
+    FROM wallets WHERE owner_type = NEW.owner_type AND owner_id = NEW.owner_id;
     IF wallet_count > 0 THEN
       SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Integridad: Este usuario ya posee una billetera DOMI. Solo se permite una por cuenta.';
+        SET MESSAGE_TEXT = 'Integridad: Este propietario (owner_type+owner_id) ya posee una billetera DOMI.';
     END IF;
   END IF;
 END;
 //
 
--- Categoria 1: Inmutabilidad de Propietario de Wallet
+-- Categoria 1: Inmutabilidad de Propietario de Wallet (Redesign v8)
 CREATE OR REPLACE TRIGGER prevent_wallet_owner_change
 BEFORE UPDATE ON wallets
 FOR EACH ROW
 BEGIN
-  IF OLD.usuario_id IS NOT NULL
-     AND NEW.usuario_id IS NOT NULL
-     AND OLD.usuario_id <> NEW.usuario_id THEN
+  IF (OLD.owner_type <> NEW.owner_type) OR (OLD.owner_id <> NEW.owner_id) THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Seguridad: La billetera no puede reasignarse a otro usuario. La propiedad es inmutable.';
+      SET MESSAGE_TEXT = 'Seguridad: La propiedad de la billetera (owner_type+owner_id) es inmutable.';
   END IF;
 END;
 //
@@ -212,4 +210,94 @@ BEGIN
 END;
 //
 
+-- Categoria 4: Snapshots y Auditoria Financiera DOMI
+CREATE OR REPLACE TRIGGER auto_snapshot_protocol_rules
+AFTER UPDATE ON protocol_rules FOR EACH ROW
+BEGIN
+  INSERT INTO protocol_rules_history (original_rule_id, snapshot, changed_by)
+  VALUES (OLD.id, JSON_OBJECT(
+    'threshold_fiat_cop', OLD.threshold_fiat_cop,
+    'base_cost_domis', OLD.base_cost_domis,
+    'percentage_rate', OLD.percentage_rate,
+    'effective_date', OLD.effective_date
+  ), @domi_session_user_id);
+END;
+//
+
+CREATE OR REPLACE TRIGGER protect_peg_history_update
+BEFORE UPDATE ON domi_peg_history FOR EACH ROW
+BEGIN
+  IF @domi_bypass_security IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Seguridad: El historial de peg del DOMI es inmutable.';
+  END IF;
+END;
+//
+
+CREATE OR REPLACE TRIGGER protect_peg_history_delete
+BEFORE DELETE ON domi_peg_history FOR EACH ROW
+BEGIN
+  IF @domi_bypass_security IS NULL THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Seguridad: El historial de peg del DOMI es inmutable.';
+  END IF;
+END;
+//
+
+-- Categoria 5: Seguridad de Pedidos (Solo customer puede hacer pedidos)
+CREATE OR REPLACE TRIGGER enforce_customer_role_on_order_insert
+BEFORE INSERT ON orders
+FOR EACH ROW
+BEGIN
+  DECLARE user_rol VARCHAR(20);
+  SELECT rol INTO user_rol FROM users WHERE id = NEW.customer_user_id;
+  IF user_rol IS NULL OR user_rol <> 'customer' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Regla de negocio: Solo un usuario con rol customer puede realizar pedidos.';
+  END IF;
+END;
+//
+
+-- Categoria 6: Sincronización Automática de Roles RBAC
+CREATE OR REPLACE TRIGGER auto_assign_customer_role
+AFTER INSERT ON users
+FOR EACH ROW
+BEGIN
+  SET @domi_is_root = 1;
+  IF NEW.rol = 'customer' THEN
+    IF NEW.es_repartidor = 1 THEN
+      INSERT IGNORE INTO user_roles (user_type, user_id, role_id) VALUES ('user', NEW.id, 11);
+    ELSE
+      INSERT IGNORE INTO user_roles (user_type, user_id, role_id) VALUES ('user', NEW.id, 10);
+    END IF;
+  END IF;
+  SET @domi_is_root = NULL;
+END;
+//
+
+CREATE OR REPLACE TRIGGER auto_sync_customer_role_update
+AFTER UPDATE ON users
+FOR EACH ROW
+BEGIN
+  SET @domi_is_root = 1;
+  IF OLD.rol = 'customer' AND NEW.rol = 'customer' THEN
+    IF OLD.es_repartidor = 0 AND NEW.es_repartidor = 1 THEN
+      DELETE FROM user_roles WHERE user_type = 'user' AND user_id = NEW.id AND role_id = 10;
+      INSERT IGNORE INTO user_roles (user_type, user_id, role_id) VALUES ('user', NEW.id, 11);
+    ELSEIF OLD.es_repartidor = 1 AND NEW.es_repartidor = 0 THEN
+      DELETE FROM user_roles WHERE user_type = 'user' AND user_id = NEW.id AND role_id = 11;
+      INSERT IGNORE INTO user_roles (user_type, user_id, role_id) VALUES ('user', NEW.id, 10);
+    END IF;
+  ELSEIF OLD.rol <> 'customer' AND NEW.rol = 'customer' THEN
+    IF NEW.es_repartidor = 1 THEN
+      INSERT IGNORE INTO user_roles (user_type, user_id, role_id) VALUES ('user', NEW.id, 11);
+    ELSE
+      INSERT IGNORE INTO user_roles (user_type, user_id, role_id) VALUES ('user', NEW.id, 10);
+    END IF;
+  ELSEIF OLD.rol = 'customer' AND NEW.rol <> 'customer' THEN
+    DELETE FROM user_roles WHERE user_type = 'user' AND user_id = NEW.id AND role_id IN (10, 11);
+  END IF;
+  SET @domi_is_root = NULL;
+END;
+//
+
 DELIMITER ;
+

@@ -2,7 +2,22 @@ const db = require('../../config/db');
 
 class PublicRepository {
   async findActiveCommerces() {
-    const [rows] = await db.query("SELECT id, nombre, descripcion, logo_url, type, open_time, close_time, orden FROM commerces WHERE status = 'active' ORDER BY orden ASC");
+    const [rows] = await db.query(`
+      SELECT id, nombre, descripcion, logo_url, 
+             IF(
+               (SELECT COUNT(*) 
+                FROM commerce_upgrades cu 
+                WHERE cu.commerce_id = c.id 
+                  AND cu.upgrade_type = 'estado_empresarial' 
+                  AND cu.expires_at > NOW()) > 0, 
+               'Empresarial', 
+               'Comercial'
+             ) as type, 
+             open_time, close_time, orden 
+      FROM commerces c
+      WHERE status = 'active' 
+      ORDER BY orden ASC
+    `);
     return rows;
   }
 
@@ -11,7 +26,7 @@ class PublicRepository {
       SELECT p.id, s.commerce_id, p.nombre, p.descripcion_larga AS descripcion_corta, p.precio_base, p.image_url
       FROM products p
       JOIN stores s ON p.store_id = s.id
-      WHERE p.disponible = 1
+      WHERE p.disponible = 1 AND p.deleted_at IS NULL
     `);
     return rows;
   }
@@ -28,7 +43,15 @@ class PublicRepository {
         c.nombre as commerce_nombre, 
         c.logo_url as commerce_logo,
         c.descripcion as commerce_descripcion,
-        c.type as commerce_type
+        IF(
+          (SELECT COUNT(*) 
+           FROM commerce_upgrades cu 
+           WHERE cu.commerce_id = c.id 
+             AND cu.upgrade_type = 'estado_empresarial' 
+             AND cu.expires_at > NOW()) > 0, 
+          'Empresarial', 
+          'Comercial'
+        ) as commerce_type
       FROM stores s
       JOIN commerces c ON s.commerce_id = c.id
       WHERE s.estado = 'operativo'
@@ -47,26 +70,21 @@ class PublicRepository {
   async findStoreFeaturedProducts(storeId) {
     const [rows] = await db.query(`
       SELECT p.id, p.image_url, p.nombre, 
-             COALESCE(sp.precio_local, p.precio_base) as precio_base, 
+             p.precio_base, 
              p.updated_at, p.tags, cat.nombre as categoria_nombre 
-      FROM products p
-      JOIN store_products sp ON p.id = sp.product_id
-      JOIN categorias cat ON p.categoria_id = cat.id
-      JOIN menus m ON cat.menu_id = m.id
-      JOIN store_menus sm ON m.id = sm.menu_id
-      JOIN store_categories sc ON cat.id = sc.categoria_id
-      WHERE sp.store_id = ? 
-        AND sp.disponible = 1 
-        AND p.disponible = 1 
-        AND sc.store_id = ?
-        AND sc.disponible = 1
-        AND cat.disponible = 1 
-        AND sm.store_id = ?
-        AND sm.disponible = 1
-        AND m.disponible = 1
-        AND p.image_url IS NOT NULL
-    `, [storeId, storeId, storeId]);
-    return rows;
+       FROM products p
+       JOIN categorias cat ON p.categoria_id = cat.id
+       JOIN menus m ON cat.menu_id = m.id
+       WHERE p.store_id = ? 
+         AND p.disponible = 1 
+         AND p.deleted_at IS NULL
+         AND cat.disponible = 1
+         AND cat.deleted_at IS NULL
+         AND m.disponible = 1
+         AND m.deleted_at IS NULL
+         AND p.image_url IS NOT NULL
+     `, [storeId]);
+     return rows;
   }
 
   async findServerTime() {
@@ -86,29 +104,23 @@ class PublicRepository {
 
   async findChangedProducts(sinceDate) {
     const [rows] = await db.query(`
-      SELECT DISTINCT sp.store_id as id
+      SELECT DISTINCT p.store_id as id
       FROM products p
-      JOIN store_products sp ON p.id = sp.product_id
-      WHERE p.updated_at > ? OR sp.updated_at > ?
+      WHERE p.updated_at > ? AND p.deleted_at IS NULL
       
       UNION
       
-      SELECT DISTINCT sm.store_id as id
+      SELECT DISTINCT m.store_id as id
       FROM menus m
-      JOIN store_menus sm ON m.id = sm.menu_id
-      WHERE m.updated_at > ? OR sm.updated_at > ?
+      WHERE m.updated_at > ? AND m.deleted_at IS NULL
       
       UNION
       
-      SELECT DISTINCT sc.store_id as id
+      SELECT DISTINCT m.store_id as id
       FROM categorias c
-      JOIN store_categories sc ON c.id = sc.categoria_id
-      WHERE c.updated_at > ? OR sc.updated_at > ?
-    `, [
-      sinceDate, sinceDate,
-      sinceDate, sinceDate,
-      sinceDate, sinceDate
-    ]);
+      JOIN menus m ON c.menu_id = m.id
+      WHERE c.updated_at > ? AND c.deleted_at IS NULL
+    `, [sinceDate, sinceDate, sinceDate]);
     return rows;
   }
 
@@ -116,7 +128,16 @@ class PublicRepository {
     const [rows] = await db.query(`
       SELECT 
         s.id, s.nombre_sucursal, s.direccion, s.telefono, s.estado, s.image_url as sede_image,
-        c.nombre as commerce_nombre, c.logo_url as commerce_logo, c.descripcion as commerce_descripcion, c.type as commerce_type
+        c.nombre as commerce_nombre, c.logo_url as commerce_logo, c.descripcion as commerce_descripcion,
+        IF(
+          (SELECT COUNT(*) 
+           FROM commerce_upgrades cu 
+           WHERE cu.commerce_id = c.id 
+             AND cu.upgrade_type = 'estado_empresarial' 
+             AND cu.expires_at > NOW()) > 0, 
+          'Empresarial', 
+          'Comercial'
+        ) as commerce_type
       FROM stores s
       JOIN commerces c ON s.commerce_id = c.id
       WHERE s.id IN (?)
@@ -138,10 +159,9 @@ class PublicRepository {
     const [rows] = await db.query(`
       SELECT m.* 
       FROM menus m
-      JOIN store_menus sm ON m.id = sm.menu_id
-      WHERE sm.store_id = ? 
-        AND sm.disponible = 1 
+      WHERE m.store_id = ? 
         AND m.disponible = 1
+        AND m.deleted_at IS NULL
       ORDER BY m.orden ASC
     `, [storeId]);
     return rows;
@@ -151,11 +171,11 @@ class PublicRepository {
     const [rows] = await db.query(`
       SELECT c.* 
       FROM categorias c
-      JOIN store_categories sc ON c.id = sc.categoria_id
+      JOIN menus m ON c.menu_id = m.id
       WHERE c.menu_id = ? 
-        AND sc.store_id = ?
-        AND sc.disponible = 1
+        AND m.store_id = ?
         AND c.disponible = 1
+        AND c.deleted_at IS NULL
       ORDER BY c.orden_visual ASC
     `, [menuId, storeId]);
     return rows;
@@ -164,15 +184,14 @@ class PublicRepository {
   async findProductsByCategoryAndStore(categoryId, storeId) {
     const [rows] = await db.query(`
       SELECT p.id, p.nombre, p.descripcion_larga, 
-             COALESCE(sp.precio_local, p.precio_base) as precio_base, 
-             COALESCE(sp.tiempo_prep_local, p.tiempo_prep_estimado) as tiempo_prep_estimado, 
+             p.precio_base, 
+             p.tiempo_prep_estimado, 
              p.image_url, p.disponible, p.es_vegetariano, p.tags
       FROM products p
-      JOIN store_products sp ON p.id = sp.product_id
       WHERE p.categoria_id = ? 
-        AND sp.store_id = ? 
-        AND sp.disponible = 1 
+        AND p.store_id = ? 
         AND p.disponible = 1
+        AND p.deleted_at IS NULL
     `, [categoryId, storeId]);
     return rows;
   }
@@ -185,7 +204,13 @@ class PublicRepository {
         (SELECT COUNT(*) FROM commerce_video_likes WHERE video_id = v.id) as likes_count
       FROM commerce_videos v
       JOIN commerces c ON v.commerce_id = c.id
-      WHERE v.status = 'active' AND c.type = 'Empresarial' AND v.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 5 DAY)
+      WHERE v.status = 'active' 
+        AND (SELECT COUNT(*) 
+             FROM commerce_upgrades cu 
+             WHERE cu.commerce_id = c.id 
+               AND cu.upgrade_type = 'estado_empresarial' 
+               AND cu.expires_at > NOW()) > 0 
+        AND v.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 5 DAY)
       ORDER BY v.created_at DESC
     `);
     return rows;
@@ -245,12 +270,49 @@ class PublicRepository {
   }
 
   async insertRegistrationRequest(data) {
-    const { tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, apellidos_contacto, celular_contacto } = data;
-    await db.query(`
+    const { 
+      tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, 
+      apellidos_contacto, celular_contacto, logo_url, documento_camara_comercio, 
+      documento_rut, documento_cedula_frente, documento_cedula_dorso,
+      nit_dv, telefono, ciudad, direccion, descripcion
+    } = data;
+    const [result] = await db.query(`
       INSERT INTO registration_requests 
-      (tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, apellidos_contacto, celular_contacto, estado)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pendiente')
-    `, [tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, apellidos_contacto, celular_contacto]);
+      (tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, apellidos_contacto, 
+       celular_contacto, logo_url, documento_camara_comercio, documento_rut, documento_cedula, 
+       documento_cedula_frente, documento_cedula_dorso, estado, nit_dv, telefono, ciudad, direccion, descripcion)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?)
+    `, [
+      tipo_solicitud, nit, razon_social, email_contacto, nombres_contacto, 
+      apellidos_contacto, celular_contacto, logo_url, documento_camara_comercio, 
+      documento_rut, documento_cedula_frente, // old column sets to front
+      documento_cedula_frente, documento_cedula_dorso,
+      nit_dv || null, telefono || null, ciudad || null, direccion || null, descripcion || null
+    ]);
+    return result.insertId;
+  }
+
+  async updateRegistrationRequest(id, data) {
+    const {
+      nit, nit_dv, razon_social, email_contacto, nombres_contacto, apellidos_contacto,
+      celular_contacto, telefono, ciudad, direccion, descripcion, logo_url,
+      documento_camara_comercio, documento_rut, documento_cedula_frente, documento_cedula_dorso
+    } = data;
+    await db.query(`
+      UPDATE registration_requests
+      SET nit = ?, nit_dv = ?, razon_social = ?, email_contacto = ?, nombres_contacto = ?, 
+          apellidos_contacto = ?, celular_contacto = ?, telefono = ?, ciudad = ?, 
+          direccion = ?, descripcion = ?, logo_url = ?, documento_camara_comercio = ?, 
+          documento_rut = ?, documento_cedula = ?, documento_cedula_frente = ?, 
+          documento_cedula_dorso = ?, estado = 'pendiente'
+      WHERE id = ?
+    `, [
+      nit, nit_dv || null, razon_social, email_contacto, nombres_contacto, apellidos_contacto,
+      celular_contacto, telefono || null, ciudad || null, direccion || null, descripcion || null,
+      logo_url || null, documento_camara_comercio || null, documento_rut || null,
+      documento_cedula_frente || null, documento_cedula_frente || null, documento_cedula_dorso || null,
+      id
+    ]);
   }
 }
 

@@ -10,11 +10,14 @@ import { useModalScroll } from '@/hooks/useModalScroll';
 import { ActionButton, TransitionShield, LoadingState, Spinner, HeaderBackButton } from '@/components/Common/UIElements';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/context/AuthContext';
+import { SystemRestrictionWrapper } from '@/components/Common/SystemRestrictionWrapper';
+import { usePermission } from '@/hooks/usePermission';
 
 // Componentes Locales
-import { Container, HeaderSection, MenuControlBar, SelectPremium, SeparatorLine, EmptyHeroCard, GlobalFeedbackStyles } from './StoreDetailStyles';
+import { Container, HeaderSection, MenuControlBar, SelectPremium, SeparatorLine, EmptyHeroCard, GlobalFeedbackStyles, DeleteIconButton } from './StoreDetailStyles';
 import { MenuAccordion } from './MenuAccordion';
 import { StoreModals } from './StoreModals';
+import { AlertModal } from '@/components/Common/AlertModal';
 
 import { API_URL } from '@/constants';
 import { getAuthHeaders } from '@/utils/auth';
@@ -29,9 +32,11 @@ interface CommerceCatalogPageProps {
 export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commerceId, isAdminView }) => {
   const router = useRouter();
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  const hasWritePermission = isAdminView || (user?.permissions || []).includes('write_catalog');
+  const { hasPermission: canWrite, mode: writeMode } = usePermission('write_catalog');
+  const hasWritePermission = isAdminView || canWrite;
+  const showEmptyCreate = hasWritePermission || writeMode === 'ghost';
 
   const [menus, setMenus] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
@@ -50,6 +55,67 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
   const [transitionLoading, setTransitionLoading] = useState(false);
   const [transitionMessage, setTransitionMessage] = useState('Sincronizando...');
   const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'menu' | 'categoria' | 'product';
+    id: number;
+    name: string;
+    preview?: { menus?: number; categorias?: number; productos?: number };
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteClick = async (type: 'menu' | 'categoria' | 'product', id: number, name: string) => {
+    if (type === 'menu' || type === 'categoria') {
+      const endpoint = type === 'menu' ? `menus/${id}/delete-preview` : `categorias/${id}/delete-preview`;
+      try {
+        const headers = getAuthHeaders();
+        const res = await axios.get(`${API_URL}/api/manage/${endpoint}`, { headers });
+        setDeleteTarget({ type, id, name, preview: res.data });
+      } catch (err) {
+        console.error('Error fetching delete preview:', err);
+        setDeleteTarget({ type, id, name });
+      }
+    } else {
+      setDeleteTarget({ type, id, name });
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    const headers = getAuthHeaders();
+    const endpoints = {
+      menu: `menus/${deleteTarget.id}`,
+      categoria: `categories/${deleteTarget.id}`,
+      product: `products/${deleteTarget.id}`
+    };
+
+    try {
+      await axios.delete(`${API_URL}/api/manage/${endpoints[deleteTarget.type]}`, { headers });
+      toast.success(`${deleteTarget.type === 'menu' ? 'Menú' : deleteTarget.type === 'categoria' ? 'Categoría' : 'Producto'} eliminado con éxito.`);
+      setDeleteTarget(null);
+      await fetchInitialData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Error al eliminar el elemento.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const getDeleteMessage = () => {
+    if (!deleteTarget) return '';
+    const { type, name, preview } = deleteTarget;
+    if (type === 'menu') {
+      const cats = preview?.categorias || 0;
+      const prods = preview?.productos || 0;
+      return `¿Estás seguro de que deseas eliminar el menú "${name}"?\nEsta acción eliminará en cascada ${cats} categoría(s) y ${prods} producto(s) asociados.\nEsta acción no se puede deshacer.`;
+    }
+    if (type === 'categoria') {
+      const prods = preview?.productos || 0;
+      return `¿Estás seguro de que deseas eliminar la categoría "${name}"?\nEsta acción eliminará en cascada ${prods} producto(s) asociados.\nEsta acción no se puede deshacer.`;
+    }
+    return `¿Estás seguro de que deseas eliminar el producto "${name}"?\nEsta acción no se puede deshacer.`;
+  };
 
   useModalScroll(isModalOpen);
 
@@ -84,8 +150,10 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
   }, []);
 
   useEffect(() => {
-    fetchInitialData();
-  }, [commerceId]);
+    if (!isLoading && user) {
+      fetchInitialData();
+    }
+  }, [commerceId, isLoading, user]);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -120,7 +188,7 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
   const fetchCategorias = async (menuId: number) => {
     try {
       const headers = getAuthHeaders();
-      const res = await axios.get(`${API_URL}/api/manage/categorias/${menuId}`, { headers });
+      const res = await axios.get(`${API_URL}/api/manage/categories/${menuId}`, { headers });
       setCategorias(res.data);
       setActiveCategoriaId(null);
     } catch (e) {
@@ -222,7 +290,7 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
         return;
       } else if (modalType === 'categoria') {
         const payload = { ...formData, menu_id: activeMenuId };
-        const res = await axios.post(`${API_URL}/api/manage/categorias`, payload, { headers });
+        const res = await axios.post(`${API_URL}/api/manage/categories`, payload, { headers });
         const finalId = formData.id || res.data.id;
         toast.success('Categoría guardada con éxito');
         if (activeMenuId) fetchCategorias(activeMenuId);
@@ -254,7 +322,7 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
     }
   };
 
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <LoadingState>
         <Spinner />
@@ -296,13 +364,15 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
         </div>
 
         {menus.length === 0 ? (
-          hasWritePermission ? (
-            <EmptyHeroCard onClick={() => openForm('menu')}>
-              <div className="icon">+</div>
-              <p className="animated-text">
-                <span className="arrow">→</span> Añada un nuevo Menú <span className="arrow">←</span>
-              </p>
-            </EmptyHeroCard>
+          showEmptyCreate ? (
+            <SystemRestrictionWrapper permission="write_catalog">
+              <EmptyHeroCard onClick={() => openForm('menu')}>
+                <div className="icon">+</div>
+                <p className="animated-text">
+                  <span className="arrow">→</span> Añada un nuevo Menú <span className="arrow">←</span>
+                </p>
+              </EmptyHeroCard>
+            </SystemRestrictionWrapper>
           ) : (
             <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem', textAlign: 'center', padding: '40px 0' }}>
               No hay menús registrados en este comercio.
@@ -319,20 +389,44 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
               </SelectPremium>
             </div>
             <div className="button-group">
-              {activeMenuId && hasWritePermission && (
-                <ActionButton 
-                  $variant="outline" 
-                  onClick={() => {
-                    const menuObj = menus.find(m => m.id === activeMenuId);
-                    if (menuObj) openForm('menu', menuObj);
-                  }}
-                >
-                  Editar Menú
-                </ActionButton>
+              {activeMenuId && (
+                <>
+                  <SystemRestrictionWrapper permission="write_catalog">
+                    <ActionButton 
+                      $variant="outline" 
+                      onClick={() => {
+                        const menuObj = menus.find(m => m.id === activeMenuId);
+                        if (menuObj) openForm('menu', menuObj);
+                      }}
+                    >
+                      Editar Menú
+                    </ActionButton>
+                  </SystemRestrictionWrapper>
+                  <SystemRestrictionWrapper permission="delete_catalog">
+                    <ActionButton
+                      $variant="outline"
+                      style={{ 
+                        borderColor: 'rgba(239, 68, 68, 0.4)', 
+                        color: '#ef4444', 
+                        background: 'transparent',
+                        padding: '0 12px'
+                      }}
+                      onClick={() => {
+                        const menuObj = menus.find(m => m.id === activeMenuId);
+                        if (menuObj) handleDeleteClick('menu', menuObj.id, menuObj.nombre);
+                      }}
+                      title="Eliminar Menú"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                      </svg>
+                    </ActionButton>
+                  </SystemRestrictionWrapper>
+                </>
               )}
-              {hasWritePermission && (
+              <SystemRestrictionWrapper permission="write_catalog">
                 <ActionButton onClick={() => openForm('menu')}>+ Nuevo Menú</ActionButton>
-              )}
+              </SystemRestrictionWrapper>
             </div>
           </MenuControlBar>
         )}
@@ -353,6 +447,7 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
             productRefs={productRefs}
             activeMenuId={activeMenuId}
             hasWritePermission={hasWritePermission}
+            onDeleteItem={handleDeleteClick}
           />
         )}
       </GlobalFeedbackStyles>
@@ -372,6 +467,20 @@ export const CommerceCatalogPage: React.FC<CommerceCatalogPageProps> = ({ commer
         <TransitionShield message={transitionMessage} />,
         modalTarget
       )}
+
+      {/* Confirmación de Eliminación Destructiva */}
+      <AlertModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+        title="Confirmar Eliminación"
+        message={getDeleteMessage()}
+        confirmText={isDeleting ? "Eliminando..." : "Eliminar"}
+        cancelText="Cancelar"
+        isDestructive={true}
+        zIndex={4000}
+      />
     </Container>
   );
 };

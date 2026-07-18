@@ -22,6 +22,12 @@ export default function PermissionsAnalysisPage() {
   const [filterCategory, setFilterCategory] = useState('');
   const [isListView, setIsListView] = useState(true); // Modo lista por defecto
 
+  // Configuración de visibilidad (PRP)
+  const [selectedPermission, setSelectedPermission] = useState<any | null>(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [updatingPermId, setUpdatingPermId] = useState<number | null>(null);
+  const [tempMode, setTempMode] = useState<'ghost' | 'hidden' | 'disabled'>('hidden');
+
   useEffect(() => {
     if (token) {
       fetchAnalysis();
@@ -47,6 +53,38 @@ export default function PermissionsAnalysisPage() {
     router.push('/admin/dashboard/roles');
   };
 
+  const handleOpenConfig = (perm: any) => {
+    setSelectedPermission(perm);
+    setTempMode(perm.ui_restriction_mode || 'hidden');
+    setShowConfigModal(true);
+  };
+
+  const handleSaveConfig = async () => {
+    if (!selectedPermission || !selectedPermission.id) return;
+    setUpdatingPermId(selectedPermission.id);
+    try {
+      await axios.patch(`${API_URL}/api/manage/permissions/${selectedPermission.id}`, 
+        { ui_restriction_mode: tempMode },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Modo de restricción de interfaz actualizado con éxito.');
+      
+      // Actualizar el estado local
+      setAnalysisData(prev => prev.map(p => 
+        p.code === selectedPermission.code 
+          ? { ...p, ui_restriction_mode: tempMode }
+          : p
+      ));
+      
+      setShowConfigModal(false);
+    } catch (err: any) {
+      console.error('Error updating permission UI mode:', err);
+      toast.error(err.response?.data?.error || 'Error al actualizar el modo de restricción.');
+    } finally {
+      setUpdatingPermId(null);
+    }
+  };
+
   if (loading) {
     return (
       <Container>
@@ -64,7 +102,7 @@ export default function PermissionsAnalysisPage() {
             <Title>Auditoría e Impacto de Permisos Atómicos</Title>
           </TitleContainer>
           <Subtitle>
-            Análisis detallado de criticidad, alcance de seguridad y afectación de bases de datos de los 32 privilegios del sistema.
+            Análisis detallado de criticidad, alcance de seguridad y afectación de bases de datos de los privilegios del sistema.
           </Subtitle>
         </div>
         <BackButton onClick={handleBack}>Volver a Roles</BackButton>
@@ -155,8 +193,10 @@ export default function PermissionsAnalysisPage() {
                 <th>Código / Funcionalidad / Alcance</th>
                 <th>Categoría</th>
                 <th>Criticidad</th>
+                <th>Modo UI</th>
                 <th>Tablas DB</th>
                 <th>Endpoints</th>
+                <th style={{ width: '80px', textAlign: 'center' }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -187,6 +227,9 @@ export default function PermissionsAnalysisPage() {
                     <td style={{ verticalAlign: 'top' }}>
                       <CriticidadBadge criticidad={p.criticidad}>{p.criticidad}</CriticidadBadge>
                     </td>
+                    <td style={{ verticalAlign: 'top' }}>
+                      <UIModeBadge mode={p.ui_restriction_mode}>{p.ui_restriction_mode}</UIModeBadge>
+                    </td>
                     <td style={{ verticalAlign: 'top', minWidth: '150px' }}>
                       <TableBadgeList style={{ marginBottom: 0 }}>
                         {p.impactedTables.map((table: string) => (
@@ -209,6 +252,15 @@ export default function PermissionsAnalysisPage() {
                         })}
                       </EndpointList>
                     </td>
+                    <td style={{ verticalAlign: 'top', textAlign: 'center' }}>
+                      {p.id ? (
+                        <IconButton onClick={() => handleOpenConfig(p)} title="Configurar Visibilidad de Interfaz">
+                          <SettingsIcon />
+                        </IconButton>
+                      ) : (
+                        <span style={{ color: '#666', fontSize: '0.85rem' }}>N/A</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               }
@@ -226,7 +278,7 @@ export default function PermissionsAnalysisPage() {
                 return matchesSearch && matchesCriticidad && matchesTipo && matchesCategory;
               }).length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', color: '#888', padding: '3rem' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', color: '#888', padding: '3rem' }}>
                     No se encontraron privilegios que coincidan con los filtros de búsqueda.
                   </td>
                 </tr>
@@ -256,9 +308,19 @@ export default function PermissionsAnalysisPage() {
                 <CardHeader>
                   <div>
                     <PermCategoryTag>{p.category}</PermCategoryTag>
-                    <PermCodeBadge>{p.code}</PermCodeBadge>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <PermCodeBadge>{p.code}</PermCodeBadge>
+                      <UIModeBadge mode={p.ui_restriction_mode}>{p.ui_restriction_mode}</UIModeBadge>
+                    </div>
                   </div>
-                  <CriticidadBadge criticidad={p.criticidad}>{p.criticidad}</CriticidadBadge>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <CriticidadBadge criticidad={p.criticidad}>{p.criticidad}</CriticidadBadge>
+                    {p.id && (
+                      <IconButton onClick={() => handleOpenConfig(p)} title="Configurar Visibilidad de Interfaz">
+                        <SettingsIcon />
+                      </IconButton>
+                    )}
+                  </div>
                 </CardHeader>
                 <PermTitle>{p.name}</PermTitle>
                 <PermScope>{p.scope}</PermScope>
@@ -305,6 +367,73 @@ export default function PermissionsAnalysisPage() {
             </div>
           )}
         </AnalysisGrid>
+      )}
+
+      {/* Modal de Configuración PRP */}
+      {showConfigModal && selectedPermission && (
+        <ModalOverlay onClick={() => setShowConfigModal(false)}>
+          <ModalContent onClick={e => e.stopPropagation()}>
+            <ModalHeader>
+              <ModalTitle>Configurar Visibilidad: {selectedPermission.code}</ModalTitle>
+              <CloseBtn onClick={() => setShowConfigModal(false)}>&times;</CloseBtn>
+            </ModalHeader>
+            <ModalBody>
+              <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+                Define cómo responderá la interfaz de usuario cuando un rol de usuario <strong>NO</strong> posea el permiso <code style={{ background: 'rgba(255,255,255,0.06)', padding: '0.1rem 0.3rem', borderRadius: '4px', color: '#ffa500' }}>{selectedPermission.code}</code> ({selectedPermission.name}).
+              </p>
+              
+              <RadioGroup>
+                <RadioLabel>
+                  <RadioInput 
+                    type="radio" 
+                    name="uiMode" 
+                    value="ghost" 
+                    checked={tempMode === 'ghost'} 
+                    onChange={() => setTempMode('ghost')} 
+                  />
+                  <div>
+                    <RadioTitle>Mostrar bloqueado (ghost)</RadioTitle>
+                    <RadioDesc>Se renderiza cubierto por un overlay semitransparente con blur y cursor denegado. Click abre un diálogo informativo u oferta de mejora (adquirir planes/upgrades).</RadioDesc>
+                  </div>
+                </RadioLabel>
+
+                <RadioLabel>
+                  <RadioInput 
+                    type="radio" 
+                    name="uiMode" 
+                    value="hidden" 
+                    checked={tempMode === 'hidden'} 
+                    onChange={() => setTempMode('hidden')} 
+                  />
+                  <div>
+                    <RadioTitle>No renderizar (hidden)</RadioTitle>
+                    <RadioDesc>No se renderiza en absoluto (retorna null). El elemento es invisible en la interfaz y el usuario no sabrá que existe.</RadioDesc>
+                  </div>
+                </RadioLabel>
+
+                <RadioLabel>
+                  <RadioInput 
+                    type="radio" 
+                    name="uiMode" 
+                    value="disabled" 
+                    checked={tempMode === 'disabled'} 
+                    onChange={() => setTempMode('disabled')} 
+                  />
+                  <div>
+                    <RadioTitle>Solo lectura (disabled)</RadioTitle>
+                    <RadioDesc>Se renderiza con propiedad &quot;disabled&quot; nativa de HTML, sin overlay de bloqueo. Apropiado para campos de formulario y controles.</RadioDesc>
+                  </div>
+                </RadioLabel>
+              </RadioGroup>
+            </ModalBody>
+            <ModalFooter>
+              <CancelBtn onClick={() => setShowConfigModal(false)}>Cancelar</CancelBtn>
+              <SaveBtn onClick={handleSaveConfig} disabled={updatingPermId !== null}>
+                {updatingPermId ? 'Guardando...' : 'Guardar Modo'}
+              </SaveBtn>
+            </ModalFooter>
+          </ModalContent>
+        </ModalOverlay>
       )}
     </Container>
   );
@@ -697,3 +826,199 @@ const ListIcon = () => (
     <line x1="3" y1="18" x2="3.01" y2="18" />
   </svg>
 );
+
+const UIModeBadge = styled.span<{mode: 'ghost' | 'hidden' | 'disabled'}>`
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  display: inline-block;
+  
+  ${p => {
+    switch(p.mode) {
+      case 'ghost':
+        return `color: #ffc107; background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.25);`;
+      case 'hidden':
+        return `color: #9e9e9e; background: rgba(158, 158, 158, 0.1); border: 1px solid rgba(158, 158, 158, 0.25);`;
+      case 'disabled':
+        return `color: #03a9f4; background: rgba(3, 169, 244, 0.1); border: 1px solid rgba(3, 169, 244, 0.25);`;
+      default:
+        return `color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);`;
+    }
+  }}
+`;
+
+const IconButton = styled.button`
+  background: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--emerald, #48d64c);
+    transform: scale(1.08);
+  }
+`;
+
+const SettingsIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+`;
+
+const ModalContent = styled.div`
+  background: #181818;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: 500px;
+  max-width: 90%;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+`;
+
+const ModalHeader = styled.div`
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const ModalTitle = styled.h3`
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+`;
+
+const CloseBtn = styled.button`
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: color 0.2s;
+  &:hover {
+    color: #fff;
+  }
+`;
+
+const ModalBody = styled.div`
+  padding: 1.5rem;
+  flex: 1;
+`;
+
+const RadioGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const RadioLabel = styled.label`
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+`;
+
+const RadioInput = styled.input`
+  margin-top: 0.25rem;
+  cursor: pointer;
+  accent-color: var(--emerald, #48d64c);
+  transform: scale(1.1);
+`;
+
+const RadioTitle = styled.span`
+  display: block;
+  font-weight: 600;
+  color: #fff;
+  font-size: 0.95rem;
+  margin-bottom: 0.15rem;
+`;
+
+const RadioDesc = styled.span`
+  display: block;
+  font-size: 0.8rem;
+  color: #888;
+  line-height: 1.4;
+`;
+
+const ModalFooter = styled.div`
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.01);
+`;
+
+const CancelBtn = styled.button`
+  background: transparent;
+  color: #aaa;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.55rem 1.1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+  }
+`;
+
+const SaveBtn = styled.button`
+  background: var(--emerald, #48d64c);
+  color: #0c0c0c;
+  border: none;
+  padding: 0.55rem 1.1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.2s;
+  &:hover {
+    background: #39be3d;
+    transform: translateY(-1px);
+  }
+  &:disabled {
+    background: #3c823f;
+    cursor: not-allowed;
+    color: rgba(0,0,0,0.5);
+  }
+`;
+

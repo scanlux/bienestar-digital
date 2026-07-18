@@ -1,15 +1,11 @@
 import Cookies from 'js-cookie';
 
 /**
- * Obtiene el token JWT de autenticacion.
- * Busca primero en js-cookie ('token'), luego en document.cookie ('auth_token').
+ * Obtiene el token JWT de autenticación.
+ * Busca directamente en js-cookie ('auth_token').
  */
 export const getAuthToken = (): string | undefined => {
-  return Cookies.get('token') 
-    || document.cookie
-        .split('; ')
-        .find(row => row.startsWith('auth_token='))
-        ?.split('=')[1];
+  return Cookies.get('auth_token');
 };
 
 /**

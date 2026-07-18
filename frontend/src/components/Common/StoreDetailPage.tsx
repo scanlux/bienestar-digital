@@ -6,6 +6,9 @@ import axios from 'axios';
 import { useRouter, usePathname } from 'next/navigation';
 import styled from 'styled-components';
 import { MenuAccordion } from '@/components/Common/CommerceCatalog/MenuAccordion';
+import { SystemRestrictionWrapper } from '@/components/Common/SystemRestrictionWrapper';
+import { SystemRestrictionCard } from '@/components/Common/SystemRestrictionCard';
+
 
 const EditIconButton = styled.button`
   width: 40px;
@@ -33,6 +36,32 @@ const EditIconButton = styled.button`
   }
 `;
 
+const DeleteIconButton = styled.button`
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  margin-right: 16px;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+`;
+
 // Componentes Comunes
 import { useModalScroll } from '@/hooks/useModalScroll';
 import { useCardHighlight } from '@/hooks/useCardHighlight';
@@ -40,6 +69,7 @@ import { ActionButton, TransitionShield, LoadingState, Spinner, GlassHeaderBackB
 import { useToast } from '@/context/ToastContext';
 import { PremiumSwitch } from '@/components/Common/ModalStyles';
 import { useAuth } from '@/context/AuthContext';
+import { AlertModal } from '@/components/Common/AlertModal';
 import { StoreInfoCard } from '@/components/Common/StoreInfoCard';
 import { StoreModals } from '@/components/Common/CommerceCatalog/StoreModals';
 
@@ -59,15 +89,21 @@ import { getCommerceReturnUrl } from '@/utils/commerceNavigation';
 // Componente Local StoreHero (Integrado en el archivo común)
 interface StoreHeroProps {
   storeData: any;
+  menusCount: number;
+  categoriesCount: number;
+  maxProductsInSingleCategory: number;
 }
 
 const StoreHero: React.FC<StoreHeroProps> = ({ 
-  storeData
+  storeData,
+  menusCount,
+  categoriesCount,
+  maxProductsInSingleCategory
 }) => {
   if (!storeData) return null;
 
   return (
-    <StoreHeroCard $bgImage={getFullImageUrl(storeData?.image_url)}>
+    <StoreHeroCard $bgImage={getFullImageUrl(storeData?.image_url)} $estado={storeData?.estado}>
       <div className="hero-overlay"></div>
       <div className="hero-content">
         <div className="hero-left">
@@ -84,6 +120,9 @@ const StoreHero: React.FC<StoreHeroProps> = ({
         <StoreInfoCard 
           storeData={storeData} 
           formatTime={formatTime} 
+          menusCount={menusCount}
+          categoriesCount={categoriesCount}
+          maxProductsInSingleCategory={maxProductsInSingleCategory}
         />
       </div>
     </StoreHeroCard>
@@ -94,7 +133,7 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
   const router = useRouter();
   const pathname = usePathname();
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
   const isAdminPath = pathname.startsWith('/admin');
   const permissions = user?.permissions || [];
@@ -122,6 +161,13 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [catalogModalType, setCatalogModalType] = useState<'menu' | 'categoria' | 'product' | null>(null);
   const [catalogFormData, setCatalogFormData] = useState<any>({});
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'menu' | 'categoria' | 'product';
+    id: number;
+    name: string;
+    preview?: { menus?: number; categorias?: number; productos?: number };
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const {
     highlightedId: highlightedProductId,
@@ -136,6 +182,59 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
   const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
   const [headerPortalTarget, setHeaderPortalTarget] = useState<HTMLElement | null>(null);
 
+  const handleDeleteClick = async (type: 'menu' | 'categoria' | 'product', id: number, name: string) => {
+    if (type === 'menu' || type === 'categoria') {
+      const endpoint = type === 'menu' ? `menus/${id}/delete-preview` : `categorias/${id}/delete-preview`;
+      try {
+        const headers = getAuthHeaders();
+        const res = await axios.get(`${API_URL}/api/manage/${endpoint}`, { headers });
+        setDeleteTarget({ type, id, name, preview: res.data });
+      } catch (err) {
+        console.error('Error fetching delete preview:', err);
+        setDeleteTarget({ type, id, name });
+      }
+    } else {
+      setDeleteTarget({ type, id, name });
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    const headers = getAuthHeaders();
+    const endpoints = {
+      menu: `menus/${deleteTarget.id}`,
+      categoria: `categories/${deleteTarget.id}`,
+      product: `products/${deleteTarget.id}`
+    };
+
+    try {
+      await axios.delete(`${API_URL}/api/manage/${endpoints[deleteTarget.type]}`, { headers });
+      toast.success(`${deleteTarget.type === 'menu' ? 'Menú' : deleteTarget.type === 'categoria' ? 'Categoría' : 'Producto'} eliminado con éxito.`);
+      setDeleteTarget(null);
+      await fetchInitialData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Error al eliminar el elemento.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const getDeleteMessage = () => {
+    if (!deleteTarget) return '';
+    const { type, name, preview } = deleteTarget;
+    if (type === 'menu') {
+      const cats = preview?.categorias || 0;
+      const prods = preview?.productos || 0;
+      return `¿Estás seguro de que deseas eliminar el menú "${name}"?\nEsta acción eliminará en cascada ${cats} categoría(s) y ${prods} producto(s) asociados.\nEsta acción no se puede deshacer.`;
+    }
+    if (type === 'categoria') {
+      const prods = preview?.productos || 0;
+      return `¿Estás seguro de que deseas eliminar la categoría "${name}"?\nEsta acción eliminará en cascada ${prods} producto(s) asociados.\nEsta acción no se puede deshacer.`;
+    }
+    return `¿Estás seguro de que deseas eliminar el producto "${name}"?\nEsta acción no se puede deshacer.`;
+  };
+
   useModalScroll(isCatalogModalOpen);
 
   useEffect(() => {
@@ -144,8 +243,10 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
   }, []);
 
   useEffect(() => {
-    fetchInitialData();
-  }, [params.storeId]);
+    if (!isLoading && user) {
+      fetchInitialData();
+    }
+  }, [params.storeId, isLoading, user]);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -347,7 +448,7 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
         setTransitionMessage(isUpdate ? 'Actualizando Categoría...' : 'Creando Categoría...');
         setTransitionLoading(true);
         
-        await axios.post(`${API_URL}/api/manage/categorias`, payload, { headers });
+        await axios.post(`${API_URL}/api/manage/categories`, payload, { headers });
         toast.success(isUpdate ? 'Categoría actualizada con éxito' : 'Categoría creada con éxito');
         
         setIsCatalogModalOpen(false);
@@ -416,9 +517,14 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
     storeMenus.some(sm => sm.menu_id === mm.id && sm.disponible === 1)
   );
 
+  const maxProductsInSingleCategory = React.useMemo(() => {
+    const counts = Object.values(productsByCategory).map(list => list?.length || 0);
+    return counts.length > 0 ? Math.max(...counts) : 0;
+  }, [productsByCategory]);
+
   const showBackButton = isAdminPath || user?.adminType !== 'store';
 
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <LoadingState>
         <Spinner />
@@ -436,49 +542,20 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
               ← Volver
             </GlassHeaderBackButton>
           )}
-          {(canEditBasic || canEditAdvanced) && (
-            <ActionButton 
-              $variant="success-solid" 
-              style={{ fontSize: '0.85rem', padding: '6px 12px', height: '36px', marginRight: '12px' }}
-              onClick={openStoreEditForm}
-            >
-              Editar Sede
-            </ActionButton>
-          )}
         </>,
         headerPortalTarget
       )}
       <HeaderSection>
-        <StoreHero storeData={storeData} />
+        <StoreHero 
+          storeData={storeData} 
+          menusCount={storeMenus.length}
+          categoriesCount={categories.length}
+          maxProductsInSingleCategory={maxProductsInSingleCategory}
+        />
       </HeaderSection>
   
       {!canViewCatalog ? (
-        <div style={{ 
-          background: 'rgba(255,255,255,0.02)', 
-          border: '1px solid rgba(255,255,255,0.06)', 
-          borderRadius: '16px', 
-          padding: '40px 24px', 
-          maxWidth: '100%', 
-          width: '100%', 
-          textAlign: 'center',
-          backdropFilter: 'blur(10px)',
-          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
-        }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>✨</div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#fff', marginBottom: '8px' }}>
-            Plan Premium Requerido: Gestión de Catálogo
-          </h2>
-          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', maxWidth: '480px', margin: '0 auto 24px auto', lineHeight: '1.5' }}>
-            Esta funcionalidad requiere activar el plan Empresarial o poseer el rol de Administrador Comercial. Para más detalles, ponte en contacto con la gerencia de tu comercio.
-          </p>
-          <ActionButton 
-            $variant="luminous" 
-            style={{ padding: '10px 24px' }}
-            onClick={handleBackClick}
-          >
-            Volver
-          </ActionButton>
-        </div>
+        <SystemRestrictionCard onBackClick={handleBackClick} />
       ) : (
         <>
           {/* SECCIÓN 1: Gestión de Menús */}
@@ -488,14 +565,14 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
                 <SectionTitle style={{ marginBottom: '4px' }}>Gestión de Menús</SectionTitle>
                 <SectionDesc style={{ margin: 0 }}>Gestiona los menús y disponibilidad directamente para esta sede física.</SectionDesc>
               </div>
-              {canWriteCatalog && (
+              <SystemRestrictionWrapper permission="write_catalog">
                 <ActionButton 
                   onClick={openNewMenuForm}
                   style={{ flexShrink: 0, padding: '8px 16px', fontSize: '0.85rem' }}
                 >
                   + Nuevo Menú
                 </ActionButton>
-              )}
+              </SystemRestrictionWrapper>
             </div>
             
             {masterMenus.length === 0 ? (
@@ -504,51 +581,81 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
               </div>
             ) : (
               <MenuSelectionList>
-                {masterMenus.map(m => {
-                  const isEnabled = storeMenus.some(sm => sm.menu_id === m.id && sm.disponible === 1);
-                  return (
-                    <MenuSelectionCard key={m.id} $isEnabled={isEnabled}>
-                      <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                        {canWriteCatalog && (
-                          <EditIconButton 
-                            type="button"
-                            onClick={() => openEditMenuForm(m)}
-                            title="Editar Menú"
-                          >
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-                            </svg>
-                          </EditIconButton>
-                        )}
-                        <div className="menu-info">
-                          <h3>{m.nombre}</h3>
-                          {m.descripcion && <p>{m.descripcion}</p>}
+                {(() => {
+                  let activeEnabledCount = 0;
+                  const isBusiness = !!storeData?.has_business_status;
+
+                  return masterMenus.map(m => {
+                    const isEnabled = storeMenus.some(sm => sm.menu_id === m.id && sm.disponible === 1);
+                    let isExceedingCapacity = false;
+
+                    if (isEnabled) {
+                      activeEnabledCount++;
+                      if (!isBusiness && activeEnabledCount > 1) {
+                        isExceedingCapacity = true;
+                      }
+                    }
+
+                    return (
+                      <MenuSelectionCard key={m.id} $isEnabled={isEnabled} $isExceedingCapacity={isExceedingCapacity}>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          <SystemRestrictionWrapper permission="write_catalog">
+                            <EditIconButton 
+                              type="button"
+                              onClick={() => openEditMenuForm(m)}
+                              title="Editar Menú"
+                            >
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                              </svg>
+                            </EditIconButton>
+                          </SystemRestrictionWrapper>
+                          <SystemRestrictionWrapper permission="delete_catalog">
+                            <DeleteIconButton 
+                              type="button"
+                              onClick={() => handleDeleteClick('menu', m.id, m.nombre)}
+                              title="Eliminar Menú"
+                            >
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                              </svg>
+                            </DeleteIconButton>
+                          </SystemRestrictionWrapper>
+                          <div className="menu-info">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <h3>{m.nombre}</h3>
+                              {isExceedingCapacity && (
+                                <span style={{ 
+                                  fontSize: '0.65rem', 
+                                  fontWeight: 800, 
+                                  color: '#f59e0b', 
+                                  background: 'rgba(245, 158, 11, 0.12)', 
+                                  border: '1px solid rgba(245, 158, 11, 0.25)', 
+                                  padding: '2px 8px', 
+                                  borderRadius: '4px',
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.5px'
+                                }}>
+                                  Excede Capacidad (Inactivo)
+                                </span>
+                              )}
+                            </div>
+                            {m.descripcion && <p>{m.descripcion}</p>}
+                          </div>
                         </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                        {canEnableStoreCatalog ? (
-                          <PremiumSwitch 
-                            id={`menu-switch-${m.id}`}
-                            checked={isEnabled}
-                            onCheckedChange={(checked) => handleMenuToggle(m.id, checked)}
-                          />
-                        ) : (
-                          <span style={{
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            color: isEnabled ? 'var(--emerald, #48d64c)' : 'rgba(255,255,255,0.2)',
-                            background: isEnabled ? 'rgba(72,214,76,0.1)' : 'rgba(255,255,255,0.03)',
-                            border: `1px solid ${isEnabled ? 'rgba(72,214,76,0.2)' : 'rgba(255,255,255,0.05)'}`,
-                            padding: '4px 10px',
-                            borderRadius: '6px'
-                          }}>
-                            {isEnabled ? 'Habilitado' : 'Deshabilitado'}
-                          </span>
-                        )}
-                      </div>
-                    </MenuSelectionCard>
-                  );
-                })}
+                        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                          <SystemRestrictionWrapper permission="enable_store_catalog">
+                            <PremiumSwitch 
+                              id={`menu-switch-${m.id}`}
+                              checked={isEnabled}
+                              onCheckedChange={(checked) => handleMenuToggle(m.id, checked)}
+                            />
+                          </SystemRestrictionWrapper>
+                        </div>
+                      </MenuSelectionCard>
+                    );
+                  });
+                })()}
               </MenuSelectionList>
             )}
           </div>
@@ -570,13 +677,15 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
                   </SelectPremium>
                 )}
               </div>
-              {canWriteCatalog && enabledStoreMenus.length > 0 && (
-                <ActionButton 
-                  onClick={openNewCategoryForm}
-                  style={{ flexShrink: 0, padding: '8px 16px', fontSize: '0.85rem', height: '38px' }}
-                >
-                  + Nueva Categoría
-                </ActionButton>
+              {enabledStoreMenus.length > 0 && (
+                <SystemRestrictionWrapper permission="write_catalog">
+                  <ActionButton 
+                    onClick={openNewCategoryForm}
+                    style={{ flexShrink: 0, padding: '8px 16px', fontSize: '0.85rem', height: '38px' }}
+                  >
+                    + Nueva Categoría
+                  </ActionButton>
+                </SystemRestrictionWrapper>
               )}
             </div>
 
@@ -622,6 +731,7 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
                       onProductToggle={handleProductToggle}
                       canEnableStoreCatalog={canEnableStoreCatalog}
                       hideHeader={true}
+                      onDeleteItem={handleDeleteClick}
                     />
                   </GlobalFeedbackStyles>
                 )}
@@ -651,6 +761,20 @@ export default function StoreDetailPage({ params }: { params: { storeId: string 
         <TransitionShield message={transitionMessage} />,
         modalTarget
       )}
+
+      {/* Confirmación de Eliminación Destructiva */}
+      <AlertModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+        title="Confirmar Eliminación"
+        message={getDeleteMessage()}
+        confirmText={isDeleting ? "Eliminando..." : "Eliminar"}
+        cancelText="Cancelar"
+        isDestructive={true}
+        zIndex={4000}
+      />
     </Container>
   );
 }

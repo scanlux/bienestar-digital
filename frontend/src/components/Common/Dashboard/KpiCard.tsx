@@ -16,7 +16,7 @@ const pulseRed = keyframes`
 export interface KpiCardProps {
   icon: React.ReactNode;
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   accent?: boolean;
   accentColor?: string; // 'green' | 'blue'
   pulse?: 'green' | 'red';

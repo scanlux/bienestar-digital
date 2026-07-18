@@ -3,17 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import {
   Container, HeaderSection, MainGrid, Panel, PanelTabs, Tab,
-  PanelContent, RequestList, RequestItem, TypeBadge, ActionBtn,
-  SidebarTools, ToolBox, ToolBtn, StatusBox, LoadingState, Spinner
+  PanelContent, SidebarTools, ToolBox, ToolBtn, StatusBox, LoadingState, Spinner
 } from './AdminDashboardStyles';
 import axios from 'axios';
 import { getAuthHeaders } from '@/utils/auth';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_URL } from '@/constants';
-import { useAlert } from '@/context/AlertContext';
-import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 import { KpiCard } from '@/components/Common/Dashboard/KpiCard';
 import { KpiGrid } from '@/components/Common/Dashboard/KpiGrid';
 import { EmptyState } from '@/components/Common/EmptyState';
+import { useRouter } from 'next/navigation';
 
 interface Stats {
   activeCommerces: number;
@@ -23,21 +23,11 @@ interface Stats {
   totalOrders: number;
 }
 
-interface RegistrationRequest {
-  id: number;
-  tipo_solicitud: 'commerce' | 'delivery_company';
-  nit: string;
-  razon_social: string;
-  email_contacto: string;
-  nombres_contacto: string;
-  apellidos_contacto: string;
-  celular_contacto: string;
-  created_at?: string;
-}
-
 export default function AdminDashboard() {
-  const { showConfirm } = useAlert();
-  const toast = useToast();
+  const { user, isLoading } = useAuth();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
   const [stats, setStats] = useState<Stats>({
     activeCommerces: 0,
     pendingRequests: 0,
@@ -45,64 +35,30 @@ export default function AdminDashboard() {
     totalProducts: 0,
     totalOrders: 0
   });
-  const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'requests' | 'activity'>('requests');
-  const [processingId, setProcessingId] = useState<number | null>(null);
 
-  const fetchData = async () => {
-    try {
+  // TanStack Query: Lectura de Estadísticas
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['adminStats'],
+    queryFn: async ({ signal }) => {
       const headers = getAuthHeaders();
-      
-      const [statsRes, requestsRes] = await Promise.all([
-        axios.get(`${API_URL}/api/manage/stats`, { headers }),
-        axios.get(`${API_URL}/api/manage/requests?estado=pendiente`, { headers })
-      ]);
-
-      setStats(statsRes.data);
-      setRequests(requestsRes.data);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const res = await axios.get(`${API_URL}/api/manage/stats`, { headers, signal });
+      return res.data;
+    },
+    enabled: !isLoading && !!user
+  });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (statsData) {
+      setStats(statsData);
+    }
+  }, [statsData]);
 
-  const handleAction = (id: number, action: 'approve' | 'reject') => {
-    const confirmMsg = action === 'approve' 
-      ? '¿Estás seguro de que deseas aprobar esta solicitud? Se creará la cuenta y entidad correspondientes.' 
-      : '¿Estás seguro de que deseas rechazar esta solicitud?';
+  useEffect(() => {
+    setLoading(statsLoading);
+  }, [statsLoading]);
 
-    showConfirm({
-      title: 'Confirmar Accion',
-      message: confirmMsg,
-      confirmText: action === 'approve' ? 'Aprobar' : 'Rechazar',
-      cancelText: 'Cancelar',
-      onConfirm: async () => {
-        setProcessingId(id);
-        try {
-          const headers = getAuthHeaders();
-          if (action === 'approve') {
-            await axios.post(`${API_URL}/api/manage/requests/${id}/approve`, {}, { headers });
-          } else {
-            await axios.post(`${API_URL}/api/manage/requests/${id}/reject`, { notas_system: 'Rechazado por administración matriz.' }, { headers });
-          }
-          toast.success(action === 'approve' ? 'Solicitud aprobada con éxito.' : 'Solicitud rechazada con éxito.');
-          fetchData();
-        } catch (error: any) {
-          toast.error(error.response?.data?.error || 'Error al procesar la solicitud');
-        } finally {
-          setProcessingId(null);
-        }
-      }
-    });
-  };
-
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <LoadingState>
         <Spinner />
@@ -138,6 +94,7 @@ export default function AdminDashboard() {
           value={stats.pendingRequests}
           accent={true}
           tag="PENDIENTES"
+          onClick={() => router.push('/admin/dashboard/requests')}
         />
 
         <KpiCard
@@ -154,77 +111,19 @@ export default function AdminDashboard() {
       </KpiGrid>
 
       <MainGrid>
-        {/* Management Panel */}
+        {/* Resumen del Core */}
         <Panel>
           <PanelTabs>
-            <Tab 
-              $active={activeTab === 'requests'} 
-              onClick={() => setActiveTab('requests')}
-            >
-              Control de Solicitudes de Registro
-              {requests.length > 0 && <span className="count">{requests.length}</span>}
-            </Tab>
-            <Tab 
-              $active={activeTab === 'activity'} 
-              onClick={() => setActiveTab('activity')}
-            >
+            <Tab $active={true}>
               Actividad Reciente
             </Tab>
           </PanelTabs>
 
           <PanelContent>
-            {activeTab === 'requests' ? (
-              <RequestList>
-                {requests.length === 0 ? (
-                  <EmptyState
-                    icon="✔"
-                    message="Todo al día. No hay solicitudes de registro pendientes."
-                  />
-                ) : (
-                  requests.map((req) => (
-                    <RequestItem key={req.id}>
-                      <div className="b-info">
-                        <div className="b-logo">
-                          {req.tipo_solicitud === 'commerce' ? '🏪' : '🛵'}
-                        </div>
-                        <div className="b-text">
-                          <div className="b-name-row">
-                            <p className="b-name">{req.razon_social}</p>
-                            <TypeBadge className={req.tipo_solicitud}>
-                              {req.tipo_solicitud === 'commerce' ? 'Comercio' : 'Mensajería'}
-                            </TypeBadge>
-                          </div>
-                          <p className="b-desc">
-                            NIT: {req.nit} | Contacto: {req.nombres_contacto} {req.apellidos_contacto}
-                          </p>
-                          <p className="b-contact-info">
-                            Correo: {req.email_contacto} | Celular: {req.celular_contacto}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="b-actions">
-                         <ActionBtn 
-                           $variant="approve" 
-                           onClick={() => handleAction(req.id, 'approve')}
-                           disabled={processingId === req.id}
-                         >
-                           Aprobar
-                         </ActionBtn>
-                         <ActionBtn 
-                           $variant="reject" 
-                           onClick={() => handleAction(req.id, 'reject')}
-                           disabled={processingId === req.id}
-                         >
-                           Rechazar
-                         </ActionBtn>
-                      </div>
-                    </RequestItem>
-                  ))
-                )}
-              </RequestList>
-            ) : (
-              <EmptyState message="Registro de actividad de sistema temporalmente deshabilitado." />
-            )}
+            <EmptyState 
+              icon="📈" 
+              message="No hay notificaciones de auditoría pendientes de revisión en la cola." 
+            />
           </PanelContent>
         </Panel>
 
@@ -232,14 +131,18 @@ export default function AdminDashboard() {
         <SidebarTools>
           <ToolBox>
             <h3>Acciones Rápidas</h3>
-            <ToolBtn onClick={() => fetchData()}>
+            <ToolBtn onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['adminStats'] });
+            }}>
                <span>↻</span> Refrescar Datos
             </ToolBtn>
+            {user?.permissions?.includes('manage_registration_requests') && (
+              <ToolBtn onClick={() => router.push('/admin/dashboard/requests')}>
+                 <span>🏪</span> Gestionar Solicitudes
+              </ToolBtn>
+            )}
             <ToolBtn className="disabled">
                <span>📊</span> Exportar Reporte
-            </ToolBtn>
-            <ToolBtn className="disabled">
-               <span>⚙</span> Ajustes Globales
             </ToolBtn>
           </ToolBox>
 
@@ -248,13 +151,10 @@ export default function AdminDashboard() {
                 <span className="dot" />
                 <h4>Estado del Sistema</h4>
              </div>
-             <p>Todos los servicios operan con normalidad. Conexión estable con Oracle Cloud.</p>
+             <p>Todos los servicios operan con normalidad. Conexión cifrada a la VPN de Tailscale activa.</p>
           </StatusBox>
         </SidebarTools>
       </MainGrid>
     </Container>
   );
 }
-
-
-

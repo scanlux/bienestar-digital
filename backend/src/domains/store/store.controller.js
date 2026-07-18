@@ -1,4 +1,5 @@
 const storeService = require('./store.service');
+const storeQuotaService = require('./store.quota.service');
 const { handleControllerError } = require('../../utils/errors');
 
 class StoreController {
@@ -90,9 +91,64 @@ class StoreController {
     }
   }
 
-  async subscribePlan(req, res) {
+  async getStoreFinancialSummary(req, res) {
     try {
-      const result = await storeService.subscribePlan(req.user, req.body, req);
+      const { id } = req.params;
+      const { filterType, selectedMonth } = req.query;
+      const result = await storeService.getStoreFinancialSummary(req.user, { id, filterType, selectedMonth }, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async getStoreQuotaStatus(req, res) {
+    try {
+      const isSystem = req.user.actorType === 'system_user';
+      const commerceId = isSystem && req.query.commerceId ? Number(req.query.commerceId) : req.user.commerceId;
+      
+      const quota = await storeQuotaService.calculateStoreLimitForCommerce(commerceId);
+      
+      // Obtener los IDs demotados actuales para el frontend (sedes no_disponibles en exceso)
+      // O simplemente retornamos la lista de operativeStores ordenadas
+      const operativeStores = await storeRepository.findOperativeStoresByCommerceId(commerceId);
+      // Las que quedarían demotadas si forzamos el cumplimiento
+      const demotedStoreIds = [];
+      if (quota.delta > 0) {
+        for (let i = 0; i < quota.delta; i++) {
+          if (operativeStores[i]) demotedStoreIds.push(operativeStores[i].id);
+        }
+      }
+
+      res.json({
+        maxStores: quota.maxStores,
+        activeStores: quota.activeStores,
+        delta: quota.delta,
+        isExceeded: quota.isExceeded,
+        demotedStoreIds
+      });
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async updateStoreStatus(req, res) {
+    try {
+      const { storeId } = req.params;
+      const { estado, fecha_regreso } = req.body;
+      await storeService.updateStoreStatus(req.user, Number(storeId), estado, fecha_regreso, req);
+      res.json({ success: true, message: 'Estado de la sede actualizado con éxito.' });
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async enforceStoreQuota(req, res) {
+    try {
+      const isSystem = req.user.actorType === 'system_user';
+      const commerceId = isSystem && req.params.commerceId ? Number(req.params.commerceId) : req.user.commerceId;
+      
+      const result = await storeQuotaService.enforceStoreQuota(commerceId, db, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

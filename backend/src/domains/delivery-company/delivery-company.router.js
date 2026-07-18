@@ -8,14 +8,22 @@ const { affiliateDriverSchema } = require('./delivery-company.validation');
 
 router.use(auth);
 
-// GET /api/delivery-company/drivers
+// Drivers Management
 router.get('/drivers', hasPermission('manage_drivers'), deliveryCompanyController.getDrivers);
-
-// POST /api/delivery-company/drivers
 router.post('/drivers', hasPermission('manage_drivers'), validateBody(affiliateDriverSchema), deliveryCompanyController.affiliateDriver);
-
-// DELETE /api/delivery-company/drivers/:userId
 router.delete('/drivers/:userId', hasPermission('manage_drivers'), deliveryCompanyController.deaffiliateDriver);
 
-module.exports = router;
+// Dashboard & Stats
+router.get('/dashboard/stats', hasPermission('accept_delivery_orders'), deliveryCompanyController.getDashboardStats);
+router.get('/drivers/available', hasPermission('manage_drivers'), deliveryCompanyController.getAvailableDrivers);
 
+// Order Operations
+router.get('/orders/available', hasPermission('accept_delivery_orders'), deliveryCompanyController.getAvailableOrders);
+router.get('/orders/history', hasPermission('accept_delivery_orders'), deliveryCompanyController.getOrderHistory);
+router.post('/orders/:orderId/accept', hasPermission('accept_delivery_orders'), deliveryCompanyController.acceptOrder);
+router.post('/orders/:orderId/assign-driver', hasPermission('accept_delivery_orders'), deliveryCompanyController.assignDriver);
+
+// Financial Summary
+router.get('/financial-summary', hasPermission('view_delivery_financial_summary'), deliveryCompanyController.getFinancialSummary);
+
+module.exports = router;

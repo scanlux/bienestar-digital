@@ -89,7 +89,15 @@ class RoleRepository {
   async findAffectedUsers(roleId, connection) {
     const queryExecutor = connection || db;
     const [rows] = await queryExecutor.query(
-      'SELECT user_type, user_id FROM user_roles WHERE role_id = ?',
+      `SELECT 
+         CASE 
+           WHEN user_id IS NOT NULL THEN 'user'
+           WHEN system_user_id IS NOT NULL THEN 'system_user'
+           WHEN operator_id IS NOT NULL THEN 'operator'
+         END as user_type,
+         COALESCE(user_id, system_user_id, operator_id) as user_id
+       FROM user_roles 
+       WHERE role_id = ?`,
       [roleId]
     );
     return rows;
@@ -101,31 +109,68 @@ class RoleRepository {
   }
 
   async findUserRoles(userType, userId) {
+    let colName = 'user_id';
+    if (userType === 'system_user') colName = 'system_user_id';
+    else if (userType === 'operator') colName = 'operator_id';
+
     const [rows] = await db.query(`
       SELECT ur.role_id, r.name, r.code, r.description 
       FROM user_roles ur
       JOIN roles r ON ur.role_id = r.id
-      WHERE ur.user_type = ? AND ur.user_id = ?
-    `, [userType, userId]);
+      WHERE ur.${colName} = ?
+    `, [userId]);
     return rows;
   }
 
   async deleteUserRoles(userType, userId, connection) {
     const queryExecutor = connection || db;
-    await queryExecutor.query('DELETE FROM user_roles WHERE user_type = ? AND user_id = ?', [userType, userId]);
+    let colName = 'user_id';
+    if (userType === 'system_user') colName = 'system_user_id';
+    else if (userType === 'operator') colName = 'operator_id';
+
+    await queryExecutor.query(`DELETE FROM user_roles WHERE ${colName} = ?`, [userId]);
   }
 
   async insertUserRole(userType, userId, roleId, connection) {
     const queryExecutor = connection || db;
+    let colName = 'user_id';
+    if (userType === 'system_user') colName = 'system_user_id';
+    else if (userType === 'operator') colName = 'operator_id';
+
     await queryExecutor.query(
-      'INSERT INTO user_roles (user_type, user_id, role_id) VALUES (?, ?, ?)',
-      [userType, userId, roleId]
+      `INSERT INTO user_roles (${colName}, role_id) VALUES (?, ?)`,
+      [userId, roleId]
     );
   }
 
   async findRolesByIds(roleIds, connection) {
     const queryExecutor = connection || db;
     const [rows] = await queryExecutor.query('SELECT code FROM roles WHERE id IN (?)', [roleIds]);
+    return rows;
+  }
+
+  async findPermissionsAnalysis(connection) {
+    const queryExecutor = connection || db;
+    const query = `
+      SELECT
+        p.id,
+        p.name AS code,
+        COALESCE(p.display_name, p.name) AS name,
+        p.scope,
+        p.criticidad,
+        p.tipo,
+        p.ui_restriction_mode,
+        pc.name AS category,
+        GROUP_CONCAT(DISTINCT pe.method_path ORDER BY pe.id SEPARATOR '||') AS endpoints_raw,
+        GROUP_CONCAT(DISTINCT pit.table_name ORDER BY pit.id SEPARATOR '||') AS tables_raw
+      FROM permissions p
+      JOIN permission_categories pc ON p.category_id = pc.id
+      LEFT JOIN permission_endpoints pe ON pe.permission_id = p.id
+      LEFT JOIN permission_impacted_tables pit ON pit.permission_id = p.id
+      GROUP BY p.id
+      ORDER BY pc.name, p.name;
+    `;
+    const [rows] = await queryExecutor.query(query);
     return rows;
   }
 }

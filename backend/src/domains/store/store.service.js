@@ -1,14 +1,32 @@
 const db = require('../../config/db');
+const redisClient = require('../../config/redis');
 const storeRepository = require('./store.repository');
+const upgradesRepository = require('../upgrades/upgrades.repository');
+const upgradesHelper = require('../upgrades/upgrades.helper');
+const storeQuotaService = require('./store.quota.service');
 const { BusinessError, ForbiddenError, NotFoundError } = require('../../utils/errors');
 const { logSecurityEvent } = require('../../utils/securityLogger');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
+const { isStoreCurrentlyOpen } = require('../../utils/timeUtils');
 
 class StoreService {
   async getMyStores(userContext) {
-    return await storeRepository.findMyStores(userContext.commerceId);
+    // Autocorrección en caliente si la cuota fue excedida pasivamente
+    if (userContext.commerceId) {
+      await storeQuotaService.enforceStoreQuota(userContext.commerceId);
+    }
+    const stores = await storeRepository.findMyStores(userContext.commerceId);
+    
+    // Hidratar con horario y estado abierto/cerrado
+    await Promise.all(stores.map(async (store) => {
+      const schedule = await storeRepository.findStoreHours(store.id);
+      store.schedule = schedule;
+      store.is_currently_open = isStoreCurrentlyOpen(store.estado, schedule);
+    }));
+
+    return stores;
   }
 
   async getStoresByCommerceId(userContext, commerceId, req) {
@@ -29,16 +47,37 @@ class StoreService {
       throw new ForbiddenError('No autorizado para ver las sedes de este comercio.');
     }
 
-    return await storeRepository.findByCommerceId(targetCommerceId);
+    if (targetCommerceId) {
+      await storeQuotaService.enforceStoreQuota(targetCommerceId, db, req);
+    }
+
+    const stores = await storeRepository.findByCommerceId(targetCommerceId);
+
+    // Hidratar con horario y estado abierto/cerrado
+    await Promise.all(stores.map(async (store) => {
+      const schedule = await storeRepository.findStoreHours(store.id);
+      store.schedule = schedule;
+      store.is_currently_open = isStoreCurrentlyOpen(store.estado, schedule);
+    }));
+
+    return stores;
   }
 
   async getStoreById(userContext, id, req) {
     const isSystem = userContext.actorType === 'system_user';
     const targetId = Number(id);
 
-    const store = await storeRepository.findById(targetId);
+    let store = await storeRepository.findById(targetId);
     if (!store) {
       throw new NotFoundError('Sede no encontrada.');
+    }
+
+    if (store.commerce_id) {
+      await storeQuotaService.enforceStoreQuota(store.commerce_id, db, req);
+      store = await storeRepository.findById(targetId);
+      if (!store) {
+        throw new NotFoundError('Sede no encontrada.');
+      }
     }
 
     // BOLA Check: si no es de sistema, solo puede ver la sede si pertenece a su comercio
@@ -58,6 +97,33 @@ class StoreService {
     // Tarea 1.1: Hidratación del Detalle de la Sede
     store.schedule = await storeRepository.findStoreHours(targetId);
     store.accounts = await storeRepository.findStoreAccounts(targetId);
+    store.is_currently_open = isStoreCurrentlyOpen(store.estado, store.schedule);
+
+    // Consultar estado de plan/mejora del comercio y de la sede
+    const activeUpgrades = await upgradesRepository.findActiveByEntity('store', targetId, store.commerce_id);
+    store.has_business_status = activeUpgrades.some(up => up.upgrade_type === 'estado_empresarial');
+    let hasUnlimitedCatalogUpgrade = activeUpgrades.some(up => up.upgrade_type === 'catalogo_ilimitado');
+
+    let freeTierMenus = 1;
+    let freeTierCategories = 3;
+    let freeTierProducts = 3;
+    try {
+      const [paramRows] = await db.query(
+        'SELECT `key`, `value` FROM system_parameters WHERE `key` IN ("free_tier_categories_limit", "free_tier_products_limit")'
+      );
+      paramRows.forEach(row => {
+        if (row.key === 'free_tier_categories_limit') freeTierCategories = parseInt(row.value, 10);
+        if (row.key === 'free_tier_products_limit') freeTierProducts = parseInt(row.value, 10);
+      });
+    } catch (err) {
+      console.error('[getStoreById] Error fetching system limits:', err);
+    }
+
+    store.limits = {
+      menus: store.has_business_status ? null : freeTierMenus,
+      categories: (store.has_business_status || hasUnlimitedCatalogUpgrade) ? null : freeTierCategories,
+      products: (store.has_business_status || hasUnlimitedCatalogUpgrade) ? null : freeTierProducts
+    };
 
     return store;
   }
@@ -95,6 +161,11 @@ class StoreService {
     await connection.beginTransaction();
 
     try {
+      // Validar límite de sedes operativas si el estado es operativo
+      if (estado === 'operativo') {
+        await storeQuotaService.validateCanActivate(parsedCommerceId, id, connection);
+      }
+
       let finalUserId = usuario_id;
 
       // A. Crear administrador único si es sede nueva
@@ -249,6 +320,9 @@ class StoreService {
 
       if (id) {
         await storeRepository.updateStore(id, storePayload, connection);
+        if (finalUserId) {
+          await storeRepository.updateProfile(finalUserId, admin_nombres, admin_apellidos, telefono, connection);
+        }
       } else {
         storeId = await storeRepository.createStore(parsedCommerceId, storePayload, connection);
         await storeRepository.insertUserStore(finalUserId, storeId, connection);
@@ -327,6 +401,62 @@ class StoreService {
       await connection.rollback();
       connection.release();
       throw error;
+    }
+  }
+
+  async updateStoreStatus(userContext, storeId, estado, fechaRegreso, req) {
+    const isSystem = userContext.actorType === 'system_user';
+    const store = await storeRepository.findById(storeId);
+    if (!store) {
+      throw new NotFoundError('Sede no encontrada.');
+    }
+
+    // BOLA Check
+    if (!isSystem && store.commerce_id !== userContext.commerceId) {
+      await logSecurityEvent(
+        userContext.id,
+        'BOLA_ATTEMPT',
+        'HIGH',
+        req,
+        { storeId, action: 'update_store_status' },
+        'store',
+        storeId
+      );
+      throw new ForbiddenError('No autorizado para modificar el estado de esta sede.');
+    }
+
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      if (estado === 'operativo') {
+        await storeQuotaService.validateCanActivate(store.commerce_id, storeId, connection);
+      }
+
+      const cleanFecha = fechaRegreso ? fechaRegreso.split('T')[0] : null;
+      const finalFechaRegreso = (estado === 'operativo' || !cleanFecha) ? null : cleanFecha;
+
+      await connection.query(
+        'UPDATE stores SET estado = ?, fecha_regreso = ? WHERE id = ?',
+        [estado, finalFechaRegreso, storeId]
+      );
+
+      await logSecurityEvent(
+        userContext.id,
+        'STORE_STATUS_UPDATED',
+        'MEDIUM',
+        req,
+        { storeId, oldStatus: store.estado, newStatus: estado, fechaRegreso: finalFechaRegreso },
+        'store',
+        storeId
+      );
+
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
     }
   }
 
@@ -453,7 +583,7 @@ class StoreService {
       throw new ForbiddenError('No autorizado para eliminar este video.');
     }
 
-    // Limpiar archivo físico local y remoto
+    // Limpiar archivo remoto
     const getFileName = (url) => {
       if (!url) return '';
       const parts = url.split('/');
@@ -463,20 +593,13 @@ class StoreService {
 
     if (fileName) {
       try {
-        const localPath = path.join(__dirname, '../../uploads/videos', fileName);
-        if (fs.existsSync(localPath)) {
-          fs.unlinkSync(localPath);
-        }
-
-        if (process.env.NODE_ENV === 'production') {
-          const mediaServerUrl = process.env.MEDIA_SERVER_URL || 'https://trendy-telemetry.sytes.net';
-          await fetch(`${mediaServerUrl}/api/media/delete/video/${fileName}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': req.header('Authorization') || ''
-            }
-          }).catch(err => console.error('[VIDEO_CLEANUP_ERROR]', err.message));
-        }
+        const mediaServerUrl = process.env.MEDIA_SERVER_URL || 'http://localhost:4001';
+        await fetch(`${mediaServerUrl}/api/media/delete/video/${fileName}`, {
+          method: 'DELETE',
+          headers: {
+            'x-internal-key': process.env.INTERNAL_API_KEY || ''
+          }
+        }).catch(err => console.error('[VIDEO_CLEANUP_ERROR]', err.message));
       } catch (err) {
         console.error('[VIDEO_CLEANUP_FAILED]', err.message);
       }
@@ -509,20 +632,13 @@ class StoreService {
       const oldFileName = getFileName(oldUrl);
 
       if (oldUrl.includes('/uploads/stores/')) {
-        const localPath = path.join(__dirname, '../../uploads/stores', oldFileName);
-        if (fs.existsSync(localPath)) {
-          fs.unlinkSync(localPath);
-        }
-
-        if (process.env.NODE_ENV === 'production') {
-          const mediaServerUrl = process.env.MEDIA_SERVER_URL || 'https://trendy-telemetry.sytes.net';
-          await fetch(`${mediaServerUrl}/api/media/delete/store/${oldFileName}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': req.header('Authorization') || ''
-            }
-          }).catch(err => console.error('[IMAGE_CLEANUP_ERROR]', err.message));
-        }
+        const mediaServerUrl = process.env.MEDIA_SERVER_URL || 'http://localhost:4001';
+        await fetch(`${mediaServerUrl}/api/media/delete/store/${oldFileName}`, {
+          method: 'DELETE',
+          headers: {
+            'x-internal-key': process.env.INTERNAL_API_KEY || ''
+          }
+        }).catch(err => console.error('[IMAGE_CLEANUP_ERROR]', err.message));
       }
     } catch (err) {
       console.error('[IMAGE_CLEANUP_FAILED]', err.message);
@@ -530,101 +646,199 @@ class StoreService {
   }
 
   async cloneCatalog(sourceStoreId, targetStoreId, connection) {
-    // 1. Clonar asociaciones de menus
+    // 1. Obtener menús de la sede origen
     const [menus] = await connection.query(
-      'SELECT menu_id, disponible FROM store_menus WHERE store_id = ?', 
+      'SELECT id, nombre, descripcion, orden, disponible FROM menus WHERE store_id = ? AND deleted_at IS NULL',
       [sourceStoreId]
     );
+
     for (const menu of menus) {
-      await connection.query(
-        'INSERT INTO store_menus (store_id, menu_id, disponible) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE disponible = VALUES(disponible)',
-        [targetStoreId, menu.menu_id, menu.disponible]
+      // Insertar copia del menú para la sede destino
+      const [menuResult] = await connection.query(
+        'INSERT INTO menus (store_id, nombre, descripcion, orden, disponible) VALUES (?, ?, ?, ?, ?)',
+        [targetStoreId, menu.nombre, menu.descripcion, menu.orden, menu.disponible]
       );
-    }
+      const newMenuId = menuResult.insertId;
 
-    // 2. Clonar asociaciones de categorias
-    const [categories] = await connection.query(
-      'SELECT categoria_id, disponible FROM store_categories WHERE store_id = ?',
-      [sourceStoreId]
-    );
-    for (const cat of categories) {
-      await connection.query(
-        'INSERT INTO store_categories (store_id, categoria_id, disponible) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE disponible = VALUES(disponible)',
-        [targetStoreId, cat.categoria_id, cat.disponible]
+      // 2. Obtener categorías vinculadas al menú original
+      const [categories] = await connection.query(
+        'SELECT id, nombre, descripcion, orden_visual, disponible FROM categorias WHERE menu_id = ? AND deleted_at IS NULL',
+        [menu.id]
       );
-    }
 
-    // 3. Clonar asociaciones de productos (incluyendo sobreescrituras locales)
-    const [products] = await connection.query(
-      'SELECT product_id, precio_local, tiempo_prep_local, disponible FROM store_products WHERE store_id = ?',
-      [sourceStoreId]
-    );
-    for (const prod of products) {
-      await connection.query(
-        `INSERT INTO store_products (store_id, product_id, precio_local, tiempo_prep_local, disponible) 
-         VALUES (?, ?, ?, ?, ?) 
-         ON DUPLICATE KEY UPDATE 
-           precio_local = VALUES(precio_local), 
-           tiempo_prep_local = VALUES(tiempo_prep_local), 
-           disponible = VALUES(disponible)`,
-        [targetStoreId, prod.product_id, prod.precio_local, prod.tiempo_prep_local, prod.disponible]
-      );
+      for (const cat of categories) {
+        // Insertar copia de la categoría vinculada al nuevo menú
+        const [catResult] = await connection.query(
+          'INSERT INTO categorias (menu_id, nombre, descripcion, orden_visual, disponible) VALUES (?, ?, ?, ?, ?)',
+          [newMenuId, cat.nombre, cat.descripcion, cat.orden_visual, cat.disponible]
+        );
+        const newCategoryId = catResult.insertId;
+
+        // 3. Obtener productos de la sede origen en esta categoría
+        const [products] = await connection.query(
+          `SELECT nombre, descripcion_larga, precio_base, tiempo_prep_estimado, disponible, es_vegetariano, image_url, tags 
+           FROM products 
+           WHERE store_id = ? AND categoria_id = ? AND deleted_at IS NULL`,
+          [sourceStoreId, cat.id]
+        );
+
+        for (const prod of products) {
+          // Insertar copia del producto para la sede destino vinculada a la nueva categoría y menú
+          await connection.query(
+            `INSERT INTO products 
+             (store_id, categoria_id, menu_id, nombre, descripcion_larga, precio_base, tiempo_prep_estimado, disponible, es_vegetariano, image_url, tags)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              targetStoreId, newCategoryId, newMenuId, prod.nombre, prod.descripcion_larga,
+              prod.precio_base, prod.tiempo_prep_estimado, prod.disponible,
+              prod.es_vegetariano, prod.image_url, prod.tags
+            ]
+          );
+        }
+      }
     }
   }
 
-  async subscribePlan(userContext, data, req) {
-    const { storeId, commerceId: bodyCommerceId } = data;
+  async getStoreFinancialSummary(userContext, params, req) {
+    const { filterType, selectedMonth, id } = params;
     const isSystem = userContext.actorType === 'system_user';
-    const commerceId = isSystem ? bodyCommerceId : userContext.commerceId;
-
-    if (!storeId || !commerceId) {
-      throw new BusinessError('storeId y commerceId son requeridos.');
-    }
-
-    const store = await storeRepository.findById(storeId);
-    if (!store || store.commerce_id !== Number(commerceId)) {
-      throw new ForbiddenError('La sede especificada no pertenece al comercio autorizado.');
-    }
-
-    const domiEngine = require('../../services/domiEngine');
-    try {
-      await domiEngine.chargeStoreSubscription(commerceId, storeId, 50.00);
-    } catch (engineErr) {
-      if (engineErr.message.includes('Saldo insuficiente')) {
-        throw new BusinessError(engineErr.message, 402);
+    
+    let targetStoreId = Number(id);
+    if (!isSystem) {
+      // BOLA Protection: si no es system_user, forzar a su propio storeId asignado
+      if (!userContext.storeId && (!userContext.storeIds || userContext.storeIds.length === 0)) {
+        throw new ForbiddenError('El usuario no tiene una sede asociada.');
       }
-      throw engineErr;
+      targetStoreId = userContext.storeId || userContext.storeIds[0];
     }
 
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(startDate.getDate() + 30);
+    if (!targetStoreId) {
+      throw new BusinessError('Debe especificar una sede válida.');
+    }
 
-    const [planResult] = await db.query(`
-      INSERT INTO commerce_plans (commerce_id, plan_type, status, price_paid_domis, start_date, end_date, payment_ref)
-      VALUES (?, 'Empresarial', 'active', 50.00, ?, ?, ?)
-    `, [commerceId, startDate, endDate, `DOMI-SUB-${storeId}-${Date.now()}`]);
+    // 1. Obtener rangos de fecha localizados
+    const { start, end } = getQueryDateBoundsLocal(filterType, selectedMonth);
 
-    await db.query('UPDATE commerces SET type = "Empresarial" WHERE id = ?', [commerceId]);
+    // 2. Obtener estadísticas de la sede
+    const stats = await storeRepository.getStoreFinancialSummaryData(targetStoreId, start, end);
+    if (!stats) {
+      throw new NotFoundError('Sede no encontrada o sin datos disponibles.');
+    }
 
+    // 3. Obtener meses con datos
+    const monthsWithData = await storeRepository.getMonthsWithData(targetStoreId);
+    const colNow = new Date(new Date().getTime() - (5 * 3600000));
+    const currentMonthStr = `${colNow.getUTCFullYear()}-${String(colNow.getUTCMonth() + 1).padStart(2, '0')}`;
+    
+    let monthOptions = [...monthsWithData];
+    if (!monthOptions.includes(currentMonthStr)) {
+      monthOptions.unshift(currentMonthStr);
+    }
+
+    // 4. Obtener paridad del token DOMI peg
+    const [tokenRows] = await db.query('SELECT fiat_peg_cop FROM token_registry WHERE id = 1');
+    const fiatPeg = tokenRows.length > 0 ? parseFloat(tokenRows[0].fiat_peg_cop) : 400.0;
+
+    // 5. Obtener deudas contingentes (reembolsos pendientes)
+    const [debtRows] = await db.query(
+      `SELECT SUM(amount_domis) as total_debts 
+       FROM domi_order_debts 
+       WHERE beneficiary_type = 'store' 
+         AND beneficiary_id = ? 
+         AND status = 'pending'`,
+      [targetStoreId]
+    );
+    const contingentDomi = parseFloat(debtRows[0].total_debts || 0.0);
+
+    const completed = parseInt(stats.completed_orders, 10);
+    const rejected = parseInt(stats.rejected_orders, 10);
+    const cancelled = parseInt(stats.cancelled_orders, 10);
+    const sales = parseFloat(stats.total_sales);
+    const commissions = parseFloat(stats.commissions_paid);
+    const balance = parseFloat(stats.balance_custody);
+
+    // Registrar auditoría de seguridad
     await logSecurityEvent(
       userContext.id,
-      'SUBSCRIBE_PLAN',
-      'HIGH',
+      'VIEW_FINANCIAL_SUMMARY',
+      'INFO',
       req,
-      { storeId, commerceId, planId: planResult.insertId },
+      { storeId: targetStoreId, filterType },
       'store',
-      parseInt(storeId)
+      targetStoreId
     );
 
     return {
-      success: true,
-      message: 'Suscripcion mensual al plan Empresarial activada con exito.',
-      planId: planResult.insertId,
-      startDate,
-      endDate
+      consolidated: {
+        totalSalesCop: sales,
+        totalCommissionsPaidDomi: commissions,
+        totalCompletedOrders: completed,
+        totalRejectedOrders: rejected,
+        totalCancelledOrders: cancelled,
+        totalContingentRefundsDomi: contingentDomi,
+        walletBalanceDomi: balance,
+        walletBalanceCop: balance * fiatPeg,
+        fiatPeg
+      },
+      store: {
+        storeId: stats.store_id,
+        nombreSucursal: stats.nombre_sucursal,
+        estado: stats.estado,
+        balanceCustodyDomi: balance,
+        balanceCustodyCop: balance * fiatPeg,
+        contingentRefundsDomi: contingentDomi,
+        contingentRefundsCop: contingentDomi * fiatPeg,
+        stats: {
+          completedOrdersCount: completed,
+          rejectedOrdersCount: rejected,
+          cancelledOrdersCount: cancelled,
+          totalSalesCop: sales,
+          commissionsPaidDomi: commissions
+        }
+      },
+      fiatPeg,
+      monthOptions
     };
   }
+}
+
+function getQueryDateBoundsLocal(filterType, selectedMonth) {
+  const now = new Date();
+  const col = new Date(now.getTime() - (5 * 3600000));
+  const y = col.getUTCFullYear();
+  const m = col.getUTCMonth();
+  const d = col.getUTCDate();
+
+  let start, end;
+
+  if (filterType === 'day') {
+    start = new Date(Date.UTC(y, m, d, 5, 0, 0, 0));
+    end = new Date(Date.UTC(y, m, d, 28, 59, 59, 999));
+  } else if (filterType === 'week') {
+    const dayOfWeek = col.getUTCDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    start = new Date(Date.UTC(y, m, d + diffToMonday, 5, 0, 0, 0));
+    end = new Date(Date.UTC(y, m, d + diffToMonday + 6, 28, 59, 59, 999));
+  } else if (filterType === 'month') {
+    let year = y;
+    let monthZeroIndexed = m;
+
+    if (selectedMonth && /^\d{4}-\d{2}$/.test(selectedMonth)) {
+      const [yStr, mStr] = selectedMonth.split('-');
+      year = parseInt(yStr, 10);
+      monthZeroIndexed = parseInt(mStr, 10) - 1;
+    }
+
+    start = new Date(Date.UTC(year, monthZeroIndexed, 1, 5, 0, 0, 0));
+    const lastDayObj = new Date(Date.UTC(year, monthZeroIndexed + 1, 0));
+    const lastDay = lastDayObj.getUTCDate();
+    end = new Date(Date.UTC(year, monthZeroIndexed, lastDay, 28, 59, 59, 999));
+  } else {
+    start = new Date(Date.UTC(y, m, d, 5, 0, 0, 0));
+    end = new Date(Date.UTC(y, m, d, 28, 59, 59, 999));
+  }
+
+  return { start: start.toISOString(), end: end.toISOString() };
 }
 
 module.exports = new StoreService();

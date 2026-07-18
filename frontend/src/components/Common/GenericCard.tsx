@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { ActionButton } from '@/components/Common/UIElements';
 import { 
   GenericCardWrapper, CardImageWrapper, StoreImage, 
@@ -7,10 +8,12 @@ import {
   SedeEstadoBadge, SedeRegresoAlert 
 } from './GenericCardStyles';
 import { getFullImageUrl, formatTime } from '@/utils';
+import { StoreAvailabilityBadge } from './StoreHeroStyles';
 
 interface GenericCardProps {
   store: any;
   isHighlighted?: boolean;
+  isQuotaLocked?: boolean;
   onSelect?: () => void;
   onEdit?: () => void;
 }
@@ -18,9 +21,11 @@ interface GenericCardProps {
 export const GenericCard: React.FC<GenericCardProps> = ({
   store,
   isHighlighted = false,
+  isQuotaLocked = false,
   onSelect,
   onEdit
 }) => {
+  const router = useRouter();
   if (!store) return null;
 
   // Formatear horario de hoy
@@ -54,20 +59,44 @@ export const GenericCard: React.FC<GenericCardProps> = ({
           src={imageSrc} 
           alt={store.nombre_sucursal || `Sede #${store.id}`} 
         />
-        {store.estado && (
-          <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 10 }}>
+        {isQuotaLocked && (
+          <div style={{
+            position: 'absolute',
+            top: '1rem',
+            left: '1rem',
+            zIndex: 10,
+            background: '#f59e0b',
+            color: 'black',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '0.75rem',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+          }}>
+            🔒 Exceso de Cuota
+          </div>
+        )}
+        <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 10, display: 'flex', gap: '0.5rem' }}>
+          <StoreAvailabilityBadge store={store} />
+          {store.estado && (
             <SedeEstadoBadge estado={store.estado}>
               {store.estado}
             </SedeEstadoBadge>
-          </div>
-        )}
+          )}
+        </div>
       </CardImageWrapper>
       
       <CardContent>
         <StoreName>{store.nombre_sucursal || `Sede #${store.id}`}</StoreName>
         
         {store.estado !== 'operativo' && store.fecha_regreso && new Date(store.fecha_regreso) <= new Date() && (
-          <SedeRegresoAlert>
+          <SedeRegresoAlert onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/commerce/stores/${store.id}/profile?highlight=fecha_regreso`);
+          }}>
             <span>⚠️</span>
             ¡DEBE ABRIR HOY! ({new Date(store.fecha_regreso).toLocaleDateString()})
           </SedeRegresoAlert>
@@ -83,34 +112,40 @@ export const GenericCard: React.FC<GenericCardProps> = ({
             <InfoValue>{store.telefono || 'N/A'}</InfoValue>
           </InfoItem>
           <InfoItem>
-            <InfoLabel>Horario:</InfoLabel>
-            <InfoValue title={todayScheduleString}>{todayScheduleString}</InfoValue>
+            <InfoLabel>Administrador:</InfoLabel>
+            <InfoValue>
+              {store.admin_nombres || store.admin_apellidos
+                ? `${store.admin_nombres || ''} ${store.admin_apellidos || ''}`.trim()
+                : store.profile_nombres || store.profile_apellidos
+                  ? `${store.profile_nombres || ''} ${store.profile_apellidos || ''}`.trim()
+                  : store.contacto_directo || 'Sin asignar'}
+            </InfoValue>
           </InfoItem>
         </InfoGrid>
 
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: 'auto' }}>
-          {onEdit && (
+          {onSelect && (
             <ActionButton 
               style={{ flex: 1 }} 
               $variant="outline" 
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit();
+                onSelect();
               }}
             >
-              Editar Datos
+              Catálogo
             </ActionButton>
           )}
-          {onSelect && (
+          {onEdit && (
             <ActionButton
               $variant="luminous"
               style={{ flex: 1.2 }}
               onClick={(e) => {
                 e.stopPropagation();
-                onSelect();
+                onEdit();
               }}
             >
-              Entrar Sede
+              Configuración
             </ActionButton>
           )}
         </div>

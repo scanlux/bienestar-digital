@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import styled from 'styled-components';
 import axios from 'axios';
 import { getAuthHeaders } from '@/utils/auth';
 import {
@@ -32,8 +31,21 @@ import { PaymentAccountCard } from '@/components/Common/PaymentAccountCard';
 import { useToast } from '@/context/ToastContext';
 import { useAlert } from '@/context/AlertContext';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 import { DAYS, DEFAULT_SCHEDULE, API_URL } from '@/constants';
 import { formatTime } from '@/utils';
+import { StoreScheduleForm } from './StoreScheduleForm';
+import { useEmailValidation } from '@/hooks/useEmailValidation';
+import {
+  CloneOptionsGrid,
+  CloneOptionCard,
+  StoreImageWrapper,
+  EmptyCatalogIcon,
+  StoreMetaInfo,
+  StoreNameText,
+  StoreAdminText,
+  StorePhoneText
+} from './StoreFormModalStyles';
 
 // --- ICONOS SVG INLINE (PREVENCIÓN DE EMOJIS - REGLA DE ORO) ---
 const PlusIconSvg = () => (
@@ -63,263 +75,18 @@ const PhoneIconSvg = () => (
   </svg>
 );
 
-// --- COMPONENTES ESTILIZADOS PARA CLONACIÓN (LOOK PREMIUM) ---
-const CloneOptionsGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-  max-height: 340px;
-  overflow-y: auto;
-  padding-right: 6px;
-  margin-top: 1rem;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-`;
-
-const CloneOptionCard = styled.div<{ $selected: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  background: ${(props: { $selected: boolean }) => props.$selected ? 'rgba(16, 185, 129, 0.06)' : 'rgba(255, 255, 255, 0.02)'};
-  border: 1.5px solid ${(props: { $selected: boolean }) => props.$selected ? 'var(--emerald)' : 'rgba(255, 255, 255, 0.08)'};
-  border-radius: 12px;
-  padding: 1rem;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: ${(props: { $selected: boolean }) => props.$selected ? '0 0 16px rgba(16, 185, 129, 0.12)' : 'none'};
-
-  &:hover {
-    background: ${(props: { $selected: boolean }) => props.$selected ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255, 255, 255, 0.04)'};
-    border-color: ${(props: { $selected: boolean }) => props.$selected ? 'var(--emerald)' : 'rgba(255, 255, 255, 0.2)'};
-    transform: translateY(-1px);
-    
-    svg {
-      transform: scale(1.05);
-    }
-  }
-  
-  &:active {
-    transform: translateY(0);
-  }
-`;
-
-const StoreImageWrapper = styled.div`
-  width: 52px;
-  height: 52px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.4);
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-`;
-
-const EmptyCatalogIcon = styled.div`
-  width: 52px;
-  height: 52px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.4);
-  flex-shrink: 0;
-  border: 1.5px dashed rgba(255, 255, 255, 0.15);
-  transition: all 0.2s ease;
-`;
-
-const StoreMetaInfo = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  flex-grow: 1;
-  text-align: left;
-`;
-
-const StoreNameText = styled.h4`
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #fff;
-  margin: 0;
-`;
-
-const StoreAdminText = styled.div`
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0;
-  display: flex;
-  align-items: center;
-`;
-
-const StorePhoneText = styled.div`
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.35);
-  margin: 0;
-  display: flex;
-  align-items: center;
-`;
-
 interface StoreFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (storeId: number) => void;
   initialData?: any;
-  commerceId: number;
+  commerceId?: number | null;
   paymentPlatforms: any[];
   modalTarget?: HTMLElement | null;
   onOpenMapPicker: () => void;
   lat?: string;
   lng?: string;
 }
-
-// --- SUB-COMPONENTE PARA FILA DE HORARIO (PREVENCIÓN CÓDIGO ESPAGUETI) ---
-const ScheduleRow: React.FC<{
-  day: any;
-  idx: number;
-  onUpdate: (idx: number, updates: any) => void;
-  onAlert: (message: string) => void;
-  formatTime: (time: string | null) => string;
-  disabled?: boolean;
-}> = ({ day, idx, onUpdate, onAlert, formatTime, disabled = false }) => {
-  const is24h = day.is_24h === 1 || day.is_24h === true;
-  const isInvalid = day.status === 'abierto' && 
-    day.open_time && 
-    day.close_time && 
-    (is24h 
-      ? (day.open_time !== day.close_time && day.open_time >= day.close_time && day.close_time !== '00:00')
-      : (day.open_time >= day.close_time && day.close_time !== '00:00') || (day.open_time === day.close_time)
-    );
-
-  const hasMaintenance = is24h && day.open_time !== day.close_time;
-
-  return (
-    <div className="grid-row" style={{ opacity: day.status !== 'abierto' ? 0.4 : 1, transition: 'opacity 0.3s ease' }}>
-      <span className="day-name">{DAYS[day.day_index]}</span>
-      
-      <select
-        value={day.status}
-        disabled={disabled}
-        onChange={(e) => onUpdate(idx, { status: e.target.value })}
-        className={`status-select ${day.status}`}
-      >
-        <option value="abierto">Abierto</option>
-        <option value="cerrado">Cerrado</option>
-      </select>
-
-      <div className="time-inputs">
-        {!is24h ? (
-          <>
-            <div />
-            <Input
-              type="time"
-              disabled={disabled || day.status !== 'abierto'}
-              className={isInvalid ? 'invalid-time' : ''}
-              value={day.open_time || '08:00'}
-              onChange={(e) => onUpdate(idx, { open_time: e.target.value })}
-              onBlur={() => isInvalid && onAlert('Horario inválido. La hora inicial debe ser menor a la hora final.')}
-            />
-            <span className="sep">-</span>
-            <Input
-              type="time"
-              disabled={disabled || day.status !== 'abierto'}
-              className={isInvalid ? 'invalid-time' : ''}
-              value={day.close_time || '20:00'}
-              onChange={(e) => onUpdate(idx, { close_time: e.target.value })}
-              onBlur={() => isInvalid && onAlert('Horario inválido. La hora inicial debe ser menor a la hora final.')}
-            />
-            <div />
-          </>
-        ) : (
-          <>
-            {hasMaintenance ? (
-              <>
-                <div />
-                <Input
-                  type="time"
-                  disabled={disabled}
-                  className={`maintenance-mode ${isInvalid ? 'invalid-time' : ''}`}
-                  value={day.open_time || '00:00'}
-                  onChange={(e) => onUpdate(idx, { open_time: e.target.value })}
-                  onBlur={() => isInvalid && onAlert('Horario de mantenimiento inválido. El inicio debe ser menor al fin.')}
-                  title="Inicio de mantenimiento"
-                />
-                <span className="sep" style={{ color: '#f97316' }}>M</span>
-                <Input
-                  type="time"
-                  disabled={disabled}
-                  className={`maintenance-mode ${isInvalid ? 'invalid-time' : ''}`}
-                  value={day.close_time || '00:00'}
-                  onChange={(e) => onUpdate(idx, { close_time: e.target.value })}
-                  onBlur={() => isInvalid && onAlert('Horario de mantenimiento inválido. El inicio debe ser menor al fin.')}
-                  title="Fin de mantenimiento"
-                />
-                {!disabled ? (
-                  <RemoveMaintenanceBtn 
-                    type="button" 
-                    onClick={() => onUpdate(idx, { open_time: '00:00', close_time: '00:00' })}
-                    title="Quitar horario de mantenimiento"
-                  >
-                    ✕
-                  </RemoveMaintenanceBtn>
-                ) : <div />}
-              </>
-            ) : (
-              <>
-                <div />
-                {!disabled ? (
-                  <MaintenanceBtn 
-                    type="button" 
-                    onClick={() => onUpdate(idx, { open_time: '02:00', close_time: '04:00' })}
-                  >
-                    + Agregar Mantenimiento
-                  </MaintenanceBtn>
-                ) : (
-                  <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.2)' }}>Sin mantenimiento</span>
-                )}
-                <div />
-              </>
-            )}
-          </>
-        )}
-      </div>
-
-      <CheckboxGroup style={{ padding: 0, justifyContent: 'center' }}>
-        <input
-          type="checkbox"
-          disabled={disabled || day.status !== 'abierto'}
-          checked={is24h}
-          onChange={(e) => {
-            const checked = e.target.checked;
-            onUpdate(idx, { 
-              is_24h: checked ? 1 : 0,
-              open_time: checked ? '00:00' : '08:00',
-              close_time: checked ? '00:00' : '20:00'
-            });
-          }}
-          title="Marcar si abre 24h"
-        />
-      </CheckboxGroup>
-    </div>
-  );
-};
 
 export const StoreFormModal: React.FC<StoreFormModalProps> = ({
   isOpen,
@@ -359,35 +126,50 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
     cloneSourceStoreId: ''
   });
 
+  const resolvedCommerceId = Number(commerceId || user?.commerceId || formData?.commerce_id) || null;
+  console.log('[DEBUG] StoreFormModal rendered. commerceId prop:', commerceId, 'resolvedCommerceId:', resolvedCommerceId);
+
+  useEffect(() => {
+    if (resolvedCommerceId && formData.commerce_id !== resolvedCommerceId) {
+      setFormData((prev: any) => ({ ...prev, commerce_id: resolvedCommerceId }));
+    }
+  }, [resolvedCommerceId]);
+
   const isEditMode = false;
   const canEditBasic = true;
   const canEditAdvanced = true;
   const [loading, setLoading] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<'idle' | 'checking' | 'available' | 'exists' | 'invalid'>('idle');
-  const [emailConfirmStatus, setEmailConfirmStatus] = useState<'idle' | 'matched' | 'mismatched' | 'empty'>('idle');
+  const { emailStatus, emailConfirmStatus, setEmailStatus, setEmailConfirmStatus } = useEmailValidation(
+    formData.admin_email || '',
+    formData.admin_email_confirm || '',
+    isEditMode
+  );
   const toast = useToast();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
+  const router = useRouter();
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [showShield, setShowShield] = useState(false);
   const [shieldMessage, setShieldMessage] = useState('Optimizando imagen...');
 
   useEffect(() => {
-    if (isOpen && commerceId) {
+    console.log('[DEBUG] StoreFormModal fetchAvailableStores useEffect. isOpen:', isOpen, 'resolvedCommerceId:', resolvedCommerceId);
+    if (isOpen && resolvedCommerceId) {
       const fetchAvailableStores = async () => {
         try {
           const headers = getAuthHeaders();
-          const res = await axios.get(`${API_URL}/api/manage/stores/${commerceId}`, { headers });
+          const res = await axios.get(`${API_URL}/api/manage/stores/${resolvedCommerceId}`, { headers });
+          console.log('[DEBUG] Available stores fetched:', res.data);
           setAvailableStores(res.data || []);
-        } catch (err) {
-          console.error('Error fetching stores for catalog copy:', err);
+        } catch (err: any) {
+          console.error('Error fetching stores for catalog copy:', err.response?.data || err.message);
         }
       };
       fetchAvailableStores();
     } else {
       setAvailableStores([]);
     }
-  }, [isOpen, commerceId]);
+  }, [isOpen, resolvedCommerceId]);
 
   const [hasInitialized, setHasInitialized] = useState(false);
 
@@ -406,7 +188,7 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
       setShowShield(false);
 
       setFormData({
-        commerce_id: commerceId,
+        commerce_id: resolvedCommerceId || '',
         nombre_sucursal: '',
         telefono: '',
         direccion: '',
@@ -430,7 +212,7 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
       setHasInitialized(true);
       setStep(1);
     }
-  }, [isOpen, commerceId, hasInitialized]);
+  }, [isOpen, resolvedCommerceId, hasInitialized]);
 
   useEffect(() => {
     if (lat !== undefined && lng !== undefined) {
@@ -438,57 +220,7 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
     }
   }, [lat, lng]);
 
-  useEffect(() => {
-    if (isEditMode) return;
 
-    const email = formData.admin_email || '';
-    if (!email) {
-      setEmailStatus('idle');
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setEmailStatus('invalid');
-      return;
-    }
-
-    setEmailStatus('checking');
-
-    const delayDebounceFn = setTimeout(async () => {
-      try {
-        const res = await axios.get(`${API_URL}/api/auth/mobile/check-user?email=${encodeURIComponent(email)}`);
-        if (res.data && res.data.exists) {
-          setEmailStatus('exists');
-        } else {
-          setEmailStatus('available');
-        }
-      } catch (err) {
-        console.error('Error checking email availability:', err);
-        setEmailStatus('idle');
-      }
-    }, 600);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [formData.admin_email, isEditMode]);
-
-  useEffect(() => {
-    if (isEditMode) return;
-
-    const email = formData.admin_email || '';
-    const confirm = formData.admin_email_confirm || '';
-
-    if (!confirm) {
-      setEmailConfirmStatus('empty');
-      return;
-    }
-
-    if (email === confirm) {
-      setEmailConfirmStatus('matched');
-    } else {
-      setEmailConfirmStatus('mismatched');
-    }
-  }, [formData.admin_email, formData.admin_email_confirm, isEditMode]);
 
   const getSteps = () => {
     const list = [
@@ -691,7 +423,7 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
       const payload = { 
         ...formData, 
         image_url: finalImageUrl,
-        commerce_id: commerceId,
+        commerce_id: resolvedCommerceId,
         contacto_directo: `${formData.admin_nombres || ''} ${formData.admin_apellidos || ''}`.trim()
       };
       const res = await axios.post(`${API_URL}/api/manage/stores`, payload, { headers });
@@ -700,10 +432,24 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
       onClose();
     } catch (e: any) {
       console.error(e);
-      showAlert({
-        title: 'Error al guardar',
-        message: 'Error al guardar la sede: ' + (e.response?.data?.error || e.message)
-      });
+      const errMsg = e.response?.data?.error || e.message;
+      if (errMsg.includes('Límite de sedes operativas alcanzado')) {
+        onClose();
+        showConfirm({
+          title: 'Límite de Sedes Alcanzado',
+          message: `${errMsg} ¿Deseas ir al Mercado de Mejoras ahora mismo para adquirir un buff?`,
+          confirmText: 'Ir al Mercado',
+          cancelText: 'Cerrar',
+          onConfirm: () => {
+            router.push('/commerce/upgrades?highlight=adicionar_sede');
+          }
+        });
+      } else {
+        showAlert({
+          title: 'Error al guardar',
+          message: 'Error al guardar la sede: ' + errMsg
+        });
+      }
     } finally {
       setLoading(false);
       setShowShield(false);
@@ -752,6 +498,7 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
         <Form 
           onSubmit={handleSubmit} 
           noValidate 
+          autoComplete="off"
           className={isSubmitted ? 'was-validated' : ''}
         >
           {/* STEP 1 (Or Edit Mode) */}
@@ -790,27 +537,26 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
                     setFormData({ ...formData, estado: val });
                   }}
                 >
-                  <option value="operativo">Operativo (Abierto)</option>
-                  <option value="mantenimiento">En Mantenimiento / Pausa</option>
-                  <option value="vacaciones">Cerrado por Vacaciones</option>
-                  <option value="no_disponible">No Disponible / Cerrado</option>
+                  <option value="operativo">Operativo</option>
+                  <option value="mantenimiento">En Mantenimiento</option>
+                  <option value="vacaciones">Vacaciones</option>
+                  <option value="no_disponible">No disponible</option>
                 </Select>
               </InputGroup>
-            </FormGrid>
-          )}
 
-          {(currentStepId === 'basic' || isEditMode) && formData.estado && formData.estado !== 'operativo' && (
-            <FormGrid style={{ marginBottom: '16px' }}>
-              <InputGroup>
-                <Label>Fecha estimada de regreso (Opcional)</Label>
-                <Input
-                  type="date"
-                  disabled={!canEditBasic}
-                  value={formData.fecha_regreso ? formData.fecha_regreso.split('T')[0] : ''}
-                  onChange={e => setFormData({ ...formData, fecha_regreso: e.target.value })}
-                />
-              </InputGroup>
-              <div />
+              {formData.estado && formData.estado !== 'operativo' ? (
+                <InputGroup>
+                  <Label>Fecha estimada de regreso (Opcional)</Label>
+                  <Input
+                    type="date"
+                    disabled={!canEditBasic}
+                    value={formData.fecha_regreso ? formData.fecha_regreso.split('T')[0] : ''}
+                    onChange={e => setFormData({ ...formData, fecha_regreso: e.target.value })}
+                  />
+                </InputGroup>
+              ) : (
+                <div />
+              )}
             </FormGrid>
           )}
 
@@ -964,25 +710,13 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
             <div style={{ animation: 'fadeIn 0.4s ease-out', marginTop: isEditMode ? '15px' : '0px' }}>
               <InputGroup style={{ marginTop: isEditMode ? '15px' : '0px' }}>
                 <Label>Horarios Semanales</Label>
-                <ScheduleGrid>
-                  <div className="grid-header">
-                    <span>Día</span>
-                    <span>Estado</span>
-                    <span>Horario / Mantenimiento</span>
-                    <span>¿24H?</span>
-                  </div>
-                  {formData.schedule.map((day: any, idx: number) => (
-                    <ScheduleRow
-                      key={day.day_index}
-                      day={day}
-                      idx={idx}
-                      disabled={!canEditBasic}
-                      onUpdate={handleUpdateSchedule}
-                      onAlert={(msg) => showAlert({ message: msg })}
-                      formatTime={formatTime}
-                    />
-                  ))}
-                </ScheduleGrid>
+                <StoreScheduleForm
+                  schedule={formData.schedule}
+                  disabled={!canEditBasic}
+                  onUpdateSchedule={handleUpdateSchedule}
+                  onAlert={(msg) => showAlert({ message: msg })}
+                  formatTime={formatTime}
+                />
               </InputGroup>
             </div>
           )}
@@ -1045,6 +779,7 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
                         <Input
                           required
                           type="email"
+                          autoComplete="off"
                           value={formData.admin_email || ''}
                           onChange={e => setFormData({ ...formData, admin_email: e.target.value })}
                           placeholder="admin.sucursal@dominio.com"
@@ -1089,6 +824,7 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
                         <Input
                           required
                           type="email"
+                          autoComplete="off"
                           value={formData.admin_email_confirm || ''}
                           onChange={e => setFormData({ ...formData, admin_email_confirm: e.target.value })}
                           placeholder="admin.sucursal@dominio.com"
@@ -1119,6 +855,7 @@ export const StoreFormModal: React.FC<StoreFormModalProps> = ({
                       <Input
                         required
                         type="password"
+                        autoComplete="new-password"
                         value={formData.admin_password || ''}
                         onChange={e => setFormData({ ...formData, admin_password: e.target.value })}
                         placeholder="••••••••"

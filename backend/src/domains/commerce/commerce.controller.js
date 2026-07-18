@@ -51,6 +51,26 @@ class CommerceController {
       handleControllerError(res, error);
     }
   }
+
+  async getCommerceFinancialSummary(req, res) {
+    try {
+      const { filterType, selectedMonth, commerceId } = req.query;
+      const result = await commerceService.getFinancialSummary(req.user, { filterType, selectedMonth, commerceId }, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async getStoresHistory(req, res) {
+    try {
+      const { search, txType, storeId, commerceId } = req.query;
+      const result = await commerceService.getStoresHistory(req.user, { search, txType, storeId, commerceId }, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
 }
 
 module.exports = new CommerceController();

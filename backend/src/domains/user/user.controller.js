@@ -41,9 +41,87 @@ class UserController {
     }
   }
 
+  async sendStoreAdminRecoveryEmail(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await userServiceModule.sendStoreAdminRecoveryEmail(req.user, id, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
   async getUsers(req, res) {
     try {
       const result = await userServiceModule.getUsers(req.user);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async setFinancialPin(req, res) {
+    try {
+      const result = await userServiceModule.setFinancialPin(req.user, req.body, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async unlockFinancialPin(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await userServiceModule.unlockFinancialPin(req.user, id, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async generateResetPinLink(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await userServiceModule.generateResetPinLink(req.user, id, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async getSystemUsers(req, res) {
+    try {
+      const result = await userServiceModule.getSystemUsers(req.user);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async createSystemUser(req, res) {
+    try {
+      const newUserId = await userServiceModule.createSystemUser(req.user, req.body, req);
+      res.status(201).json({ id: newUserId, message: 'Usuario de sistema creado con éxito.' });
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async moderateUser(req, res) {
+    try {
+      const { id } = req.params;
+      await userServiceModule.moderateUser(req.user, id, req.body, req);
+      res.json({ message: 'Acción de moderación aplicada con éxito.' });
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async getModerationHistory(req, res) {
+    try {
+      const { id } = req.params;
+      const { userType } = req.query;
+      const result = await userServiceModule.getModerationHistory(req.user, id, userType);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

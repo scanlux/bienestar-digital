@@ -17,11 +17,17 @@ class IntelligenceRepository {
   async findProductPopularityRanking() {
     const [rows] = await db.query(`
       SELECT 
-        p.id, p.nombre, p.image_url, pp.sales_count, pp.last_update,
+        p.id as product_id,
+        p.nombre,
+        p.image_url,
+        pp.sales_count,
+        pp.last_update,
         com.nombre as commerce_name
       FROM product_popularity pp
-      JOIN products p ON pp.product_id = p.id
-      JOIN commerces com ON p.commerce_id = com.id
+      INNER JOIN products p ON pp.product_id = p.id
+      INNER JOIN stores s ON p.store_id = s.id
+      INNER JOIN commerces com ON s.commerce_id = com.id
+      WHERE p.deleted_at IS NULL AND p.disponible = 1
       ORDER BY pp.sales_count DESC
       LIMIT 100
     `);
@@ -61,7 +67,9 @@ class IntelligenceRepository {
              c.nombre as categoria_nombre, com.nombre as commerce_nombre
       FROM products p
       LEFT JOIN categorias c ON p.categoria_id = c.id
-      LEFT JOIN commerces com ON p.commerce_id = com.id
+      LEFT JOIN stores s ON p.store_id = s.id
+      LEFT JOIN commerces com ON s.commerce_id = com.id
+      WHERE p.deleted_at IS NULL
       LIMIT ? OFFSET ?
     `, [limit, offset]);
     return rows;

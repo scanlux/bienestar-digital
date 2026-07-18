@@ -7,8 +7,6 @@ const { validateBody } = require('../../utils/validator');
 const { 
   loginSchema, 
   tokenSyncSchema, 
-  operatorLoginSchema, 
-  systemLoginSchema, 
   mobileRegisterSchema, 
   mobileRegisterFullSchema,
   activateDriverSchema,
@@ -20,12 +18,6 @@ router.post('/login', validateBody(loginSchema), authController.login);
 
 // @route   POST /api/auth/mobile/token-sync
 router.post('/mobile/token-sync', validateBody(tokenSyncSchema), authController.tokenSync);
-
-// @route   POST /api/auth/operator-login
-router.post('/operator-login', validateBody(operatorLoginSchema), authController.operatorLogin);
-
-// @route   POST /api/auth/system-login
-router.post('/system-login', validateBody(systemLoginSchema), authController.systemLogin);
 
 // @route   POST /api/auth/mobile/register
 router.post('/mobile/register', validateBody(mobileRegisterSchema), authController.mobileRegister);
@@ -44,5 +36,14 @@ router.patch('/driver-status', auth, validateBody(driverStatusSchema), authContr
 
 // @route   POST /api/auth/refresh-session
 router.post('/refresh-session', auth, authController.refreshSession);
+
+// @route   POST /api/auth/reset-password
+router.post('/reset-password', authController.resetPassword);
+
+// @route   POST /api/auth/push-token
+router.post('/push-token', auth, authController.savePushToken);
+
+// @route   GET /api/auth/my-nav
+router.get('/my-nav', auth, authController.getMyNav);
 
 module.exports = router;

@@ -12,6 +12,12 @@ router.use(auth);
 // Obtener todos los comercios (con filtrado BOLA a nivel de servicio)
 router.get('/', hasPermission('view_commerces'), commerceController.getCommerces);
 
+// Obtener el resumen financiero (debe ir antes de /:id para evitar colisión de ruta)
+router.get('/financial-summary', hasPermission('view_commerces'), commerceController.getCommerceFinancialSummary);
+
+// Obtener el historial consolidado de movimientos de sedes (debe ir antes de /:id para evitar colisión)
+router.get('/stores/history', hasPermission('view_commerces'), commerceController.getStoresHistory);
+
 // Obtener un comercio por ID (con filtrado BOLA a nivel de servicio)
 router.get('/:id', hasPermission('view_commerces'), commerceController.getCommerceById);
 

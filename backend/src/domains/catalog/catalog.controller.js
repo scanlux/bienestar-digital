@@ -5,8 +5,8 @@ class CatalogController {
   // --- MENUS ---
   async getMenus(req, res) {
     try {
-      const { storeId } = req.query;
-      const result = await catalogService.getMenus(req.user, storeId);
+      const { storeId, commerceId } = req.query;
+      const result = await catalogService.getMenus(req.user, storeId, commerceId);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);
@@ -37,6 +37,16 @@ class CatalogController {
       const { id } = req.params;
       await catalogService.deleteMenu(req.user, id, req);
       res.json({ success: true, message: 'Menú eliminado con éxito.' });
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async getMenuDeletePreview(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await catalogService.getMenuDeletePreview(req.user, id, req);
+      res.json(result);
     } catch (error) {
       handleControllerError(res, error);
     }
@@ -91,6 +101,16 @@ class CatalogController {
     }
   }
 
+  async getCategoryDeletePreview(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await catalogService.getCategoryDeletePreview(req.user, id, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
   async getStoreCategories(req, res) {
     try {
       const { storeId, menuId } = req.params;
@@ -113,8 +133,10 @@ class CatalogController {
   // --- PRODUCTOS ---
   async getProducts(req, res) {
     try {
+      const { categoryId } = req.params;
       const { categoriaId, commerceId } = req.query;
-      const result = await catalogService.getProducts(req.user, { categoriaId, commerceId }, req);
+      const targetCategoryId = categoryId || categoriaId;
+      const result = await catalogService.getProducts(req.user, { categoriaId: targetCategoryId, commerceId }, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

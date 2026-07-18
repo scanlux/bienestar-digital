@@ -6,6 +6,7 @@ const authRepository = require('./auth.repository');
 const { BusinessError, ForbiddenError, NotFoundError } = require('../../utils/errors');
 const { logSecurityEvent } = require('../../utils/securityLogger');
 const sessionStampService = require('../../services/sessionStampService');
+const redisClient = require('../../config/redis');
 
 if (admin.apps.length === 0) {
   admin.initializeApp({
@@ -14,6 +15,16 @@ if (admin.apps.length === 0) {
 }
 
 class AuthService {
+  async getSystemFlags() {
+    try {
+      const [flagRows] = await db.query('SELECT `key`, `enabled` FROM system_financial_flags');
+      return Object.fromEntries(flagRows.map(f => [f.key, f.enabled === 1]));
+    } catch (err) {
+      console.error('Error fetching system flags:', err);
+      return {};
+    }
+  }
+
   async getJWTSecret() {
     if (!process.env.JWT_SECRET) {
       throw new Error('[CRITICAL] JWT_SECRET no está configurada en las variables de entorno.');
@@ -26,80 +37,190 @@ class AuthService {
       throw new BusinessError('Email y contraseña son obligatorios');
     }
 
-    const user = await authRepository.findUserByEmail(email);
-    if (!user) {
-      await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, reason: 'Usuario no encontrado' });
-      throw new BusinessError('Credenciales inválidas', 401);
-    }
-
-    if (user.estado !== 'activo') {
-      await logSecurityEvent(user.id, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, reason: 'Cuenta inactiva o bloqueada' });
-      throw new ForbiddenError('Cuenta inactiva o bloqueada');
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) {
-      await logSecurityEvent(user.id, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, reason: 'Contraseña incorrecta' });
-      throw new BusinessError('Credenciales inválidas', 401);
-    }
-
-    const { permissions, roles } = await authRepository.getUserRolesAndPermissions('user', user.id);
-
-    let commerceId = null;
-    let storeIds = [];
-    let deliveryCompanyId = null;
-    let adminType = null;
-
-    if (user.rol === 'admin') {
-      if (user.commerce_id) {
-        adminType = 'commerce';
-        commerceId = user.commerce_id;
-        storeIds = await authRepository.findStoresByCommerceId(commerceId);
-      } else if (user.store_id) {
-        adminType = 'store';
-        commerceId = user.store_commerce_id;
-        storeIds = [user.store_id];
-      } else if (user.delivery_company_id) {
-        adminType = 'delivery_company';
-        deliveryCompanyId = user.delivery_company_id;
-      }
-    }
-
     const jwtSecret = await this.getJWTSecret();
-    let stamp = await sessionStampService.getStamp('user', user.id);
-    if (!stamp) {
-      stamp = await sessionStampService.setStamp('user', user.id);
+
+    // Consultar modo mantenimiento en Redis
+    const isMaintenance = await redisClient.get('system:maintenance_mode');
+    const maintenanceActive = isMaintenance === 'true' || isMaintenance === 'quiescing';
+
+    // 1. Buscar en system_users
+    const systemUser = await authRepository.findSystemUserByEmail(email);
+    if (systemUser) {
+      if (systemUser.estado !== 'activo') {
+        await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'HIGH', req, { email, actorType: 'system_user', reason: 'Usuario del sistema inactivo' });
+        throw new ForbiddenError('Cuenta inactiva');
+      }
+
+      if (systemUser.password_locked === 1) {
+        await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'HIGH', req, { email, actorType: 'system_user', reason: 'Contraseña bloqueada' });
+        throw new ForbiddenError('La contraseña de esta cuenta de sistema está bloqueada.');
+      }
+
+      const isMatch = await bcrypt.compare(password, systemUser.password_hash);
+      if (!isMatch) {
+        await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'HIGH', req, { email, actorType: 'system_user', reason: 'Contraseña incorrecta' });
+        throw new BusinessError('Credenciales inválidas', 401);
+      }
+
+      const { permissions, permissionModes, roles } = await authRepository.getUserRolesAndPermissions('system_user', systemUser.id);
+      const systemFlags = await this.getSystemFlags();
+      let stamp = await sessionStampService.getStamp('system_user', systemUser.id);
+      if (!stamp) {
+        stamp = await sessionStampService.setStamp('system_user', systemUser.id);
+      }
+
+      const tokenPayload = {
+        id: systemUser.id,
+        email: systemUser.email,
+        rol: systemUser.nivel,
+        actorType: 'system_user',
+        nivel: systemUser.nivel,
+        nombres: systemUser.nombres,
+        apellidos: systemUser.apellidos,
+        permissions,
+        roles,
+        session_stamp: stamp
+      };
+
+      const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '8h' });
+      await logSecurityEvent(systemUser.id, 'SUCCESSFUL_LOGIN', 'LOW', req, { actorType: 'system_user' });
+
+      return {
+        token,
+        user: {
+          id: systemUser.id,
+          email: systemUser.email,
+          nombre: `${systemUser.nombres || ''} ${systemUser.apellidos || ''}`.trim(),
+          nombres: systemUser.nombres,
+          apellidos: systemUser.apellidos,
+          rol: systemUser.nivel,
+          actorType: 'system_user',
+          permissions,
+          permissionModes,
+          systemFlags,
+          roles
+        }
+      };
     }
 
-    const tokenPayload = { 
-      id: user.id, 
-      email: user.email, 
-      rol: user.rol, 
-      actorType: 'user',
-      adminType,
-      es_repartidor: user.es_repartidor, 
-      repartidor_activo: user.repartidor_activo,
-      permissions, 
-      roles,
-      commerceId, 
-      storeIds,
-      deliveryCompanyId,
-      session_stamp: stamp
-    };
+    // Rechazar accesos no autorizados durante el mantenimiento
+    if (maintenanceActive) {
+      await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'HIGH', req, {
+        email,
+        actorType: 'external',
+        reason: 'Intento de login de usuario común u operador durante mantenimiento'
+      });
+      throw new ForbiddenError('El sistema está en mantenimiento. Solo se permite el acceso a personal autorizado.');
+    }
 
-    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '24h' });
+    // 2. Buscar en store_operators
+    const operator = await authRepository.findOperatorByEmail(email);
+    if (operator) {
+      if (operator.estado !== 'activo') {
+        await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, actorType: 'operator', reason: 'Cuenta de operador inactiva' });
+        throw new ForbiddenError('Cuenta inactiva');
+      }
 
-    await logSecurityEvent(user.id, 'SUCCESSFUL_LOGIN', 'LOW', req);
+      const isMatch = await bcrypt.compare(password, operator.password_hash);
+      if (!isMatch) {
+        await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, actorType: 'operator', reason: 'Contraseña incorrecta' });
+        throw new BusinessError('Credenciales inválidas', 401);
+      }
 
-    return {
-      token,
-      user: {
+      const { permissions, permissionModes, roles } = await authRepository.getUserRolesAndPermissions('operator', operator.id);
+      const systemFlags = await this.getSystemFlags();
+      let stamp = await sessionStampService.getStamp('operator', operator.id);
+      if (!stamp) {
+        stamp = await sessionStampService.setStamp('operator', operator.id);
+      }
+
+      const tokenPayload = {
+        id: operator.id,
+        email: operator.email,
+        rol: 'operator',
+        actorType: 'operator',
+        storeId: operator.store_id,
+        storeIds: [operator.store_id],
+        nombres: operator.nombres,
+        apellidos: operator.apellidos,
+        permissions,
+        roles,
+        session_stamp: stamp
+      };
+
+      const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '8h' });
+      await logSecurityEvent(operator.id, 'SUCCESSFUL_LOGIN', 'LOW', req, { actorType: 'operator' });
+
+      return {
+        token,
+        user: {
+          id: operator.id,
+          email: operator.email,
+          nombre: `${operator.nombres || ''} ${operator.apellidos || ''}`.trim(),
+          nombres: operator.nombres,
+          apellidos: operator.apellidos,
+          rol: 'operator',
+          actorType: 'operator',
+          storeId: operator.store_id,
+          storeIds: [operator.store_id],
+          permissions,
+          permissionModes,
+          systemFlags,
+          roles
+        }
+      };
+    }
+
+    // 3. Buscar en users
+    const user = await authRepository.findUserByEmail(email);
+    if (user) {
+      if (user.estado !== 'activo') {
+        await logSecurityEvent(user.id, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, actorType: 'user', reason: 'Cuenta inactiva o bloqueada' });
+        throw new ForbiddenError('Cuenta inactiva o bloqueada');
+      }
+
+      if (user.password_locked === 1) {
+        await logSecurityEvent(user.id, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, actorType: 'user', reason: 'Contraseña bloqueada' });
+        throw new ForbiddenError('La contraseña de esta cuenta está bloqueada.');
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password_hash);
+      if (!isMatch) {
+        await logSecurityEvent(user.id, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, actorType: 'user', reason: 'Contraseña incorrecta' });
+        throw new BusinessError('Credenciales inválidas', 401);
+      }
+
+      const { permissions, permissionModes, roles } = await authRepository.getUserRolesAndPermissions('user', user.id);
+      const systemFlags = await this.getSystemFlags();
+
+      let commerceId = null;
+      let storeIds = [];
+      let deliveryCompanyId = null;
+      let adminType = null;
+
+      if (user.rol === 'admin') {
+        if (user.commerce_id) {
+          adminType = 'commerce';
+          commerceId = user.commerce_id;
+          storeIds = await authRepository.findStoresByCommerceId(commerceId);
+        } else if (user.store_id) {
+          adminType = 'store';
+          commerceId = user.store_commerce_id;
+          storeIds = [user.store_id];
+        } else if (user.delivery_company_id) {
+          adminType = 'delivery_company';
+          deliveryCompanyId = user.delivery_company_id;
+        }
+      }
+
+      let stamp = await sessionStampService.getStamp('user', user.id);
+      if (!stamp) {
+        stamp = await sessionStampService.setStamp('user', user.id);
+      }
+
+      const tokenPayload = {
         id: user.id,
         email: user.email,
-        nombre: `${user.nombres || ''} ${user.apellidos || ''}`.trim() || 'Usuario Focnius',
-        nombres: user.nombres,
-        apellidos: user.apellidos,
-        telefono: user.telefono,
         rol: user.rol,
         actorType: 'user',
         adminType,
@@ -109,9 +230,41 @@ class AuthService {
         roles,
         commerceId,
         storeIds,
-        deliveryCompanyId
-      }
-    };
+        deliveryCompanyId,
+        session_stamp: stamp
+      };
+
+      const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '8h' });
+      await logSecurityEvent(user.id, 'SUCCESSFUL_LOGIN', 'LOW', req, { actorType: 'user' });
+
+      return {
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          nombre: `${user.nombres || ''} ${user.apellidos || ''}`.trim() || 'Usuario Focnius',
+          nombres: user.nombres,
+          apellidos: user.apellidos,
+          telefono: user.telefono,
+          rol: user.rol,
+          actorType: 'user',
+          adminType,
+          es_repartidor: user.es_repartidor,
+          repartidor_activo: user.repartidor_activo,
+          permissions,
+          permissionModes,
+          systemFlags,
+          roles,
+          commerceId,
+          storeIds,
+          deliveryCompanyId
+        }
+      };
+    }
+
+    // 4. Si ninguno existe
+    await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, reason: 'Usuario no encontrado' });
+    throw new BusinessError('Credenciales inválidas', 401);
   }
 
   async tokenSync(email, firebaseUid, firebaseIdToken, req) {
@@ -119,26 +272,24 @@ class AuthService {
       throw new BusinessError('Email y UID son obligatorios');
     }
 
-    if (process.env.BYPASS_FIREBASE_VERIFICATION !== 'true') {
-      if (!firebaseIdToken) {
-        throw new BusinessError('Token de Firebase es obligatorio para la sincronización');
-      }
-      try {
-        const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
-        if (decodedToken.uid !== firebaseUid) {
-          await logSecurityEvent(null, 'MALICIOUS_TOKEN_SYNC_ATTEMPT', 'CRITICAL', req, {
-            email,
-            reason: 'Firebase UID mismatch with ID token'
-          });
-          throw new BusinessError('El UID del token de Firebase no coincide con el UID provisto', 401);
-        }
-      } catch (firebaseErr) {
-        await logSecurityEvent(null, 'FAILED_TOKEN_SYNC', 'HIGH', req, {
+    if (!firebaseIdToken) {
+      throw new BusinessError('Token de Firebase es obligatorio para la sincronización');
+    }
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
+      if (decodedToken.uid !== firebaseUid) {
+        await logSecurityEvent(null, 'MALICIOUS_TOKEN_SYNC_ATTEMPT', 'CRITICAL', req, {
           email,
-          reason: 'Error al verificar token con Firebase: ' + firebaseErr.message
+          reason: 'Firebase UID mismatch with ID token'
         });
-        throw new BusinessError('Token de Firebase inválido o expirado: ' + firebaseErr.message, 401);
+        throw new BusinessError('El UID del token de Firebase no coincide con el UID provisto', 401);
       }
+    } catch (firebaseErr) {
+      await logSecurityEvent(null, 'FAILED_TOKEN_SYNC', 'HIGH', req, {
+        email,
+        reason: 'Error al verificar token con Firebase: ' + firebaseErr.message
+      });
+      throw new BusinessError('Token de Firebase inválido o expirado: ' + firebaseErr.message, 401);
     }
 
     const user = await authRepository.findUserByEmail(email);
@@ -158,7 +309,8 @@ class AuthService {
       throw new BusinessError('Fallo de autenticación del token móvil', 401);
     }
 
-    const { permissions, roles } = await authRepository.getUserRolesAndPermissions('user', user.id);
+    const { permissions, permissionModes, roles } = await authRepository.getUserRolesAndPermissions('user', user.id);
+    const systemFlags = await this.getSystemFlags();
 
     let commerceId = null;
     let storeIds = [];
@@ -202,7 +354,7 @@ class AuthService {
       session_stamp: stamp
     };
 
-    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '30d' });
+    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '8h' });
 
     await logSecurityEvent(user.id, 'SUCCESSFUL_LOGIN', 'LOW', req, { type: 'mobile_sync' });
 
@@ -218,6 +370,8 @@ class AuthService {
         es_repartidor: user.es_repartidor,
         repartidor_activo: user.repartidor_activo,
         permissions,
+        permissionModes,
+        systemFlags,
         roles,
         commerceId,
         storeIds,
@@ -226,143 +380,34 @@ class AuthService {
     };
   }
 
-  async operatorLogin(email, password, req) {
-    if (!email || !password) {
-      throw new BusinessError('Email y contraseña son obligatorios');
-    }
-
-    const operator = await authRepository.findOperatorByEmail(email);
-    if (!operator) {
-      await logSecurityEvent(null, 'FAILED_OPERATOR_LOGIN_ATTEMPT', 'MEDIUM', req, { email, reason: 'Operador no encontrado' });
-      throw new BusinessError('Credenciales inválidas', 401);
-    }
-
-    if (operator.estado !== 'activo') {
-      await logSecurityEvent(null, 'FAILED_OPERATOR_LOGIN_ATTEMPT', 'MEDIUM', req, { email, reason: 'Cuenta de operador inactiva' });
-      throw new ForbiddenError('Cuenta inactiva');
-    }
-
-    const isMatch = await bcrypt.compare(password, operator.password_hash);
-    if (!isMatch) {
-      await logSecurityEvent(null, 'FAILED_OPERATOR_LOGIN_ATTEMPT', 'MEDIUM', req, { email, reason: 'Contraseña incorrecta' });
-      throw new BusinessError('Credenciales inválidas', 401);
-    }
-
-    const { permissions, roles } = await authRepository.getUserRolesAndPermissions('operator', operator.id);
-
-    let stamp = await sessionStampService.getStamp('operator', operator.id);
-    if (!stamp) {
-      stamp = await sessionStampService.setStamp('operator', operator.id);
-    }
-
-    const jwtSecret = await this.getJWTSecret();
-    const token = jwt.sign(
-      {
-        id: operator.id,
-        email: operator.email,
-        rol: 'operator',
-        actorType: 'operator',
-        storeId: operator.store_id,
-        storeIds: [operator.store_id],
-        nombres: operator.nombres,
-        apellidos: operator.apellidos,
-        permissions,
-        roles,
-        session_stamp: stamp
-      },
-      jwtSecret,
-      { expiresIn: '24h' }
-    );
-
-    await logSecurityEvent(null, 'SUCCESSFUL_OPERATOR_LOGIN', 'LOW', req, { operatorId: operator.id });
-
-    return {
-      token,
-      user: {
-        id: operator.id,
-        email: operator.email,
-        nombre: `${operator.nombres} ${operator.apellidos}`.trim(),
-        nombres: operator.nombres,
-        apellidos: operator.apellidos,
-        rol: 'operator',
-        actorType: 'operator',
-        storeId: operator.store_id,
-        storeIds: [operator.store_id],
-        permissions,
-        roles
-      }
-    };
-  }
-
-  async systemLogin(email, password, req) {
-    if (!email || !password) {
-      throw new BusinessError('Email y contraseña son obligatorios');
-    }
-
-    const systemUser = await authRepository.findSystemUserByEmail(email);
-    if (!systemUser) {
-      await logSecurityEvent(null, 'FAILED_SYSTEM_LOGIN_ATTEMPT', 'HIGH', req, { email, reason: 'Usuario del sistema no encontrado' });
-      throw new BusinessError('Credenciales inválidas', 401);
-    }
-
-    if (systemUser.estado !== 'activo') {
-      await logSecurityEvent(null, 'FAILED_SYSTEM_LOGIN_ATTEMPT', 'HIGH', req, { email, reason: 'Usuario del sistema inactivo' });
-      throw new ForbiddenError('Cuenta inactiva');
-    }
-
-    const isMatch = await bcrypt.compare(password, systemUser.password_hash);
-    if (!isMatch) {
-      await logSecurityEvent(null, 'FAILED_SYSTEM_LOGIN_ATTEMPT', 'HIGH', req, { email, reason: 'Contraseña incorrecta' });
-      throw new BusinessError('Credenciales inválidas', 401);
-    }
-
-    const { permissions, roles } = await authRepository.getUserRolesAndPermissions('system_user', systemUser.id);
-
-    let stamp = await sessionStampService.getStamp('system_user', systemUser.id);
-    if (!stamp) {
-      stamp = await sessionStampService.setStamp('system_user', systemUser.id);
-    }
-
-    const jwtSecret = await this.getJWTSecret();
-    const token = jwt.sign(
-      {
-        id: systemUser.id,
-        email: systemUser.email,
-        rol: systemUser.nivel, 
-        actorType: 'system_user',
-        nivel: systemUser.nivel,
-        nombres: systemUser.nombres,
-        apellidos: systemUser.apellidos,
-        permissions,
-        roles,
-        session_stamp: stamp
-      },
-      jwtSecret,
-      { expiresIn: '24h' }
-    );
-
-    await logSecurityEvent(null, 'SUCCESSFUL_SYSTEM_LOGIN', 'LOW', req, { systemUserId: systemUser.id, nivel: systemUser.nivel });
-
-    return {
-      token,
-      user: {
-        id: systemUser.id,
-        email: systemUser.email,
-        nombre: `${systemUser.nombres} ${systemUser.apellidos}`.trim(),
-        nombres: systemUser.nombres,
-        apellidos: systemUser.apellidos,
-        rol: systemUser.nivel,
-        actorType: 'system_user',
-        nivel: systemUser.nivel,
-        permissions,
-        roles
-      }
-    };
-  }
-
-  async mobileRegister(email, nombre, firebaseUid) {
+  async mobileRegister(email, nombre, firebaseUid, firebaseIdToken, req) {
     if (!email || !firebaseUid) {
       throw new BusinessError('Email y UID son obligatorios');
+    }
+
+    if (!firebaseIdToken) {
+      await logSecurityEvent(null, 'FAILED_TOKEN_SYNC', 'HIGH', req, {
+        email,
+        reason: 'Token de Firebase faltante en el registro móvil'
+      });
+      throw new BusinessError('Token de Firebase es obligatorio para registrarse');
+    }
+
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
+      if (decodedToken.uid !== firebaseUid) {
+        await logSecurityEvent(null, 'FAILED_TOKEN_SYNC', 'HIGH', req, {
+          email,
+          reason: 'Firebase UID mismatch with ID token in mobileRegister'
+        });
+        throw new BusinessError('El UID del token de Firebase no coincide con el UID provisto', 401);
+      }
+    } catch (firebaseErr) {
+      await logSecurityEvent(null, 'FAILED_TOKEN_SYNC', 'HIGH', req, {
+        email,
+        reason: 'Error al verificar token con Firebase en registro: ' + firebaseErr.message
+      });
+      throw new BusinessError('Token de Firebase inválido o expirado: ' + firebaseErr.message, 401);
     }
 
     const connection = await db.getConnection();
@@ -484,7 +529,7 @@ class AuthService {
     }
   }
 
-  async activateDriver(userContext, aceptarTerminos) {
+  async activateDriver(userContext, aceptarTerminos, req) {
     const userId = userContext.id;
 
     if (!aceptarTerminos) {
@@ -501,6 +546,7 @@ class AuthService {
     }
 
     await authRepository.updateDriverStatus(userId, 1, 1);
+    await logSecurityEvent(userId, 'DRIVER_MODE_ACTIVATED', 'MEDIUM', req, { email: user.email });
 
     const profile = await authRepository.findUserProfile(userId);
     const { permissions, roles } = await authRepository.getUserRolesAndPermissions('user', userId);
@@ -525,7 +571,7 @@ class AuthService {
         session_stamp: stamp
       },
       jwtSecret,
-      { expiresIn: '24h' }
+      { expiresIn: '8h' }
     );
 
     return {
@@ -543,7 +589,7 @@ class AuthService {
     };
   }
 
-  async driverStatus(userContext, activo) {
+  async driverStatus(userContext, activo, req) {
     const userId = userContext.id;
 
     if (activo === undefined) {
@@ -561,6 +607,13 @@ class AuthService {
 
     const statusVal = activo ? 1 : 0;
     await authRepository.updateDriverStatus(userId, 1, statusVal);
+    await logSecurityEvent(
+      userId,
+      activo ? 'DRIVER_SHIFT_STARTED' : 'DRIVER_SHIFT_ENDED',
+      'LOW',
+      req,
+      { email: user.email }
+    );
 
     return {
       message: `Turno de repartidor ${activo ? 'iniciado' : 'finalizado'} exitosamente.`,
@@ -572,12 +625,15 @@ class AuthService {
     const { id: userId, actorType } = userContext;
     let userRecord = null;
     let permissions = [];
+    let permissionModes = {};
     let roles = [];
     let tokenPayload = {};
 
     const rbacData = await authRepository.getUserRolesAndPermissions(actorType, userId);
     permissions = rbacData.permissions;
+    permissionModes = rbacData.permissionModes;
     roles = rbacData.roles;
+    const systemFlags = await this.getSystemFlags();
 
     if (actorType === 'user') {
       userRecord = await authRepository.findUserById(userId);
@@ -646,7 +702,6 @@ class AuthService {
       }
 
       tokenPayload = {
-        id: systemUser => userRecord.id,
         id: userRecord.id,
         email: userRecord.email,
         rol: userRecord.nivel,
@@ -668,7 +723,7 @@ class AuthService {
     tokenPayload.session_stamp = stamp;
 
     const jwtSecret = await this.getJWTSecret();
-    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '24h' });
+    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '8h' });
 
     return {
       token,
@@ -681,6 +736,8 @@ class AuthService {
         rol: tokenPayload.rol,
         actorType,
         permissions,
+        permissionModes,
+        systemFlags,
         roles,
         ...(actorType === 'user' ? {
           adminType: tokenPayload.adminType,
@@ -694,6 +751,178 @@ class AuthService {
         } : {})
       }
     };
+  }
+
+  async resetPassword(token, newPassword, req) {
+    if (!token || !newPassword) {
+      throw new BusinessError('El token y la nueva contraseña son obligatorios.');
+    }
+
+    const userIdStr = await redisClient.get(`password_reset:${token}`);
+    if (!userIdStr) {
+      throw new BusinessError('El enlace de recuperación es inválido o ha expirado.');
+    }
+
+    const userId = Number(userIdStr);
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
+
+    await redisClient.del(`password_reset:${token}`);
+
+    await logSecurityEvent(
+      userId,
+      'PASSWORD_RESET_SUCCESSFUL',
+      'MEDIUM',
+      req,
+      { userId },
+      'user',
+      userId
+    );
+
+    return { success: true, message: 'Contraseña restablecida con éxito.' };
+  }
+
+  async savePushToken(user, token, platform) {
+    const userId = user.id;
+    if (!token) {
+      throw new BusinessError('Token FCM es requerido.');
+    }
+    const dbPlatform = platform === 'ios' ? 'ios' : 'android';
+    await db.query(`
+      INSERT INTO user_push_tokens (user_id, fcm_token, platform)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE fcm_token = ?, updated_at = NOW(6)
+    `, [userId, token, dbPlatform, token]);
+
+    return { success: true };
+  }
+  async getMyNavigation(user, req) {
+    const userId = user.id;
+    const actorType = user.actorType;
+    const adminType = user.adminType;
+    const storeIds = user.storeIds;
+    const deliveryCompanyId = user.deliveryCompanyId;
+
+    // Determinar scope
+    let scope = 'commerce'; // fallback
+    if (actorType === 'system_user') {
+      scope = 'admin';
+    } else if (actorType === 'operator') {
+      scope = 'store';
+    } else if (actorType === 'user') {
+      if (adminType === 'commerce') {
+        scope = 'commerce';
+      } else if (adminType === 'store') {
+        scope = 'store';
+      } else if (adminType === 'delivery_company') {
+        scope = 'delivery';
+      }
+    }
+
+    // Obtener los permisos del usuario de forma explícita
+    const { permissions: userPermissions } = await authRepository.getUserRolesAndPermissions(actorType, userId);
+
+    // Consulta de navegación
+    const [rows] = await db.query(`
+      SELECT 
+        n.id, n.parent_id, n.label, n.page_title, n.path, n.icon, 
+        n.order_index, n.risk_level, n.required_permission,
+        COALESCE(p.ui_restriction_mode, 'hidden') AS ui_mode
+      FROM system_navigation n
+      LEFT JOIN permissions p ON n.required_permission = p.name
+      WHERE n.layout_scope = ?
+      ORDER BY n.parent_id ASC, n.order_index ASC
+    `, [scope]);
+
+    // Filtrar y mapear ítems según permisos
+    const resolvedItems = rows.map(row => {
+      // Si el ítem no tiene permiso requerido, es accesible por cualquiera en este layout_scope
+      if (!row.required_permission) {
+        return {
+          id: row.id,
+          parent_id: row.parent_id,
+          label: row.label,
+          page_title: row.page_title || row.label,
+          path: row.path,
+          icon: row.icon,
+          order_index: row.order_index,
+          risk_level: row.risk_level,
+          isLocked: false
+        };
+      }
+
+      // Bypass total para system_user root
+      const isRoot = actorType === 'system_user' && user.rol === 'root';
+      const hasPermission = isRoot || userPermissions.includes(row.required_permission);
+
+      if (!hasPermission && row.ui_mode === 'hidden') {
+        return null;
+      }
+
+      return {
+        id: row.id,
+        parent_id: row.parent_id,
+        label: row.label,
+        page_title: row.page_title || row.label,
+        path: row.path,
+        icon: row.icon,
+        order_index: row.order_index,
+        risk_level: row.risk_level,
+        isLocked: !hasPermission && row.ui_mode === 'ghost'
+      };
+    }).filter(Boolean);
+
+    // Resolver parámetros dinámicos (:storeId, :deliveryCompanyId)
+    const storeIdVal = storeIds && storeIds.length > 0 ? storeIds[0] : null;
+    const resolvedPathItems = resolvedItems.map(item => {
+      if (!item.path) return item;
+      let p = item.path;
+      if (storeIdVal) {
+        p = p.replace(':storeId', storeIdVal).replace(':id', storeIdVal);
+      }
+      if (deliveryCompanyId) {
+        p = p.replace(':deliveryCompanyId', deliveryCompanyId);
+      }
+      return { ...item, path: p };
+    });
+
+    // Construir estructura de árbol (grupos y sub-ítems)
+    const tree = [];
+    const itemMap = {};
+
+    for (const item of resolvedPathItems) {
+      item.children = [];
+      itemMap[item.id] = item;
+      if (!item.parent_id) {
+        tree.push(item);
+      } else {
+        const parent = itemMap[item.parent_id];
+        if (parent) {
+          parent.children.push(item);
+        } else {
+          // Si por orden index el padre no se procesó antes, se agrega a la raíz
+          tree.push(item);
+        }
+      }
+    }
+
+    // Ordenar de nuevo los hijos por order_index
+    for (const item of tree) {
+      if (item.children.length > 0) {
+        item.children.sort((a, b) => a.order_index - b.order_index);
+      }
+    }
+
+    const lockedCount = resolvedPathItems.filter(i => i.isLocked).length;
+    await logSecurityEvent(userId, 'NAV_LOADED', 'LOW', req, {
+      scope,
+      item_count: resolvedPathItems.length,
+      locked_count: lockedCount
+    }, 'system', null);
+
+    return tree;
   }
 }
 

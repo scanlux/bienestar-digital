@@ -1,14 +1,72 @@
 const catalogRepository = require('./catalog.repository');
 const storeRepository = require('../store/store.repository');
+const db = require('../../config/db');
 const { BusinessError, ForbiddenError, NotFoundError } = require('../../utils/errors');
 const { logSecurityEvent } = require('../../utils/securityLogger');
 
 class CatalogService {
+  async applyCategoryLimits(commerceId, categories) {
+    if (!commerceId) return categories;
+    const [upgrades] = await db.query(
+      'SELECT COUNT(*) as activeCount FROM commerce_upgrades WHERE commerce_id = ? AND upgrade_type = "estado_empresarial" AND expires_at > NOW()',
+      [commerceId]
+    );
+    const hasBusinessStatus = Number(upgrades[0].activeCount) > 0;
+
+    let maxCategories = 3;
+    try {
+      const [paramRows] = await db.query(
+        'SELECT `value` FROM system_parameters WHERE `key` = "free_tier_categories_limit"'
+      );
+      if (paramRows[0]) {
+        maxCategories = parseInt(paramRows[0].value, 10);
+      }
+    } catch (err) {
+      console.error('[applyCategoryLimits] Error fetching limit:', err);
+    }
+
+    return categories.map((cat, index) => ({
+      ...cat,
+      disponible: hasBusinessStatus || index < maxCategories ? cat.disponible : 0,
+      habilitada: hasBusinessStatus || index < maxCategories ? cat.habilitada : 0,
+      locked: !hasBusinessStatus && index >= maxCategories
+    }));
+  }
+
+  async applyProductLimits(commerceId, products) {
+    if (!commerceId) return products;
+    const [upgrades] = await db.query(
+      'SELECT COUNT(*) as activeCount FROM commerce_upgrades WHERE commerce_id = ? AND upgrade_type = "estado_empresarial" AND expires_at > NOW()',
+      [commerceId]
+    );
+    const hasBusinessStatus = Number(upgrades[0].activeCount) > 0;
+
+    let maxProducts = 5;
+    try {
+      const [paramRows] = await db.query(
+        'SELECT `value` FROM system_parameters WHERE `key` = "free_tier_products_limit"'
+      );
+      if (paramRows[0]) {
+        maxProducts = parseInt(paramRows[0].value, 10);
+      }
+    } catch (err) {
+      console.error('[applyProductLimits] Error fetching limit:', err);
+    }
+
+    return products.map((prod, index) => ({
+      ...prod,
+      disponible: hasBusinessStatus || index < maxProducts ? prod.disponible : 0,
+      habilitado: hasBusinessStatus || index < maxProducts ? prod.habilitado : 0,
+      locked: !hasBusinessStatus && index >= maxProducts
+    }));
+  }
+
   // --- MENUS ---
-  async getMenus(userContext, storeId) {
-    const isSystem = userContext.actorType === 'system_user';
+  async getMenus(userContext, storeId, commerceId) {
     const targetStoreId = storeId ? Number(storeId) : null;
-    
+    const targetCommerceId = commerceId ? Number(commerceId) : (userContext.commerceId ? Number(userContext.commerceId) : null);
+    const isSystem = userContext.actorType === 'system_user';
+
     // BOLA Check: si se pasa storeId y no es sistema, verificar propiedad de la sede
     if (targetStoreId && !isSystem) {
       const store = await storeRepository.findById(targetStoreId);
@@ -17,7 +75,7 @@ class CatalogService {
       }
     }
     
-    return await catalogRepository.findMenus(targetStoreId, userContext.commerceId, isSystem);
+    return await catalogRepository.findMenus(targetStoreId, targetCommerceId, isSystem);
   }
 
   async getMenusByCommerce(userContext, commerceId) {
@@ -33,57 +91,67 @@ class CatalogService {
   }
 
   async saveMenu(userContext, data, req) {
-    const { id, commerce_id, nombre, descripcion, orden, disponible } = data;
+    const { id, store_id, commerce_id, nombre, descripcion, orden, disponible } = data;
     const isSystem = userContext.actorType === 'system_user';
-    const targetCommerceId = commerce_id ? Number(commerce_id) : null;
+    let targetStoreId = store_id ? Number(store_id) : null;
 
-    if (!targetCommerceId && !id) {
-      throw new BusinessError('Falta commerce_id para esta operación.');
+    if (!targetStoreId && !id && commerce_id) {
+      const [firstStore] = await db.query('SELECT id FROM stores WHERE commerce_id = ? LIMIT 1', [commerce_id]);
+      if (firstStore && firstStore[0]) {
+        targetStoreId = firstStore[0].id;
+      }
     }
 
-    let finalCommerceId = targetCommerceId;
+    if (!targetStoreId && !id) {
+      throw new BusinessError('Falta store_id para esta operación.');
+    }
+
+    let finalStoreId = targetStoreId;
     if (id) {
       const existing = await catalogRepository.findMenuById(id);
       if (!existing) throw new NotFoundError('Menú no encontrado.');
-      finalCommerceId = existing.commerce_id;
+      finalStoreId = existing.store_id;
     }
 
+    const store = await storeRepository.findById(finalStoreId);
+    if (!store) throw new NotFoundError('Sede no encontrada.');
+
     // BOLA Check
-    if (!isSystem && finalCommerceId !== userContext.commerceId) {
+    if (!isSystem && store.commerce_id !== userContext.commerceId) {
       await logSecurityEvent(
         userContext.id,
         'BOLA_ATTEMPT',
         'HIGH',
         req,
-        { commerceId: finalCommerceId, action: id ? 'modify_menu' : 'create_menu' },
-        'commerce',
-        finalCommerceId
+        { storeId: finalStoreId, action: id ? 'modify_menu' : 'create_menu' },
+        'store',
+        finalStoreId
       );
       throw new ForbiddenError('No autorizado para realizar esta acción.');
     }
 
     if (id) {
-      await catalogRepository.updateMenu(id, data);
+      await catalogRepository.updateMenu(id, { ...data, store_id: finalStoreId });
       await logSecurityEvent(
         userContext.id,
         'WRITE_CATALOG',
         'LOW',
         req,
         { menuId: Number(id), action: 'update_menu', nombre },
-        'commerce',
-        finalCommerceId
+        'store',
+        finalStoreId
       );
       return id;
     } else {
-      const newId = await catalogRepository.createMenu(data);
+      const newId = await catalogRepository.createMenu({ ...data, store_id: finalStoreId });
       await logSecurityEvent(
         userContext.id,
         'WRITE_CATALOG',
         'LOW',
         req,
         { menuId: newId, action: 'create_menu', nombre },
-        'commerce',
-        finalCommerceId
+        'store',
+        finalStoreId
       );
       return newId;
     }
@@ -112,13 +180,36 @@ class CatalogService {
       }
     }
 
-    await catalogRepository.deleteMenu(targetId);
+    const [prodImages] = await db.query(`
+      SELECT p.image_url FROM products p
+      JOIN categorias c ON p.categoria_id = c.id
+      WHERE c.menu_id = ? AND p.image_url IS NOT NULL AND p.deleted_at IS NULL
+    `, [targetId]);
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      await catalogRepository.softDeleteMenu(targetId, conn);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+
+    for (const p of prodImages) {
+      if (p.image_url) {
+        this.cleanupProductImage(p.image_url).catch(() => {});
+      }
+    }
+
     await logSecurityEvent(
       userContext.id,
       'DELETE_CATALOG',
       'LOW',
       req,
-      { menuId: targetId, action: 'delete_menu' },
+      { menuId: targetId, action: 'soft_delete_menu', cascade: true },
       'commerce',
       userContext.commerceId
     );
@@ -183,12 +274,10 @@ class CatalogService {
     return true;
   }
 
-  // --- CATEGORIAS ---
   async getCategories(userContext, menuId, req) {
     const targetMenuId = Number(menuId);
     const isSystem = userContext.actorType === 'system_user';
 
-    // BOLA Check
     if (!isSystem) {
       const isOwner = await catalogRepository.checkMenuOwnership(targetMenuId, userContext.commerceId);
       if (!isOwner) {
@@ -205,7 +294,15 @@ class CatalogService {
       }
     }
 
-    return await catalogRepository.findCategories(targetMenuId);
+    // Consultar el commerce_id del menu para verificar si tiene la mejora de Estado Empresarial
+    const [menuRows] = await db.query(
+      'SELECT s.commerce_id FROM menus m JOIN stores s ON m.store_id = s.id WHERE m.id = ?',
+      [targetMenuId]
+    );
+    const commerceId = menuRows[0] ? menuRows[0].commerce_id : null;
+
+    const categories = await catalogRepository.findCategories(targetMenuId);
+    return await this.applyCategoryLimits(commerceId, categories);
   }
 
   async saveCategory(userContext, data, req) {
@@ -287,17 +384,71 @@ class CatalogService {
       }
     }
 
-    await catalogRepository.deleteCategory(targetId);
+    const [prodImages] = await db.query(
+      'SELECT image_url FROM products WHERE categoria_id = ? AND image_url IS NOT NULL AND deleted_at IS NULL',
+      [targetId]
+    );
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      await catalogRepository.softDeleteCategory(targetId, conn);
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+
+    for (const p of prodImages) {
+      if (p.image_url) {
+        this.cleanupProductImage(p.image_url).catch(() => {});
+      }
+    }
+
     await logSecurityEvent(
       userContext.id,
       'DELETE_CATALOG',
       'LOW',
       req,
-      { categoriaId: targetId, action: 'delete_category' },
+      { categoriaId: targetId, action: 'soft_delete_category', cascade: true },
       'commerce',
       userContext.commerceId
     );
     return true;
+  }
+
+  async getMenuDeletePreview(userContext, id, req) {
+    const targetId = Number(id);
+    const isSystem = userContext.actorType === 'system_user';
+
+    const menu = await catalogRepository.findMenuById(targetId);
+    if (!menu) throw new NotFoundError('Menú no encontrado.');
+
+    if (!isSystem) {
+      const isOwner = await catalogRepository.checkMenuOwnership(targetId, userContext.commerceId);
+      if (!isOwner) throw new ForbiddenError('No autorizado.');
+    }
+
+    const preview = await catalogRepository.getMenuDeletePreview(targetId);
+    return { menus: 1, ...preview };
+  }
+
+  async getCategoryDeletePreview(userContext, id, req) {
+    const targetId = Number(id);
+    const isSystem = userContext.actorType === 'system_user';
+
+    const category = await catalogRepository.findCategoryById(targetId);
+    if (!category) throw new NotFoundError('Categoría no encontrada.');
+
+    if (!isSystem) {
+      const isOwner = await catalogRepository.checkCategoryOwnership(targetId, userContext.commerceId);
+      if (!isOwner) throw new ForbiddenError('No autorizado.');
+    }
+
+    const preview = await catalogRepository.getCategoryDeletePreview(targetId);
+    return { categorias: 1, ...preview };
   }
 
   async getStoreCategories(userContext, storeId, menuId, req) {
@@ -305,9 +456,11 @@ class CatalogService {
     const targetMenuId = Number(menuId);
     const isSystem = userContext.actorType === 'system_user';
 
+    const store = await storeRepository.findById(targetStoreId);
+    if (!store) throw new NotFoundError('Sede no encontrada.');
+
     if (!isSystem) {
-      const store = await storeRepository.findById(targetStoreId);
-      if (!store || store.commerce_id !== userContext.commerceId) {
+      if (store.commerce_id !== userContext.commerceId) {
         await logSecurityEvent(
           userContext.id,
           'BOLA_ATTEMPT',
@@ -321,8 +474,8 @@ class CatalogService {
       }
     }
 
-    // Nota: devuelve categorías de un menú específico con alias disponible as habilitada
-    return await catalogRepository.findStoreCategoriesWithAvailability(targetStoreId, targetMenuId);
+    const categories = await catalogRepository.findStoreCategoriesWithAvailability(targetStoreId, targetMenuId);
+    return await this.applyCategoryLimits(store.commerce_id, categories);
   }
 
   async toggleStoreCategory(userContext, data, req) {
@@ -331,15 +484,40 @@ class CatalogService {
     const targetStoreId = Number(store_id);
     const targetCategoryId = Number(categoria_id);
 
+    const store = await storeRepository.findById(targetStoreId);
+    if (!store) throw new NotFoundError('Sede no encontrada.');
+
     if (!isSystem) {
-      const store = await storeRepository.findById(targetStoreId);
-      if (!store || store.commerce_id !== userContext.commerceId) {
+      if (store.commerce_id !== userContext.commerceId) {
         throw new ForbiddenError('Acceso no autorizado.');
       }
 
       const isCategoryOwner = await catalogRepository.checkCategoryOwnership(targetCategoryId, userContext.commerceId);
       if (!isCategoryOwner) {
         throw new ForbiddenError('No autorizado para modificar esta categoría.');
+      }
+    }
+
+    // Validación Anti-Bypass para Habilitaciones
+    if (disponible) {
+      const [rows] = await db.query('SELECT menu_id FROM categorias WHERE id = ?', [targetCategoryId]);
+      const menuId = rows[0] ? rows[0].menu_id : null;
+      if (menuId) {
+        const categories = await catalogRepository.findStoreCategoriesWithAvailability(targetStoreId, menuId);
+        const limitedCategories = await this.applyCategoryLimits(store.commerce_id, categories);
+        const target = limitedCategories.find(c => Number(c.id) === targetCategoryId);
+        if (target && target.locked) {
+          await logSecurityEvent(
+            userContext.id,
+            'LIMIT_BYPASS_ATTEMPT',
+            'HIGH',
+            req,
+            { storeId: targetStoreId, categoryId: targetCategoryId, type: 'category' },
+            'store',
+            targetStoreId
+          );
+          throw new ForbiddenError('Límite del plan excedido. No es posible activar esta categoría.');
+        }
       }
     }
 
@@ -404,7 +582,15 @@ class CatalogService {
       }
     }
 
-    return await catalogRepository.findProducts(targetCategoryId);
+    // Consultar el commerce_id de la categoria para verificar si tiene la mejora de Estado Empresarial
+    const [categoryRows] = await db.query(
+      'SELECT s.commerce_id FROM categorias c JOIN menus m ON c.menu_id = m.id JOIN stores s ON m.store_id = s.id WHERE c.id = ?',
+      [targetCategoryId]
+    );
+    const targetCommerceIdFromCategory = categoryRows[0] ? categoryRows[0].commerce_id : null;
+
+    const products = await catalogRepository.findProducts(targetCategoryId);
+    return await this.applyProductLimits(targetCommerceIdFromCategory, products);
   }
 
   async saveProduct(userContext, data, req) {
@@ -487,13 +673,17 @@ class CatalogService {
       }
     }
 
-    await catalogRepository.deleteProduct(targetId);
+    if (product.image_url) {
+      this.cleanupProductImage(product.image_url).catch(() => {});
+    }
+
+    await catalogRepository.softDeleteProduct(targetId);
     await logSecurityEvent(
       userContext.id,
       'DELETE_CATALOG',
       'LOW',
       req,
-      { productId: targetId, action: 'delete_product' },
+      { productId: targetId, action: 'soft_delete_product' },
       'commerce',
       userContext.commerceId
     );
@@ -505,9 +695,11 @@ class CatalogService {
     const targetCategoryId = Number(categoriaId);
     const isSystem = userContext.actorType === 'system_user';
 
+    const store = await storeRepository.findById(targetStoreId);
+    if (!store) throw new NotFoundError('Sede no encontrada.');
+
     if (!isSystem) {
-      const store = await storeRepository.findById(targetStoreId);
-      if (!store || store.commerce_id !== userContext.commerceId) {
+      if (store.commerce_id !== userContext.commerceId) {
         await logSecurityEvent(
           userContext.id,
           'BOLA_ATTEMPT',
@@ -521,7 +713,8 @@ class CatalogService {
       }
     }
 
-    return await catalogRepository.findStoreProducts(targetStoreId, targetCategoryId);
+    const products = await catalogRepository.findStoreProducts(targetStoreId, targetCategoryId);
+    return await this.applyProductLimits(store.commerce_id, products);
   }
 
   async toggleStoreProduct(userContext, data, req) {
@@ -530,15 +723,40 @@ class CatalogService {
     const targetStoreId = Number(store_id);
     const targetProductId = Number(product_id);
 
+    const store = await storeRepository.findById(targetStoreId);
+    if (!store) throw new NotFoundError('Sede no encontrada.');
+
     if (!isSystem) {
-      const store = await storeRepository.findById(targetStoreId);
-      if (!store || store.commerce_id !== userContext.commerceId) {
+      if (store.commerce_id !== userContext.commerceId) {
         throw new ForbiddenError('Acceso no autorizado.');
       }
 
       const isProductOwner = await catalogRepository.checkProductOwnership(targetProductId, userContext.commerceId);
       if (!isProductOwner) {
         throw new ForbiddenError('No autorizado para modificar este producto.');
+      }
+    }
+
+    // Validación Anti-Bypass para Habilitaciones
+    if (disponible) {
+      const [rows] = await db.query('SELECT categoria_id FROM products WHERE id = ?', [targetProductId]);
+      const categoryId = rows[0] ? rows[0].categoria_id : null;
+      if (categoryId) {
+        const products = await catalogRepository.findStoreProducts(targetStoreId, categoryId);
+        const limitedProducts = await this.applyProductLimits(store.commerce_id, products);
+        const target = limitedProducts.find(p => Number(p.id) === targetProductId);
+        if (target && target.locked) {
+          await logSecurityEvent(
+            userContext.id,
+            'LIMIT_BYPASS_ATTEMPT',
+            'HIGH',
+            req,
+            { storeId: targetStoreId, productId: targetProductId, type: 'product' },
+            'store',
+            targetStoreId
+          );
+          throw new ForbiddenError('Límite del plan excedido. No es posible activar este producto.');
+        }
       }
     }
 
@@ -597,6 +815,27 @@ class CatalogService {
         newId
       );
       return newId;
+    }
+  }
+
+  async cleanupProductImage(imageUrl) {
+    try {
+      if (!imageUrl || !imageUrl.includes('/uploads/products/')) return;
+      const parts = imageUrl.split('/');
+      const fileName = parts[parts.length - 1];
+      const mediaServerUrl = process.env.MEDIA_SERVER_URL || 'http://localhost:4001';
+      
+      const response = await fetch(`${mediaServerUrl}/api/media/delete/product/${fileName}`, {
+        method: 'DELETE',
+        headers: {
+          'x-internal-key': process.env.INTERNAL_API_KEY || ''
+        }
+      });
+      if (!response.ok) {
+        console.error(`[PRODUCT_IMAGE_CLEANUP_FAILED] Status: ${response.status}`);
+      }
+    } catch (err) {
+      console.error('[PRODUCT_IMAGE_CLEANUP_ERROR]', err.message);
     }
   }
 }

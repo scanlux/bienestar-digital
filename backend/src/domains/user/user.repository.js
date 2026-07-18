@@ -124,41 +124,50 @@ class UserRepository {
   }
 
   async checkUserPermission(userType, userId, permissionName) {
+    let colName = 'user_id';
+    if (userType === 'system_user') colName = 'system_user_id';
+    else if (userType === 'operator') colName = 'operator_id';
+
     const [rows] = await db.query(`
       SELECT 1
       FROM user_roles ur
       JOIN role_permissions rp ON rp.role_id = ur.role_id
       JOIN permissions p ON p.id = rp.permission_id
-      WHERE ur.user_type = ? AND ur.user_id = ? AND p.name = ?
-    `, [userType, userId, permissionName]);
+      WHERE ur.${colName} = ? AND p.name = ?
+    `, [userId, permissionName]);
     return rows.length > 0;
   }
 
   async findSystemAndAdminUsers() {
     const [rows] = await db.query(`
       SELECT u.id, u.email, u.rol, u.estado, 
+             u.financial_pin_locked, u.financial_pin_attempts,
              p.nombres, p.apellidos 
-      FROM users u
+     FROM users u
       LEFT JOIN profiles p ON p.usuario_id = u.id
-      WHERE u.rol IN ('admin', 'system')
+      WHERE u.rol IN ('admin', 'system', 'customer')
     `);
     return rows;
   }
 
-  async findUserRolesAndPermissions(userId) {
+  async findUserRolesAndPermissions(userId, userType = 'user') {
+    let colName = 'user_id';
+    if (userType === 'system_user') colName = 'system_user_id';
+    else if (userType === 'operator') colName = 'operator_id';
+
     const [permissionsData] = await db.query(`
       SELECT DISTINCT p.name 
       FROM user_roles ur
       JOIN role_permissions rp ON rp.role_id = ur.role_id
       JOIN permissions p ON p.id = rp.permission_id
-      WHERE ur.user_type = 'user' AND ur.user_id = ?
+      WHERE ur.${colName} = ?
     `, [userId]);
 
     const [rolesData] = await db.query(`
       SELECT r.name, r.id
       FROM user_roles ur
       JOIN roles r ON ur.role_id = r.id
-      WHERE ur.user_type = 'user' AND ur.user_id = ?
+      WHERE ur.${colName} = ?
     `, [userId]);
 
     return {
@@ -166,6 +175,98 @@ class UserRepository {
       roles: rolesData.map(r => r.name),
       roleIds: rolesData.map(r => r.id)
     };
+  }
+
+  async findSystemUsers() {
+    const [rows] = await db.query(`
+      SELECT id, email, nivel, estado, password_locked, nombres, apellidos, created_at
+      FROM system_users
+    `);
+    return rows;
+  }
+
+  async createSystemUser(email, passwordHash, nombres, apellidos, nivel, connection) {
+    const queryExecutor = connection || db;
+    const [result] = await queryExecutor.query(
+      'INSERT INTO system_users (email, password_hash, nombres, apellidos, nivel, estado, password_locked) VALUES (?, ?, ?, ?, ?, "activo", 0)',
+      [email, passwordHash, nombres, apellidos, nivel]
+    );
+    return result.insertId;
+  }
+
+  async updateSystemUserStatus(userId, status) {
+    await db.query('UPDATE system_users SET estado = ? WHERE id = ?', [status, userId]);
+  }
+
+  async updateSystemUserPasswordLock(userId, locked) {
+    await db.query('UPDATE system_users SET password_locked = ? WHERE id = ?', [locked, userId]);
+  }
+
+  async updateUserPasswordLock(userId, locked) {
+    await db.query('UPDATE users SET password_locked = ? WHERE id = ?', [locked, userId]);
+  }
+
+  async insertModerationLog(targetUserType, targetUserId, action, reason, moderatorUserType, moderatorUserId, connection) {
+    const queryExecutor = connection || db;
+    await queryExecutor.query(
+      `INSERT INTO user_moderation_logs (target_user_type, target_user_id, action, reason, moderator_user_type, moderator_user_id) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [targetUserType, targetUserId, action, reason, moderatorUserType, moderatorUserId]
+    );
+  }
+
+  async findModerationLogs(targetUserType, targetUserId) {
+    const [rows] = await db.query(`
+      SELECT 
+        l.id,
+        l.action,
+        l.reason,
+        l.created_at,
+        l.moderator_user_type,
+        l.moderator_user_id,
+        CASE 
+          WHEN l.moderator_user_type = 'system_user' THEN CONCAT(su.nombres, ' ', su.apellidos)
+          ELSE CONCAT(p.nombres, ' ', COALESCE(p.apellidos, ''))
+        END AS moderator_name,
+        CASE 
+          WHEN l.moderator_user_type = 'system_user' THEN su.email
+          ELSE u.email
+        END AS moderator_email
+      FROM user_moderation_logs l
+      LEFT JOIN system_users su ON l.moderator_user_type = 'system_user' AND l.moderator_user_id = su.id
+      LEFT JOIN users u ON l.moderator_user_type = 'user' AND l.moderator_user_id = u.id
+      LEFT JOIN profiles p ON l.moderator_user_type = 'user' AND l.moderator_user_id = p.usuario_id
+      WHERE l.target_user_type = ? AND l.target_user_id = ?
+      ORDER BY l.created_at DESC
+    `, [targetUserType, targetUserId]);
+    return rows;
+  }
+
+  async findUserWithPinHash(id) {
+    const [rows] = await db.query(
+      'SELECT id, email, password_hash, financial_pin_hash, financial_pin_locked, financial_pin_attempts FROM users WHERE id = ?',
+      [id]
+    );
+    return rows[0] || null;
+  }
+
+  async updateUserFinancialPin(id, pinHash) {
+    await db.query(
+      'UPDATE users SET financial_pin_hash = ?, financial_pin_locked = 0, financial_pin_attempts = 0 WHERE id = ?',
+      [pinHash, id]
+    );
+  }
+
+  async lockFinancialPin(id) {
+    await db.query('UPDATE users SET financial_pin_locked = 1 WHERE id = ?', [id]);
+  }
+
+  async incrementFinancialPinAttempts(id) {
+    await db.query('UPDATE users SET financial_pin_attempts = financial_pin_attempts + 1 WHERE id = ?', [id]);
+  }
+
+  async resetFinancialPinAttempts(id) {
+    await db.query('UPDATE users SET financial_pin_locked = 0, financial_pin_attempts = 0 WHERE id = ?', [id]);
   }
 }
 

@@ -4,6 +4,8 @@ import styled from 'styled-components';
 export type BadgeStatus = 
   | 'pendiente'
   | 'preparando'
+  | 'listo'
+  | 'listo_despacho'
   | 'listo_para_envio'
   | 'en_camino'
   | 'entregado'
@@ -47,11 +49,18 @@ const StyledBadge = styled.span<{ $status: string }>`
           color: var(--emerald);
           border-color: rgba(16, 185, 129, 0.15);
         `;
+      case 'listo':
       case 'listo_para_envio':
         return `
           background: rgba(16, 185, 129, 0.08);
           color: var(--emerald);
           border-color: rgba(16, 185, 129, 0.15);
+        `;
+      case 'listo_despacho':
+        return `
+          background: rgba(59, 130, 246, 0.08);
+          color: #3b82f6;
+          border-color: rgba(59, 130, 246, 0.15);
         `;
       case 'en_camino':
         return `

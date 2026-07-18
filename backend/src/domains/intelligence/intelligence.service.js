@@ -105,6 +105,10 @@ class IntelligenceService {
       throw new BusinessError('Se requiere un prompt');
     }
 
+    if (prompt.length > 2000) {
+      throw new BusinessError('El prompt excede el límite de longitud permitido (2000 caracteres).');
+    }
+
     if (!apiKey) {
       throw new Error('API Key no configurada en el servidor');
     }

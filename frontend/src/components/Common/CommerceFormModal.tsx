@@ -21,7 +21,6 @@ interface CommerceFormData {
   direccion: string;
   logo_url: string;
   descripcion: string;
-  type: string;
 }
 
 interface CommerceFormModalProps {
@@ -190,16 +189,6 @@ export const CommerceFormModal: React.FC<CommerceFormModalProps> = ({
             />
           </InputGroup>
 
-          <InputGroup>
-            <Label>Tipo de Interfaz</Label>
-            <Select 
-              value={formData.type} 
-              onChange={e => setFormData({...formData, type: e.target.value})}
-            >
-              <option value="Empresarial">Empresarial (TikTok Style / Videos)</option>
-              <option value="Comercial">Comercial (Clasica)</option>
-            </Select>
-          </InputGroup>
 
           <SubmitButton type="submit">
             {isEditing ? 'Guardar Cambios' : 'Crear Comercio'}

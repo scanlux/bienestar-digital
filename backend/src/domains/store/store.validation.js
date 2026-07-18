@@ -5,7 +5,7 @@ const saveStoreSchema = {
 };
 
 const updateOrderAcceptanceSchema = {
-  acceptanceMode: { type: 'number', required: true }
+  acceptanceMode: { type: 'string', required: true }
 };
 
 const saveVideoSchema = {
@@ -13,14 +13,8 @@ const saveVideoSchema = {
   url: { type: 'string', required: true }
 };
 
-const subscribePlanSchema = {
-  storeId: { type: 'number', required: true },
-  commerceId: { type: 'number', required: false }
-};
-
 module.exports = {
   saveStoreSchema,
   updateOrderAcceptanceSchema,
-  saveVideoSchema,
-  subscribePlanSchema
+  saveVideoSchema
 };

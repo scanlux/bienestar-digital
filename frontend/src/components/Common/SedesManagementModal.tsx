@@ -1,12 +1,13 @@
 'use client';
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { 
   ModalOverlay, ModalContent, ModalHeader, ModalTitle, ModalSubtitle, CloseButton 
 } from '@/components/Common/ModalStyles';
 import styled from 'styled-components';
 import { ActionButton, standardCardHighlight } from '@/components/Common/UIElements';
-import { SedeEstadoBadge } from '@/components/Common/StoreHeroStyles';
+import { SedeEstadoBadge, StoreAvailabilityBadge } from '@/components/Common/StoreHeroStyles';
 import { getFullImageUrl, formatTime } from '@/utils';
 
 // Styled Components locales para restaurar la vista compacta original
@@ -142,6 +143,14 @@ const SedeRegresoAlert = styled.div`
   width: fit-content;
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    transform: scale(1.03);
+    background: #DC2626;
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.5);
+  }
 `;
 
 const SedeEditBtn = styled(ActionButton).attrs({ $variant: 'luminous' })`
@@ -193,6 +202,7 @@ export const SedesManagementModal: React.FC<SedesManagementModalProps> = ({
   onNewSede,
   onSelectSede
 }) => {
+  const router = useRouter();
   const target = modalTarget || (typeof window !== 'undefined' ? document.getElementById('modal-portal-root') : null);
   if (!isOpen || !selectedCommerce || !target) return null;
 
@@ -218,11 +228,7 @@ export const SedesManagementModal: React.FC<SedesManagementModalProps> = ({
               <div className="card-overlay" />
               <div className="card-content">
                 <SedeCardHeader>
-                  {typeof sede.is_currently_open === 'boolean' && (
-                    <SedeEstadoBadge estado={sede.is_currently_open ? 'operativo' : 'no_disponible'}>
-                      {sede.is_currently_open ? 'Abierto Ahora' : 'Cerrado'}
-                    </SedeEstadoBadge>
-                  )}
+                  <StoreAvailabilityBadge store={sede} />
                   <SedeEstadoBadge estado={sede.estado}>
                     {sede.estado}
                   </SedeEstadoBadge>
@@ -230,7 +236,10 @@ export const SedesManagementModal: React.FC<SedesManagementModalProps> = ({
                 <SedeNombre>{sede.nombre_sucursal || `Sede #${sede.id}`}</SedeNombre>
                 
                 {sede.estado !== 'operativo' && sede.fecha_regreso && new Date(sede.fecha_regreso) <= new Date() && (
-                  <SedeRegresoAlert>
+                  <SedeRegresoAlert onClick={(e) => {
+                    e.stopPropagation();
+                    router.push(`/commerce/stores/${sede.id}/profile?highlight=fecha_regreso`);
+                  }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                       <line x1="12" y1="9" x2="12" y2="13"/>

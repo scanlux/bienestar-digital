@@ -11,6 +11,9 @@ import { useModalScroll } from '@/hooks/useModalScroll';
 import { ActionButton, TransitionShield, LoadingState, Spinner, HeaderBackButton } from '@/components/Common/UIElements';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/context/AuthContext';
+import { SystemRestrictionWrapper } from '@/components/Common/SystemRestrictionWrapper';
+import { SystemRestrictionCard } from '@/components/Common/SystemRestrictionCard';
+
 import { 
   ModalOverlay, ModalContent, ModalHeader, ModalTitle, CloseButton, 
   Form, FormGrid, InputGroup, Label, Input, SubmitButton, PremiumSwitch 
@@ -134,7 +137,7 @@ export default function StoreCatalogPage({ params }: { params: { storeId: string
   const router = useRouter();
   const pathname = usePathname();
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
   const isAdminPath = pathname.startsWith('/admin');
   const permissions = user?.permissions || [];
@@ -165,8 +168,10 @@ export default function StoreCatalogPage({ params }: { params: { storeId: string
   }, []);
 
   useEffect(() => {
-    fetchInitialData();
-  }, [params.storeId, params.categoriaId]);
+    if (!isLoading && user) {
+      fetchInitialData();
+    }
+  }, [params.storeId, params.categoriaId, isLoading, user]);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -189,7 +194,7 @@ export default function StoreCatalogPage({ params }: { params: { storeId: string
       // Buscar la categoría entre los menús del comercio
       let foundCat: any = null;
       for (const m of menusRes.data) {
-        const catRes = await axios.get(`${API_URL}/api/manage/categorias/${m.id}`, { headers });
+        const catRes = await axios.get(`${API_URL}/api/manage/categories/${m.id}`, { headers });
         const match = catRes.data.find((c: any) => c.id === Number(params.categoriaId));
         if (match) {
           foundCat = match;
@@ -283,7 +288,7 @@ export default function StoreCatalogPage({ params }: { params: { storeId: string
     }
   };
 
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <LoadingState>
         <Spinner />
@@ -299,33 +304,7 @@ export default function StoreCatalogPage({ params }: { params: { storeId: string
       </HeaderBackButton>
       
       {!canViewCatalog ? (
-        <div style={{ 
-          background: 'rgba(255,255,255,0.02)', 
-          border: '1px solid rgba(255,255,255,0.06)', 
-          borderRadius: '16px', 
-          padding: '40px 24px', 
-          maxWidth: '720px', 
-          width: '100%', 
-          textAlign: 'center',
-          backdropFilter: 'blur(10px)',
-          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
-          marginTop: '20px'
-        }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>✨</div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#fff', marginBottom: '8px' }}>
-            Plan Premium Requerido: Gestión de Catálogo
-          </h2>
-          <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.4)', maxWidth: '480px', margin: '0 auto 24px auto', lineHeight: '1.5' }}>
-            Esta funcionalidad requiere activar el plan Empresarial o poseer el rol de Administrador Comercial. Para más detalles, ponte en contacto con la gerencia de tu comercio.
-          </p>
-          <ActionButton 
-            $variant="luminous" 
-            style={{ padding: '10px 24px' }}
-            onClick={handleBackClick}
-          >
-            Volver
-          </ActionButton>
-        </div>
+        <SystemRestrictionCard onBackClick={handleBackClick} />
       ) : (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -378,22 +357,25 @@ export default function StoreCatalogPage({ params }: { params: { storeId: string
                     </div>
 
                     <div className="card-bottom">
-                      <ActionButton
-                        disabled={!canWriteCatalog}
-                        style={{ padding: '6px 12px', height: 'auto', fontSize: '0.75rem', opacity: (isEnabled && canWriteCatalog) ? 1 : 0.25, cursor: (isEnabled && canWriteCatalog) ? 'pointer' : 'not-allowed' }}
-                        onClick={() => {
-                          if (isEnabled && canWriteCatalog) handleOpenEditModal(prod);
-                        }}
-                      >
-                        Editar Precio
-                      </ActionButton>
+                      <SystemRestrictionWrapper permission="write_catalog">
+                        <ActionButton
+                          disabled={!isEnabled}
+                          style={{ padding: '6px 12px', height: 'auto', fontSize: '0.75rem' }}
+                          onClick={() => {
+                            if (isEnabled) handleOpenEditModal(prod);
+                          }}
+                        >
+                          Editar Precio
+                        </ActionButton>
+                      </SystemRestrictionWrapper>
                       
-                      <PremiumSwitch 
-                        id={`prod-switch-${prod.id}`}
-                        checked={isEnabled}
-                        disabled={!canWriteCatalog}
-                        onCheckedChange={(checked) => handleProductToggle(prod.id, checked)}
-                      />
+                      <SystemRestrictionWrapper permission="write_catalog">
+                        <PremiumSwitch 
+                          id={`prod-switch-${prod.id}`}
+                          checked={isEnabled}
+                          onCheckedChange={(checked) => handleProductToggle(prod.id, checked)}
+                        />
+                      </SystemRestrictionWrapper>
                     </div>
                   </ProductSelectionCard>
                 );

@@ -5,11 +5,37 @@ function getCacheKey(ownerType, ownerId) {
   return `domi:balance:${ownerType}:${ownerId}`;
 }
 
+async function resolveOwner(ownerType, ownerId) {
+  let resolvedType = ownerType;
+  let resolvedId = ownerId;
+
+  if (ownerType === 'store') {
+    const [rows] = await db.query('SELECT usuario_id FROM stores WHERE id = ?', [ownerId]);
+    resolvedType = 'user';
+    resolvedId = rows[0]?.usuario_id || null;
+  } else if (ownerType === 'commerce') {
+    const [rows] = await db.query('SELECT usuario_id FROM commerces WHERE id = ?', [ownerId]);
+    resolvedType = 'user';
+    resolvedId = rows[0]?.usuario_id || null;
+  } else if (ownerType === 'delivery_company') {
+    const [rows] = await db.query('SELECT usuario_id FROM delivery_companies WHERE id = ?', [ownerId]);
+    resolvedType = 'user';
+    resolvedId = rows[0]?.usuario_id || null;
+  }
+
+  return { resolvedType, resolvedId };
+}
+
 /**
  * Obtiene el balance desde Redis. Si no existe, lo carga desde MariaDB y lo guarda en Redis.
  */
 async function getWalletBalance(ownerType, ownerId) {
-  const cacheKey = getCacheKey(ownerType, ownerId);
+  const { resolvedType, resolvedId } = await resolveOwner(ownerType, ownerId);
+  if (resolvedType === 'user' && !resolvedId) {
+    return 0;
+  }
+
+  const cacheKey = getCacheKey(resolvedType, resolvedId);
   const cachedBalance = await redisClient.get(cacheKey);
 
   if (cachedBalance !== null) {
@@ -17,10 +43,18 @@ async function getWalletBalance(ownerType, ownerId) {
   }
 
   // Fallback a MariaDB
-  const [rows] = await db.query(
-    "SELECT balance_custody FROM wallets WHERE owner_type = ? AND owner_id = ?", 
-    [ownerType, ownerId]
-  );
+  let query = "";
+  let params = [];
+  if (resolvedType === 'user') {
+    query = "SELECT balance_custody FROM wallets WHERE user_id = ?";
+    params = [resolvedId];
+  } else if (resolvedType === 'system') {
+    query = "SELECT balance_utility as balance_custody FROM wallets WHERE is_system = 1";
+    params = [];
+  } else {
+    throw new Error(`Tipo de dueño de billetera inválido en Redis: ${resolvedType}`);
+  }
+  const [rows] = await db.query(query, params);
   
   const balance = rows.length > 0 ? parseFloat(rows[0].balance_custody) : 0;
   
@@ -35,10 +69,15 @@ async function getWalletBalance(ownerType, ownerId) {
  * Usamos INCRBYFLOAT con valor negativo.
  */
 async function decrementBalance(ownerType, ownerId, amount) {
-  const cacheKey = getCacheKey(ownerType, ownerId);
+  const { resolvedType, resolvedId } = await resolveOwner(ownerType, ownerId);
+  if (resolvedType === 'user' && !resolvedId) {
+    throw new Error(`No se pudo resolver el propietario para decrementar balance: ${ownerType} #${ownerId}`);
+  }
+
+  const cacheKey = getCacheKey(resolvedType, resolvedId);
   
   // Asegurarnos de que existe en cache antes de decrementar
-  await getWalletBalance(ownerType, ownerId); 
+  await getWalletBalance(resolvedType, resolvedId); 
   
   const newBalanceStr = await redisClient.incrByFloat(cacheKey, -amount);
   const newBalance = parseFloat(newBalanceStr);
@@ -56,9 +95,14 @@ async function decrementBalance(ownerType, ownerId, amount) {
  * Incrementa de forma atómica el balance en Redis (Usado para Mint o Refunds)
  */
 async function incrementBalance(ownerType, ownerId, amount) {
-  const cacheKey = getCacheKey(ownerType, ownerId);
+  const { resolvedType, resolvedId } = await resolveOwner(ownerType, ownerId);
+  if (resolvedType === 'user' && !resolvedId) {
+    throw new Error(`No se pudo resolver el propietario para incrementar balance: ${ownerType} #${ownerId}`);
+  }
+
+  const cacheKey = getCacheKey(resolvedType, resolvedId);
   
-  await getWalletBalance(ownerType, ownerId);
+  await getWalletBalance(resolvedType, resolvedId);
   
   const newBalanceStr = await redisClient.incrByFloat(cacheKey, amount);
   const newBalance = parseFloat(newBalanceStr);
@@ -75,7 +119,10 @@ async function incrementBalance(ownerType, ownerId, amount) {
  * Fuerza una actualización del caché desde un valor dado (Sincronización manual)
  */
 async function setBalance(ownerType, ownerId, amount) {
-  const cacheKey = getCacheKey(ownerType, ownerId);
+  const { resolvedType, resolvedId } = await resolveOwner(ownerType, ownerId);
+  if (resolvedType === 'user' && !resolvedId) return;
+
+  const cacheKey = getCacheKey(resolvedType, resolvedId);
   await redisClient.set(cacheKey, parseFloat(amount).toFixed(4));
 }
 
@@ -83,7 +130,12 @@ async function setBalance(ownerType, ownerId, amount) {
  * Obtiene la longitud de la cola de transacciones.
  */
 async function getQueueLength() {
-  return await redisClient.lLen('domi:tx_queue');
+  try {
+    return await redisClient.xLen('domi:tx_stream');
+  } catch (err) {
+    // Si el stream no existe aún, xLen puede fallar o retornar 0
+    return 0;
+  }
 }
 
 module.exports = {

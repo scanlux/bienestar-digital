@@ -81,8 +81,28 @@ class PublicController {
 
   async createRequest(req, res) {
     try {
-      const result = await publicService.createRequest(req.body);
+      const result = await publicService.createRequest(req.body, req);
       res.status(201).json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async verifyRequestToken(req, res) {
+    try {
+      const { token } = req.query;
+      const result = await publicService.verifyRequestToken(token);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async updateRequestWithCorrections(req, res) {
+    try {
+      const { token, requestData } = req.body;
+      const result = await publicService.updateRequestWithCorrections(token, requestData, req);
+      res.json(result);
     } catch (error) {
       handleControllerError(res, error);
     }
@@ -91,6 +111,15 @@ class PublicController {
   async getMaintenanceStatus(req, res) {
     try {
       const result = await publicService.getMaintenanceStatus();
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async getMaintenanceBypassRules(req, res) {
+    try {
+      const result = await publicService.getMaintenanceBypassRules();
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

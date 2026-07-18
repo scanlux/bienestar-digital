@@ -5,15 +5,18 @@ class CatalogRepository {
     let query = 'SELECT m.* FROM menus m';
     const params = [];
     if (storeId) {
-      query += ' JOIN store_menus sm ON m.id = sm.menu_id WHERE sm.store_id = ?';
-      params.push(storeId);
       if (!isSystem) {
-        query += ' AND m.commerce_id = ?';
-        params.push(commerceId);
+        query += ' JOIN stores s ON m.store_id = s.id WHERE m.store_id = ? AND s.commerce_id = ? AND m.deleted_at IS NULL';
+        params.push(storeId, commerceId);
+      } else {
+        query += ' WHERE m.store_id = ? AND m.deleted_at IS NULL';
+        params.push(storeId);
       }
-    } else if (!isSystem) {
-      query += ' WHERE m.commerce_id = ?';
+    } else if (commerceId) {
+      query += ' JOIN stores s ON m.store_id = s.id WHERE s.commerce_id = ? AND m.deleted_at IS NULL';
       params.push(commerceId);
+    } else {
+      query += ' WHERE m.deleted_at IS NULL';
     }
     query += ' ORDER BY m.orden ASC, m.nombre ASC';
     const [rows] = await db.query(query, params);
@@ -21,33 +24,33 @@ class CatalogRepository {
   }
 
   async findMenuById(id) {
-    const [rows] = await db.query('SELECT * FROM menus WHERE id = ?', [id]);
+    const [rows] = await db.query('SELECT * FROM menus WHERE id = ? AND deleted_at IS NULL', [id]);
     return rows[0] || null;
   }
 
   async checkMenuOwnership(menuId, commerceId) {
     const [rows] = await db.query(
-      'SELECT commerce_id FROM menus WHERE id = ?',
+      'SELECT s.commerce_id FROM menus m JOIN stores s ON m.store_id = s.id WHERE m.id = ?',
       [menuId]
     );
     return rows[0] && rows[0].commerce_id === commerceId;
   }
 
   async createMenu(data) {
-    const { commerce_id, nombre, disponible, descripcion, orden } = data;
+    const { store_id, nombre, disponible, descripcion, orden } = data;
     const [result] = await db.query(
-      'INSERT INTO menus (commerce_id, nombre, disponible, descripcion, orden) VALUES (?, ?, ?, ?, ?)',
-      [commerce_id, nombre, disponible !== undefined ? disponible : 1, descripcion || null, orden || 0]
+      'INSERT INTO menus (store_id, nombre, disponible, descripcion, orden) VALUES (?, ?, ?, ?, ?)',
+      [store_id, nombre, disponible !== undefined ? disponible : 1, descripcion || null, orden || 0]
     );
     return result.insertId;
   }
 
   async updateMenu(id, data) {
-    const { nombre, disponible, descripcion, orden, commerce_id } = data;
-    if (commerce_id) {
+    const { nombre, disponible, descripcion, orden, store_id } = data;
+    if (store_id) {
       await db.query(
-        'UPDATE menus SET nombre=?, disponible=?, descripcion=?, orden=?, commerce_id=? WHERE id=?',
-        [nombre, disponible !== undefined ? disponible : 1, descripcion || null, orden || 0, commerce_id, id]
+        'UPDATE menus SET nombre=?, disponible=?, descripcion=?, orden=?, store_id=? WHERE id=?',
+        [nombre, disponible !== undefined ? disponible : 1, descripcion || null, orden || 0, store_id, id]
       );
     } else {
       await db.query(
@@ -57,13 +60,32 @@ class CatalogRepository {
     }
   }
 
-  async deleteMenu(id) {
-    await db.query('DELETE FROM menus WHERE id = ?', [id]);
+  async softDeleteMenu(id, conn) {
+    const q = conn || db;
+    // Cascada en orden: primero productos, luego categorias, luego menu
+    // Tambien limpia product_popularity: los eliminados no deben aparecer en sugerencias
+    await q.query(`
+      DELETE pp FROM product_popularity pp
+      INNER JOIN products p ON pp.product_id = p.id
+      INNER JOIN categorias c ON p.categoria_id = c.id
+      WHERE c.menu_id = ?
+    `, [id]);
+    await q.query(`
+      UPDATE products p
+      JOIN categorias c ON p.categoria_id = c.id
+      SET p.image_url = NULL, p.deleted_at = NOW(6)
+      WHERE c.menu_id = ? AND p.deleted_at IS NULL
+    `, [id]);
+    await q.query(
+      'UPDATE categorias SET deleted_at = NOW(6) WHERE menu_id = ? AND deleted_at IS NULL',
+      [id]
+    );
+    await q.query('UPDATE menus SET deleted_at = NOW(6) WHERE id = ?', [id]);
   }
 
   async findMenusByCommerce(commerceId) {
     const [rows] = await db.query(
-      'SELECT * FROM menus WHERE commerce_id = ? ORDER BY orden ASC, nombre ASC',
+      'SELECT m.* FROM menus m JOIN stores s ON m.store_id = s.id WHERE s.commerce_id = ? AND m.deleted_at IS NULL ORDER BY m.orden ASC, m.nombre ASC',
       [commerceId]
     );
     return rows;
@@ -74,7 +96,7 @@ class CatalogRepository {
       `SELECT p.* 
        FROM products p
        JOIN stores s ON p.store_id = s.id
-       WHERE s.commerce_id = ?
+       WHERE s.commerce_id = ? AND p.deleted_at IS NULL
        ORDER BY p.nombre ASC`,
       [commerceId]
     );
@@ -82,20 +104,24 @@ class CatalogRepository {
   }
 
   async findCategories(menuId) {
-    const [rows] = await db.query('SELECT * FROM categorias WHERE menu_id = ? ORDER BY orden_visual ASC', [menuId]);
+    const [rows] = await db.query(
+      'SELECT * FROM categorias WHERE menu_id = ? AND deleted_at IS NULL ORDER BY orden_visual ASC',
+      [menuId]
+    );
     return rows;
   }
 
   async findCategoryById(id) {
-    const [rows] = await db.query('SELECT * FROM categorias WHERE id = ?', [id]);
+    const [rows] = await db.query('SELECT * FROM categorias WHERE id = ? AND deleted_at IS NULL', [id]);
     return rows[0] || null;
   }
 
   async checkCategoryOwnership(categoryId, commerceId) {
     const [rows] = await db.query(
-      `SELECT m.commerce_id 
+      `SELECT s.commerce_id 
        FROM categorias c 
        JOIN menus m ON c.menu_id = m.id 
+       JOIN stores s ON m.store_id = s.id
        WHERE c.id = ?`,
       [categoryId]
     );
@@ -119,26 +145,39 @@ class CatalogRepository {
     );
   }
 
-  async deleteCategory(id) {
-    await db.query('DELETE FROM categorias WHERE id = ?', [id]);
+  async softDeleteCategory(id, conn) {
+    const q = conn || db;
+    // Limpiar popularidad de los productos de esta categoria antes del soft delete
+    await q.query(
+      'DELETE FROM product_popularity WHERE product_id IN (SELECT id FROM products WHERE categoria_id = ?)',
+      [id]
+    );
+    // Cascada: primero productos, luego la categoria
+    await q.query(
+      'UPDATE products SET image_url = NULL, deleted_at = NOW(6) WHERE categoria_id = ? AND deleted_at IS NULL',
+      [id]
+    );
+    await q.query('UPDATE categorias SET deleted_at = NOW(6) WHERE id = ?', [id]);
   }
 
   async findProducts(categoriaId) {
-    const [rows] = await db.query('SELECT * FROM products WHERE categoria_id = ? ORDER BY nombre ASC', [categoriaId]);
+    const [rows] = await db.query(
+      'SELECT * FROM products WHERE categoria_id = ? AND deleted_at IS NULL ORDER BY nombre ASC',
+      [categoriaId]
+    );
     return rows;
   }
 
   async findProductById(id) {
-    const [rows] = await db.query('SELECT * FROM products WHERE id = ?', [id]);
+    const [rows] = await db.query('SELECT * FROM products WHERE id = ? AND deleted_at IS NULL', [id]);
     return rows[0] || null;
   }
 
   async checkProductOwnership(productId, commerceId) {
     const [rows] = await db.query(
-      `SELECT m.commerce_id 
+      `SELECT s.commerce_id 
        FROM products p 
-       JOIN categorias c ON p.categoria_id = c.id 
-       JOIN menus m ON c.menu_id = m.id 
+       JOIN stores s ON p.store_id = s.id 
        WHERE p.id = ?`,
       [productId]
     );
@@ -174,22 +213,24 @@ class CatalogRepository {
     );
   }
 
-  async deleteProduct(id) {
-    await db.query('DELETE FROM products WHERE id = ?', [id]);
+  async softDeleteProduct(id, conn) {
+    const q = conn || db;
+    // Limpiar popularidad: un producto eliminado no debe aparecer en sugerencias
+    await q.query('DELETE FROM product_popularity WHERE product_id = ?', [id]);
+    await q.query('UPDATE products SET image_url = NULL, deleted_at = NOW(6) WHERE id = ?', [id]);
   }
 
   async findStoreProducts(storeId, categoriaId) {
     const [rows] = await db.query(
-      `SELECT p.id, sp.store_id, p.categoria_id, p.menu_id, p.nombre, p.descripcion_larga, 
+      `SELECT p.id, p.store_id, p.categoria_id, p.menu_id, p.nombre, p.descripcion_larga, 
               p.precio_base, p.tiempo_prep_estimado, 
-              sp.disponible, sp.disponible as habilitado,
-              sp.precio_local, sp.tiempo_prep_local,
-              COALESCE(sp.precio_local, p.precio_base) as precio_efectivo,
-              COALESCE(sp.tiempo_prep_local, p.tiempo_prep_estimado) as tiempo_efectivo,
+              p.disponible, p.disponible as habilitado,
+              NULL as precio_local, NULL as tiempo_prep_local,
+              p.precio_base as precio_efectivo,
+              p.tiempo_prep_estimado as tiempo_efectivo,
               p.image_url, p.es_vegetariano, p.tags
        FROM products p
-       JOIN store_products sp ON p.id = sp.product_id
-       WHERE sp.store_id = ? AND p.categoria_id = ?
+       WHERE p.store_id = ? AND p.categoria_id = ? AND p.deleted_at IS NULL
        ORDER BY p.nombre ASC`,
       [storeId, categoriaId]
     );
@@ -198,32 +239,32 @@ class CatalogRepository {
 
   async toggleStoreMenu(storeId, menuId, disponible) {
     await db.query(
-      `INSERT INTO store_menus (store_id, menu_id, disponible)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE disponible = VALUES(disponible)`,
-      [storeId, menuId, disponible]
+      'UPDATE menus SET disponible = ? WHERE id = ? AND store_id = ?',
+      [disponible, menuId, storeId]
     );
   }
 
   async toggleStoreCategory(storeId, categoriaId, disponible) {
     await db.query(
-      `INSERT INTO store_categories (store_id, categoria_id, disponible)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE disponible = VALUES(disponible)`,
-      [storeId, categoriaId, disponible]
+      'UPDATE categorias c JOIN menus m ON c.menu_id = m.id SET c.disponible = ? WHERE c.id = ? AND m.store_id = ?',
+      [disponible, categoriaId, storeId]
     );
   }
 
   async toggleStoreProduct(storeId, productId, disponible, precioLocal, tiempoPrepLocal) {
-    await db.query(
-      `INSERT INTO store_products (store_id, product_id, disponible, precio_local, tiempo_prep_local)
-       VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE 
-         disponible = VALUES(disponible),
-         precio_local = VALUES(precio_local),
-         tiempo_prep_local = VALUES(tiempo_prep_local)`,
-      [storeId, productId, disponible, precioLocal, tiempoPrepLocal]
-    );
+    const params = [disponible];
+    let query = 'UPDATE products SET disponible = ?';
+    if (precioLocal !== undefined && precioLocal !== null) {
+      query += ', precio_base = ?';
+      params.push(precioLocal);
+    }
+    if (tiempoPrepLocal !== undefined && tiempoPrepLocal !== null) {
+      query += ', tiempo_prep_estimado = ?';
+      params.push(tiempoPrepLocal);
+    }
+    query += ' WHERE id = ? AND store_id = ?';
+    params.push(productId, storeId);
+    await db.query(query, params);
   }
 
   async findIngredients() {
@@ -241,22 +282,47 @@ class CatalogRepository {
   }
 
   async findStoreMenusAvailability(storeId) {
-    const [rows] = await db.query('SELECT menu_id, disponible FROM store_menus WHERE store_id = ?', [storeId]);
+    const [rows] = await db.query(
+      'SELECT id as menu_id, disponible FROM menus WHERE store_id = ? AND deleted_at IS NULL',
+      [storeId]
+    );
     return rows;
   }
 
   async findStoreCategoriesWithAvailability(storeId, menuId) {
     const [rows] = await db.query(
       `SELECT c.id, c.menu_id, c.nombre, c.descripcion, c.orden_visual, 
-              COALESCE(sc.disponible, c.disponible) as habilitada,
-              COALESCE(sc.disponible, c.disponible) as disponible
+              c.disponible as habilitada,
+              c.disponible as disponible
        FROM categorias c
-       LEFT JOIN store_categories sc ON c.id = sc.categoria_id AND sc.store_id = ?
-       WHERE c.menu_id = ?
+       JOIN menus m ON c.menu_id = m.id
+       WHERE m.store_id = ? AND c.menu_id = ? AND c.deleted_at IS NULL
        ORDER BY c.orden_visual ASC`,
       [storeId, menuId]
     );
     return rows;
+  }
+
+  async getMenuDeletePreview(menuId) {
+    const [[catRow]] = await db.query(
+      'SELECT COUNT(*) as total FROM categorias WHERE menu_id = ? AND deleted_at IS NULL',
+      [menuId]
+    );
+    const [[prodRow]] = await db.query(
+      `SELECT COUNT(*) as total FROM products p
+       JOIN categorias c ON p.categoria_id = c.id
+       WHERE c.menu_id = ? AND p.deleted_at IS NULL`,
+      [menuId]
+    );
+    return { categorias: catRow.total, productos: prodRow.total };
+  }
+
+  async getCategoryDeletePreview(categoriaId) {
+    const [[prodRow]] = await db.query(
+      'SELECT COUNT(*) as total FROM products WHERE categoria_id = ? AND deleted_at IS NULL',
+      [categoriaId]
+    );
+    return { productos: prodRow.total };
   }
 }
 

@@ -66,55 +66,50 @@ class UploadService {
     }
 
     const folderName = `${entityType}s`;
-    const fileName = `${entityType}-${Date.now()}.webp`;
-    const uploadDir = path.join(__dirname, '../../uploads', folderName);
-    const uploadPath = path.join(uploadDir, fileName);
+    let fileName = `${entityType}-${Date.now()}.webp`;
 
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    await image
+    const processedBuffer = await image
       .resize({ 
         width: metadata.width > 1920 ? 1920 : metadata.width,
         withoutEnlargement: true 
       })
       .webp({ quality: 85 })
-      .toFile(uploadPath);
-    
-    if (process.env.NODE_ENV === 'production') {
-      try {
-        const fileBuffer = fs.readFileSync(uploadPath);
-        const fileBlob = new Blob([fileBuffer], { type: 'image/webp' });
-        const formData = new FormData();
-        formData.append('image', fileBlob, fileName);
+      .toBuffer();
 
-        const mediaServerUrl = process.env.MEDIA_SERVER_URL || 'https://trendy-telemetry.sytes.net';
-        console.log(`[MEDIA_UPLOAD] Enviando ${fileName} a ${mediaServerUrl}...`);
+    try {
+      const fileBlob = new Blob([processedBuffer], { type: 'image/webp' });
+      const formData = new FormData();
+      formData.append('image', fileBlob, fileName);
 
-        const response = await fetch(`${mediaServerUrl}/api/media/upload/${entityType}`, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Authorization': authHeader || ''
-          }
-        });
+      const mediaServerUrl = process.env.MEDIA_SERVER_URL || 'http://localhost:4001';
+      console.log(`[MEDIA_UPLOAD] Enviando ${fileName} en memoria a ${mediaServerUrl}...`);
 
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`HTTP ${response.status}: ${errText}`);
+      const response = await fetch(`${mediaServerUrl}/api/media/upload/${entityType}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'x-internal-key': process.env.INTERNAL_API_KEY || ''
         }
+      });
 
-        const resData = await response.json();
-        if (!resData.success) {
-          throw new Error('Respuesta de éxito falsa desde el servidor de medios');
-        }
-
-        console.log(`[MEDIA_UPLOAD] Sincronización exitosa con servidor de medios para ${fileName}`);
-      } catch (uploadError) {
-        console.error('[MEDIA_UPLOAD_ERROR] Fallo crítico al subir imagen a Bogotá:', uploadError.message);
-        throw new Error('Error al sincronizar imagen con el servidor de medios: ' + uploadError.message);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errText}`);
       }
+
+      const resData = await response.json();
+      if (!resData.success) {
+        throw new Error('Respuesta de éxito falsa desde el servidor de medios');
+      }
+
+      if (resData.filename) {
+        fileName = resData.filename;
+      }
+
+      console.log(`[MEDIA_UPLOAD] Sincronización exitosa con servidor de medios para ${fileName}`);
+    } catch (uploadError) {
+      console.error('[MEDIA_UPLOAD_ERROR] Fallo crítico al subir imagen a Bogotá:', uploadError.message);
+      throw new Error('Error al sincronizar imagen con el servidor de medios: ' + uploadError.message);
     }
 
     const relativeUrl = `/uploads/${folderName}/${fileName}`;

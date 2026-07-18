@@ -265,8 +265,33 @@ export const EditIconButton = styled.button`
   }
 `;
 
+export const DeleteIconButton = styled.button`
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+`;
+
 export const ProductCardStyle = styled.div<{ $isEnabled?: boolean; $isDisponible?: boolean; $isHighlighted?: boolean }>`
-  display: flex; gap: 12px;
+  display: flex; flex-direction: column; gap: 12px;
   background: ${p => (p.$isEnabled === false || p.$isDisponible === false) ? 'rgba(255, 255, 255, 0.015)' : 'rgba(255, 255, 255, 0.03)'};
   border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 12px;
   cursor: pointer; transition: all 0.2s ease;
@@ -286,17 +311,19 @@ export const ProductCardStyle = styled.div<{ $isEnabled?: boolean; $isDisponible
   .p-img img { width: 100%; height: 100%; object-fit: cover; }
   .p-img span { font-size: 10px; color: rgba(255,255,255,0.2); }
 
-  .p-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
-  
-  .p-info-body {
-    display: flex;
-    flex-direction: column;
+  .p-info { 
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: space-between; 
+    align-self: stretch; 
     
     h4 {
       font-size: 1.05rem;
       font-weight: 700;
       color: #fff;
       line-height: 1.2;
+      margin-top: 0.625rem;
     }
   }
 
@@ -305,7 +332,7 @@ export const ProductCardStyle = styled.div<{ $isEnabled?: boolean; $isDisponible
     font-weight: 700;
     font-size: 1.1rem;
     white-space: nowrap;
-    margin-top: 6px;
+    margin-bottom: 0.625rem;
   }
 
   .prep-time { font-size: 0.75rem; color: rgba(255,255,255,0.4); display: flex; align-items: center; gap: 4px; margin-top: 4px; }
@@ -313,12 +340,12 @@ export const ProductCardStyle = styled.div<{ $isEnabled?: boolean; $isDisponible
   
   .p-info-foot {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-top: 10px;
+    width: 100%;
+    margin-top: 4px;
     
     .action-control {
-      margin-left: auto;
+      width: 100%;
     }
     
     .edit-link {

@@ -6,6 +6,19 @@ import axios from 'axios';
 import { getAuthHeaders } from '@/utils/auth';
 import { API_URL } from '@/constants';
 import { useAlert } from '@/context/AlertContext';
+import { useToast } from '@/context/ToastContext';
+import {
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalTitle,
+  CloseButton,
+  Form,
+  InputGroup,
+  Label,
+  Input,
+  SubmitButton
+} from '@/components/Common/ModalStyles';
 
 interface Driver {
   id: number;
@@ -13,29 +26,33 @@ interface Driver {
   apellidos: string;
   cedula: string;
   telefono: string;
-  repartidor_activo: boolean;
+  repartidor_activo: number;
+  deliveries_completed: number;
+  in_progress: number;
+  earnings_cop: number;
+  cancellations: number;
 }
 
 export default function DeliveryDriversPage() {
   const { showConfirm } = useAlert();
+  const toast = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [cedulaInput, setCedulaInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [period, setPeriod] = useState<'day' | 'week'>('day');
 
   const fetchDrivers = async () => {
     try {
       setLoading(true);
       const headers = getAuthHeaders();
-      const response = await axios.get(`${API_URL}/api/delivery-company/drivers`, { headers });
+      const response = await axios.get(`${API_URL}/api/delivery-company/drivers/available?period=${period}`, { headers });
       setDrivers(response.data);
     } catch (error: any) {
-      console.warn('API error, using mock fallback. Details:', error.message);
-      // Fallback a repartidores simulados de semilla
-      setDrivers([
-        { id: 7, nombres: 'Camilo', apellidos: 'Repartidor Afiliado', cedula: '80000001', telefono: '3200000001', repartidor_activo: true }
-      ]);
+      console.error('API error fetching drivers:', error.message);
+      toast.error('Error al cargar la lista de repartidores.');
+      setDrivers([]);
     } finally {
       setLoading(false);
     }
@@ -43,14 +60,14 @@ export default function DeliveryDriversPage() {
 
   useEffect(() => {
     fetchDrivers();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
 
   const handleAffiliate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cedulaInput.trim()) return;
 
     setActionLoading(true);
-    setMessage(null);
 
     try {
       const headers = getAuthHeaders();
@@ -60,12 +77,13 @@ export default function DeliveryDriversPage() {
         { headers }
       );
       
-      setMessage({ text: 'Repartidor afiliado exitosamente', type: 'success' });
+      toast.success(response.data.message || 'Repartidor afiliado exitosamente.');
       setCedulaInput('');
+      setIsModalOpen(false);
       fetchDrivers();
     } catch (error: any) {
       const errMsg = error.response?.data?.error || 'Error al afiliar el repartidor';
-      setMessage({ text: errMsg, type: 'error' });
+      toast.error(errMsg);
     } finally {
       setActionLoading(false);
     }
@@ -73,21 +91,20 @@ export default function DeliveryDriversPage() {
 
   const handleDeaffiliate = (driverId: number) => {
     showConfirm({
-      title: 'Confirmar Desafiliacion',
+      title: 'Confirmar Desafiliación',
       message: '¿Estás seguro de que deseas desafiliar a este repartidor?',
       confirmText: 'Desafiliar',
       cancelText: 'Cancelar',
       onConfirm: async () => {
         setActionLoading(true);
-        setMessage(null);
         try {
           const headers = getAuthHeaders();
           await axios.delete(`${API_URL}/api/delivery-company/drivers/${driverId}`, { headers });
-          setMessage({ text: 'Repartidor desafiliado exitosamente', type: 'success' });
+          toast.success('Repartidor desafiliado exitosamente');
           fetchDrivers();
         } catch (error: any) {
           const errMsg = error.response?.data?.error || 'Error al desafiliar el repartidor';
-          setMessage({ text: errMsg, type: 'error' });
+          toast.error(errMsg);
         } finally {
           setActionLoading(false);
         }
@@ -96,50 +113,34 @@ export default function DeliveryDriversPage() {
   };
 
   return (
-    <Container>
-      <HeaderSection>
-        <div className="title-group">
-          <p className="subtitle">Gestión de Personal —</p>
-          <h1 className="title">Afiliar Repartidores</h1>
-        </div>
-      </HeaderSection>
-
-      <Grid>
-        {/* Formulario de Afiliación */}
-        <Card>
-          <h3>Afiliar por Cédula</h3>
-          <p className="description">
-            Ingresa la cédula del conductor registrado en Focnius para vincularlo a tu empresa de mensajería.
-          </p>
-
-          <Form onSubmit={handleAffiliate}>
-            <InputGroup>
-              <Label htmlFor="cedula">Cédula del Repartidor</Label>
-              <Input
-                type="text"
-                id="cedula"
-                placeholder="Ej. 80000001"
-                value={cedulaInput}
-                onChange={(e) => setCedulaInput(e.target.value)}
-                required
-              />
-            </InputGroup>
-
-            <SubmitBtn type="submit" disabled={actionLoading}>
-              {actionLoading ? 'Procesando...' : 'Afiliar Conductor'}
-            </SubmitBtn>
-          </Form>
-
-          {message && (
-            <AlertMessage className={message.type}>
-              {message.text}
-            </AlertMessage>
-          )}
-        </Card>
-
+    <>
+      <Container>
         {/* Listado de Repartidores */}
-        <Card className="span-2">
-          <h3>Conductores Afiliados ({drivers.length})</h3>
+        <Card>
+          <CardHeader>
+            <TitleArea>
+              <h3>Conductores Afiliados ({drivers.length})</h3>
+              <PeriodWrapper>
+                <button
+                  className={period === 'day' ? 'active' : ''}
+                  onClick={() => setPeriod('day')}
+                >
+                  Hoy
+                </button>
+                <button
+                  className={period === 'week' ? 'active' : ''}
+                  onClick={() => setPeriod('week')}
+                >
+                  Esta Semana
+                </button>
+              </PeriodWrapper>
+            </TitleArea>
+            <HeaderActions>
+              <AffiliateBtn onClick={() => setIsModalOpen(true)}>
+                Afiliar por Cédula
+              </AffiliateBtn>
+            </HeaderActions>
+          </CardHeader>
 
           {loading ? (
             <LoadingBox>Cargando lista de repartidores...</LoadingBox>
@@ -151,21 +152,41 @@ export default function DeliveryDriversPage() {
                 <thead>
                   <tr>
                     <th>Nombre Completo</th>
-                    <th>Cédula</th>
-                    <th>Teléfono</th>
                     <th>Estado de Turno</th>
+                    <th>Entregas</th>
+                    <th>En Ruta</th>
+                    <th>Cancelaciones</th>
                     <th style={{ textAlign: 'right' }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {drivers.map((drv) => (
                     <tr key={drv.id}>
-                      <td className="font-bold">{drv.nombres} {drv.apellidos}</td>
-                      <td>{drv.cedula}</td>
-                      <td>{drv.telefono}</td>
                       <td>
-                        <StatusDot $active={drv.repartidor_activo} />
-                        {drv.repartidor_activo ? 'En línea' : 'Desconectado'}
+                        <span className="font-bold">{drv.nombres} {drv.apellidos}</span>
+                        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
+                          CC: {drv.cedula} | Tel: {drv.telefono}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <StatusDot $active={drv.repartidor_activo === 1} />
+                          {drv.repartidor_activo === 1 ? 'En línea' : 'Desconectado'}
+                        </div>
+                      </td>
+                      <td>
+                        <span style={{ fontWeight: 700 }}>{drv.deliveries_completed}</span>
+                      </td>
+                      <td>
+                        <span style={{ fontWeight: 700, color: drv.in_progress > 0 ? '#3b82f6' : 'rgba(255,255,255,0.4)' }}>
+                          {drv.in_progress}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span style={{ color: drv.cancellations > 0 ? '#ff5f5f' : 'rgba(255,255,255,0.4)' }}>
+                          {drv.cancellations}
+                        </span>
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <DeleteBtn 
@@ -182,8 +203,43 @@ export default function DeliveryDriversPage() {
             </TableWrapper>
           )}
         </Card>
-      </Grid>
-    </Container>
+      </Container>
+
+      {/* Ventana Modal de Afiliación Modularizada */}
+      {isModalOpen && (
+        <ModalOverlay onClick={() => setIsModalOpen(false)}>
+          <ModalContent onClick={(e) => e.stopPropagation()} $maxWidth="450px">
+            <ModalHeader style={{ marginBottom: '1.5rem' }}>
+              <div>
+                <ModalTitle>Afiliar por Cédula</ModalTitle>
+                <p style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.85rem', marginTop: '0.5rem', lineHeight: '1.5' }}>
+                  Ingresa la cédula del conductor registrado en Focnius para vincularlo a tu empresa de mensajería.
+                </p>
+              </div>
+              <CloseButton onClick={() => setIsModalOpen(false)} style={{ fontSize: '1.2rem', margin: 0 }}>✕</CloseButton>
+            </ModalHeader>
+
+            <Form onSubmit={handleAffiliate}>
+              <InputGroup>
+                <Label htmlFor="cedula">Cédula del Repartidor</Label>
+                <Input
+                  type="text"
+                  id="cedula"
+                  placeholder="Ej. 80000001"
+                  value={cedulaInput}
+                  onChange={(e) => setCedulaInput(e.target.value)}
+                  required
+                />
+              </InputGroup>
+
+              <SubmitButton type="submit" disabled={actionLoading}>
+                {actionLoading ? 'Procesando...' : 'Afiliar Conductor'}
+              </SubmitButton>
+            </Form>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+    </>
   );
 }
 
@@ -201,103 +257,77 @@ const Container = styled.div`
   animation: ${fadeIn} 0.5s ease-out forwards;
 `;
 
-const HeaderSection = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-
-  .subtitle {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.3);
-    margin-bottom: 6px;
-  }
-  .title {
-    font-size: 2.25rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.6) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-`;
-
-const Grid = styled.div`
-  display: grid;
-  grid-template-columns: 350px 1fr;
-  gap: 24px;
-  align-items: start;
-  
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
-  }
-`;
-
 const Card = styled.div`
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 24px;
   padding: 2rem;
   backdrop-filter: blur(10px);
+`;
+
+const CardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
 
   h3 {
-    font-size: 1.1rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #fff;
-    margin-bottom: 0.5rem;
-  }
-
-  .description {
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.4);
-    line-height: 1.5;
-    margin-bottom: 1.5rem;
+    margin: 0;
   }
 `;
 
-const Form = styled.form`
+const TitleArea = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+  align-items: center;
+  gap: 1.5rem;
 `;
 
-const InputGroup = styled.div`
+const HeaderActions = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 16px;
 `;
 
-const Label = styled.label`
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.6);
-`;
-
-const Input = styled.input`
-  width: 100%;
+const PeriodWrapper = styled.div`
+  display: flex;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.85rem 1rem;
-  border-radius: 0.75rem;
-  color: #fff;
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 3px;
 
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    background: rgba(59, 130, 246, 0.02);
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.05);
+  button {
+    background: none;
+    border: none;
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    border-radius: 9px;
+    transition: all 0.2s;
+
+    &:hover {
+      color: #fff;
+    }
+
+    &.active {
+      background: #3b82f6;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
   }
 `;
 
-const SubmitBtn = styled.button`
+const AffiliateBtn = styled.button`
   background: #3b82f6;
   color: #fff;
   border: none;
-  padding: 0.85rem;
+  padding: 0.75rem 1.5rem;
   border-radius: 0.75rem;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
@@ -315,29 +345,9 @@ const SubmitBtn = styled.button`
   }
 `;
 
-const AlertMessage = styled.div`
-  margin-top: 1.25rem;
-  padding: 0.85rem 1rem;
-  border-radius: 0.75rem;
-  font-size: 0.85rem;
-  line-height: 1.4;
-  
-  &.success {
-    background: rgba(72, 214, 76, 0.1);
-    color: var(--emerald);
-    border: 1px solid rgba(72, 214, 76, 0.2);
-  }
-  
-  &.error {
-    background: rgba(255, 95, 95, 0.1);
-    color: #ff5f5f;
-    border: 1px solid rgba(255, 95, 95, 0.2);
-  }
-`;
-
 const TableWrapper = styled.div`
   overflow-x: auto;
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
 `;
 
 const Table = styled.table`
@@ -357,7 +367,7 @@ const Table = styled.table`
     padding: 1.25rem 1rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     color: rgba(255, 255, 255, 0.7);
-    
+
     &.font-bold {
       color: #fff;
       font-weight: 600;
@@ -394,7 +404,7 @@ const DeleteBtn = styled.button`
     background: rgba(255, 95, 95, 0.15);
     transform: translateY(-1px);
   }
-  
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;

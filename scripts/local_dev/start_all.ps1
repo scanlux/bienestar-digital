@@ -1,11 +1,16 @@
 # start_all.ps1 - Arranque del entorno de desarrollo local
-# Lanza 3 ventanas de PowerShell independientes:
+# Lanza 4 ventanas de PowerShell independientes:
 #   Ventana 1: Backend      (Ctrl+C para detener Node.js)
 #   Ventana 2: Frontend     (Ctrl+C para detener Next.js)
-#   Ventana 3: Dashboard    (Ctrl+C para detener el monitoreo)
+#   Ventana 3: Telemetría   (Ctrl+C para detener Telemetry/Media)
+#   Ventana 4: Dashboard    (Ctrl+C para detener el monitoreo)
 #
 # El acceso a la DB y a Redis se realiza localmente (127.0.0.1) para un aislamiento completo.
 # Detecta y detiene procesos previos ocupando los puertos de desarrollo antes de arrancar.
+
+param(
+    [switch]$Stop
+)
 
 $LOCAL_DEV_DIR = $PSScriptRoot
 $SCRIPTS_DIR = Split-Path -Parent $LOCAL_DEV_DIR
@@ -51,6 +56,49 @@ function Stop-ProcessOnPort {
 }
 
 # ============================================================
+# PROTOCOLO DE DETENCIÓN (APAGADO CRÍTICO)
+# ============================================================
+if ($Stop) {
+    Write-Host ""
+    Write-Host "==================================================" -ForegroundColor Red
+    Write-Host "   DETENIENDO ENTORNO DE DESARROLLO LOCAL" -ForegroundColor Red
+    Write-Host "==================================================" -ForegroundColor Red
+    Write-Host ""
+
+    Write-Host "[LIMPIEZA] Cerrando procesos en puertos de trabajo..." -ForegroundColor Magenta
+    Write-Host "   Frontend (puerto 3000):" -ForegroundColor White
+    Stop-ProcessOnPort -Port 3000 -Label "Frontend"
+
+    Write-Host "   Backend (puerto 4000):" -ForegroundColor White
+    Stop-ProcessOnPort -Port 4000 -Label "Backend"
+
+    Write-Host "   Telemetry/Media (puerto 4001):" -ForegroundColor White
+    Stop-ProcessOnPort -Port 4001 -Label "Telemetry"
+
+    Write-Host ""
+    Write-Host "[TERMINALES] Cerrando ventanas de PowerShell del entorno..." -ForegroundColor Magenta
+    
+    # Obtener procesos de PowerShell o pwsh que estén corriendo scripts de desarrollo
+    $devProcesses = Get-CimInstance -ClassName Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -match "pnpm run dev" -or 
+        $_.CommandLine -match "dashboard_loop" -or
+        $_.CommandLine -match "start_all"
+    }
+
+    foreach ($proc in $devProcesses) {
+        if ($proc.ProcessId -ne $PID) {
+            Write-Host "   Terminando consola (PID $($proc.ProcessId))..." -ForegroundColor DarkGray
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Entorno de desarrollo local detenido correctamente." -ForegroundColor Green
+    Write-Host "==================================================" -ForegroundColor Green
+    Exit
+}
+
+# ============================================================
 # INICIO
 # ============================================================
 Write-Host ""
@@ -60,6 +108,7 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host "   Usando: $psExe | IP Host: $dbHost" -ForegroundColor DarkGray
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host ""
+
 
 # ---- PASO 1: VERIFICAR Y LEVANTAR REDIS LOCAL ----
 Write-Host "[REDIS] Verificando servidor Redis local..." -ForegroundColor Magenta
@@ -109,27 +158,38 @@ Stop-ProcessOnPort -Port 3000 -Label "Frontend"
 Write-Host "   Backend (puerto 4000):" -ForegroundColor White
 Stop-ProcessOnPort -Port 4000 -Label "Backend"
 
+Write-Host "   Telemetry/Media (puerto 4001):" -ForegroundColor White
+Stop-ProcessOnPort -Port 4001 -Label "Telemetry"
+
 Write-Host ""
 Write-Host "   Limpieza completada. Arrancando servicios..." -ForegroundColor Green
 Write-Host ""
 
 # ---- VENTANA 1: BACKEND NODE.JS ----
-Write-Host "[1/3] Lanzando Backend (Node.js en :4000)..." -ForegroundColor Yellow
+Write-Host "[1/4] Lanzando Backend (Node.js en :4000)..." -ForegroundColor Yellow
 Start-Process $psExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location '$backendDir'; pnpm run dev"
 
 Write-Host "      Esperando 7s para que el backend inicialice..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 7
 
 # ---- VENTANA 2: FRONTEND NEXT.JS ----
-Write-Host "[2/3] Lanzando Frontend (Next.js en :3000)..." -ForegroundColor Yellow
+Write-Host "[2/4] Lanzando Frontend (Next.js en :3000)..." -ForegroundColor Yellow
 Start-Process $psExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location '$frontendDir'; pnpm run dev"
 
-Write-Host "      Esperando 5s antes de iniciar el dashboard..." -ForegroundColor DarkGray
+Write-Host "      Esperando 5s antes de iniciar Telemetry/Media..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 5
 
-# ---- VENTANA 3: DASHBOARD DE MONITOREO ----
-Write-Host "[3/3] Lanzando Dashboard de monitoreo..." -ForegroundColor Yellow
+# ---- VENTANA 3: TELEMETRY/MEDIA NODE.JS ----
+Write-Host "[3/4] Lanzando Telemetry/Media (Node.js en :4001)..." -ForegroundColor Yellow
+Start-Process $psExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location '$ROOT\telemetry'; pnpm run dev"
+
+Write-Host "      Esperando 3s antes de iniciar el dashboard..." -ForegroundColor DarkGray
+Start-Sleep -Seconds 3
+
+# ---- VENTANA 4: DASHBOARD DE MONITOREO ----
+Write-Host "[4/4] Lanzando Dashboard de monitoreo..." -ForegroundColor Yellow
 Start-Process $psExe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$dashScript`""
+
 
 Write-Host ""
 Write-Host "==================================================" -ForegroundColor Green
@@ -138,6 +198,7 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host ""
 Write-Host "  Frontend    : http://localhost:3000" -ForegroundColor White
 Write-Host "  Backend     : http://localhost:4000" -ForegroundColor White
+Write-Host "  Telemetry   : http://localhost:4001" -ForegroundColor White
 Write-Host "  DB Local    : ${dbHost}:3306" -ForegroundColor White
 Write-Host "  Redis Local : ${dbHost}:6379" -ForegroundColor White
 Write-Host ""
