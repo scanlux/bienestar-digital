@@ -83,7 +83,8 @@ async function truncateTransactionalData(c) {
     'withdrawal_accounts', 'domi_reserve_alerts', 'domi_reserve_declarations',
     'domi_peg_history', 'users', 'profiles', 'commerces', 'stores',
     'user_stores', 'store_operators', 'delivery_companies', 'registration_requests',
-    'commerce_upgrades', 'influencer_reels', 'product_popularity'
+    'commerce_upgrades', 'influencer_reels', 'product_popularity',
+    'firebase_identities', 'invitations'
   ];
 
   await c.query('SET FOREIGN_KEY_CHECKS = 0');

@@ -89,6 +89,7 @@ class OrderRepository {
         domi_cost, 
         driver_domi_cost,
         payment_method_customer,
+        group_order_id,
         store_cost_cop_snapshot,
         driver_cost_domi_snapshot,
         fiat_peg_snapshot,
@@ -124,7 +125,7 @@ class OrderRepository {
         status, 
         delivery_address, 
         notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)
     `, [
       orderData.store_id,
       orderData.customer_user_id,
@@ -132,6 +133,7 @@ class OrderRepository {
       orderData.domi_cost || 0,
       orderData.driver_domi_cost || 0,
       orderData.payment_method_customer || 'domi',
+      orderData.group_order_id || null,
       orderData.store_cost_cop_snapshot || null,
       orderData.driver_cost_domi_snapshot || null,
       orderData.fiat_peg_snapshot || null,

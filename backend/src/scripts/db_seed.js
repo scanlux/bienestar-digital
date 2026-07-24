@@ -1041,6 +1041,19 @@ const rbacData = {
       "ui_restriction_mode": "hidden",
       "created_at": "2026-07-12T12:00:00.000Z",
       "updated_at": "2026-07-12T12:00:00.000Z"
+    },
+    {
+      "id": 89,
+      "category_id": 1,
+      "name": "receive_cash_payment",
+      "description": "Recibir pagos en efectivo y acuñación de DOMIs (Instamint)",
+      "display_name": "Recibir Pago en Efectivo (Caja)",
+      "criticidad": "Alta",
+      "tipo": "Escritura",
+      "scope": "Permite registrar ingresos de dinero en efectivo y acuñar DOMIs directamente a la wallet del cliente.",
+      "ui_restriction_mode": "hidden",
+      "created_at": "2026-07-21T12:00:00.000Z",
+      "updated_at": "2026-07-21T12:00:00.000Z"
     }
   ],
   "roles": [
@@ -1494,10 +1507,6 @@ const rbacData = {
       "permission_id": 30
     },
     {
-      "role_id": 10,
-      "permission_id": 29
-    },
-    {
       "role_id": 1,
       "permission_id": 31
     },
@@ -1844,6 +1853,14 @@ const rbacData = {
     {
       "role_id": 6,
       "permission_id": 87
+    },
+    {
+      "role_id": 2,
+      "permission_id": 89
+    },
+    {
+      "role_id": 7,
+      "permission_id": 89
     }
   ],
   "endpoints": [
@@ -3783,6 +3800,7 @@ const configData = {
       "store_cancel_client_indemnity_rate": "0.250000",
       "customer_cancel_driver_delivery_pct_dispatch_rate": "0.500000",
       "driver_commission_refund_on_store_cancel_rate": "0.900000",
+      "cash_income_pin_threshold_cop": "500000.00",
       "effective_date": "2026-07-01T05:00:00.000Z",
       "notes": "Reglas iniciales completas del protocolo DOMI",
       "created_at": "2026-07-02T02:51:58.000Z",
@@ -4652,9 +4670,9 @@ async function seed(connection) {
   console.log('Seeding protocol rules...');
   for (const pr of configData.protocol_rules) {
     await c.query(
-      'INSERT IGNORE INTO protocol_rules (id, threshold_fiat_cop, base_cost_domis, percentage_rate, retention_penalty_rate, refund_standard_rate, rescue_cashback_rate, store_fixed_fee_cop, driver_fixed_fee_domi, cashback_rate_customer, score_min_for_cashback, max_monthly_yield_pct, cash_mint_expiry_days, min_domi_balance_driver, cod_capital_min_cop, driver_fixed_fee_cop, delivery_base_fare_cop, delivery_base_distance_km, delivery_extra_rate_cop_per_km, delivery_max_distance_km, max_balance_cop, free_withdrawals_per_month, withdrawal_fee_cop, score_cashback_win_base, min_collateral_ratio_post_adjust, store_subscription_fee_domi, commerce_subscription_fee_domi, wompi_min_purchase_cop, score_earned_on_purchase, score_earned_on_domi_purchase, score_penalty_domi_cancel_accepted, score_penalty_domi_cancel_in_transit, block_meters, score_penalty_domi_cancel_dispatch, score_penalty_cash_cancel_accepted, score_penalty_cash_cancel_in_transit, score_penalty_cash_cancel_dispatch, driver_cancellation_compensation_rate, driver_cancel_pre_pickup_refund_rate, driver_cancel_post_pickup_penalty_rate, customer_cancel_store_refund_prep_rate, customer_cancel_client_refund_prep_rate, customer_cancel_sys_retain_prep_rate, customer_cancel_driver_commission_refund_transit_rate, customer_cancel_store_commission_refund_dispatch_rate, customer_cancel_driver_commission_refund_dispatch_rate, customer_cancel_driver_delivery_pct_dispatch, platform_processing_fee_rate, driver_rescue_commission_refund_rate, driver_rescue_timeout_minutes, driver_rescue_max_attempts, driver_penalty_points_rescue_original, driver_rescue_chain_penalty_points, minimum_delivery_rate, store_solvency_delivery_multiplier, solvency_commission_guarantee_fraction, store_cancel_client_indemnity_domi_amount, store_penalty_points_prep, store_penalty_points_dispatch, driver_penalty_points_prep, driver_penalty_points_dispatch, driver_penalty_points_transit, store_cancel_driver_delivery_pct_rate, store_cancel_client_indemnity_rate, customer_cancel_driver_delivery_pct_dispatch_rate, driver_commission_refund_on_store_cancel_rate, effective_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT IGNORE INTO protocol_rules (id, threshold_fiat_cop, base_cost_domis, percentage_rate, retention_penalty_rate, refund_standard_rate, rescue_cashback_rate, store_fixed_fee_cop, driver_fixed_fee_domi, cashback_rate_customer, score_min_for_cashback, max_monthly_yield_pct, cash_mint_expiry_days, min_domi_balance_driver, cod_capital_min_cop, driver_fixed_fee_cop, delivery_base_fare_cop, delivery_base_distance_km, delivery_extra_rate_cop_per_km, delivery_max_distance_km, max_balance_cop, free_withdrawals_per_month, withdrawal_fee_cop, score_cashback_win_base, min_collateral_ratio_post_adjust, store_subscription_fee_domi, commerce_subscription_fee_domi, wompi_min_purchase_cop, score_earned_on_purchase, score_earned_on_domi_purchase, score_penalty_domi_cancel_accepted, score_penalty_domi_cancel_in_transit, block_meters, score_penalty_domi_cancel_dispatch, score_penalty_cash_cancel_accepted, score_penalty_cash_cancel_in_transit, score_penalty_cash_cancel_dispatch, driver_cancellation_compensation_rate, driver_cancel_pre_pickup_refund_rate, driver_cancel_post_pickup_penalty_rate, customer_cancel_store_refund_prep_rate, customer_cancel_client_refund_prep_rate, customer_cancel_sys_retain_prep_rate, customer_cancel_driver_commission_refund_transit_rate, customer_cancel_store_commission_refund_dispatch_rate, customer_cancel_driver_commission_refund_dispatch_rate, customer_cancel_driver_delivery_pct_dispatch, platform_processing_fee_rate, driver_rescue_commission_refund_rate, driver_rescue_timeout_minutes, driver_rescue_max_attempts, driver_penalty_points_rescue_original, driver_rescue_chain_penalty_points, minimum_delivery_rate, store_solvency_delivery_multiplier, solvency_commission_guarantee_fraction, store_cancel_client_indemnity_domi_amount, store_penalty_points_prep, store_penalty_points_dispatch, driver_penalty_points_prep, driver_penalty_points_dispatch, driver_penalty_points_transit, store_cancel_driver_delivery_pct_rate, store_cancel_client_indemnity_rate, customer_cancel_driver_delivery_pct_dispatch_rate, driver_commission_refund_on_store_cancel_rate, cash_income_pin_threshold_cop, effective_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        pr.id, pr.threshold_fiat_cop, pr.base_cost_domis, pr.percentage_rate, pr.retention_penalty_rate, pr.refund_standard_rate, pr.rescue_cashback_rate, pr.store_fixed_fee_cop, pr.driver_fixed_fee_domi, pr.cashback_rate_customer, pr.score_min_for_cashback, pr.max_monthly_yield_pct, pr.cash_mint_expiry_days, pr.min_domi_balance_driver, pr.cod_capital_min_cop, pr.driver_fixed_fee_cop, pr.delivery_base_fare_cop, pr.delivery_base_distance_km, pr.delivery_extra_rate_cop_per_km, pr.delivery_max_distance_km, pr.max_balance_cop, pr.free_withdrawals_per_month, pr.withdrawal_fee_cop, pr.score_cashback_win_base, pr.min_collateral_ratio_post_adjust, pr.store_subscription_fee_domi, pr.commerce_subscription_fee_domi, pr.wompi_min_purchase_cop, pr.score_earned_on_purchase, pr.score_earned_on_domi_purchase, pr.score_penalty_domi_cancel_accepted, pr.score_penalty_domi_cancel_in_transit, pr.block_meters, pr.score_penalty_domi_cancel_dispatch, pr.score_penalty_cash_cancel_accepted, pr.score_penalty_cash_cancel_in_transit, pr.score_penalty_cash_cancel_dispatch, pr.driver_cancellation_compensation_rate, pr.driver_cancel_pre_pickup_refund_rate, pr.driver_cancel_post_pickup_penalty_rate, pr.customer_cancel_store_refund_prep_rate, pr.customer_cancel_client_refund_prep_rate, pr.customer_cancel_sys_retain_prep_rate, pr.customer_cancel_driver_commission_refund_transit_rate, pr.customer_cancel_store_commission_refund_dispatch_rate, pr.customer_cancel_driver_commission_refund_dispatch_rate, pr.customer_cancel_driver_delivery_pct_dispatch, pr.platform_processing_fee_rate, pr.driver_rescue_commission_refund_rate, pr.driver_rescue_timeout_minutes, pr.driver_rescue_max_attempts, pr.driver_penalty_points_rescue_original, pr.driver_rescue_chain_penalty_points, pr.minimum_delivery_rate, pr.store_solvency_delivery_multiplier, pr.solvency_commission_guarantee_fraction, pr.store_cancel_client_indemnity_domi_amount, pr.store_penalty_points_prep, pr.store_penalty_points_dispatch, pr.driver_penalty_points_prep, pr.driver_penalty_points_dispatch, pr.driver_penalty_points_transit, pr.store_cancel_driver_delivery_pct_rate, pr.store_cancel_client_indemnity_rate, pr.customer_cancel_driver_delivery_pct_dispatch_rate, pr.driver_commission_refund_on_store_cancel_rate, pr.effective_date, pr.notes
+        pr.id, pr.threshold_fiat_cop, pr.base_cost_domis, pr.percentage_rate, pr.retention_penalty_rate, pr.refund_standard_rate, pr.rescue_cashback_rate, pr.store_fixed_fee_cop, pr.driver_fixed_fee_domi, pr.cashback_rate_customer, pr.score_min_for_cashback, pr.max_monthly_yield_pct, pr.cash_mint_expiry_days, pr.min_domi_balance_driver, pr.cod_capital_min_cop, pr.driver_fixed_fee_cop, pr.delivery_base_fare_cop, pr.delivery_base_distance_km, pr.delivery_extra_rate_cop_per_km, pr.delivery_max_distance_km, pr.max_balance_cop, pr.free_withdrawals_per_month, pr.withdrawal_fee_cop, pr.score_cashback_win_base, pr.min_collateral_ratio_post_adjust, pr.store_subscription_fee_domi, pr.commerce_subscription_fee_domi, pr.wompi_min_purchase_cop, pr.score_earned_on_purchase, pr.score_earned_on_domi_purchase, pr.score_penalty_domi_cancel_accepted, pr.score_penalty_domi_cancel_in_transit, pr.block_meters, pr.score_penalty_domi_cancel_dispatch, pr.score_penalty_cash_cancel_accepted, pr.score_penalty_cash_cancel_in_transit, pr.score_penalty_cash_cancel_dispatch, pr.driver_cancellation_compensation_rate, pr.driver_cancel_pre_pickup_refund_rate, pr.driver_cancel_post_pickup_penalty_rate, pr.customer_cancel_store_refund_prep_rate, pr.customer_cancel_client_refund_prep_rate, pr.customer_cancel_sys_retain_prep_rate, pr.customer_cancel_driver_commission_refund_transit_rate, pr.customer_cancel_store_commission_refund_dispatch_rate, pr.customer_cancel_driver_commission_refund_dispatch_rate, pr.customer_cancel_driver_delivery_pct_dispatch, pr.platform_processing_fee_rate, pr.driver_rescue_commission_refund_rate, pr.driver_rescue_timeout_minutes, pr.driver_rescue_max_attempts, pr.driver_penalty_points_rescue_original, pr.driver_rescue_chain_penalty_points, pr.minimum_delivery_rate, pr.store_solvency_delivery_multiplier, pr.solvency_commission_guarantee_fraction, pr.store_cancel_client_indemnity_domi_amount, pr.store_penalty_points_prep, pr.store_penalty_points_dispatch, pr.driver_penalty_points_prep, pr.driver_penalty_points_dispatch, pr.driver_penalty_points_transit, pr.store_cancel_driver_delivery_pct_rate, pr.store_cancel_client_indemnity_rate, pr.customer_cancel_driver_delivery_pct_dispatch_rate, pr.driver_commission_refund_on_store_cancel_rate, pr.cash_income_pin_threshold_cop, pr.effective_date, pr.notes
       ]
     );
   }
@@ -4821,10 +4839,22 @@ async function seedLocalTestData(c) {
   // 2. Crear usuarios administradores de comercios y sedes
   const testUsers = [
     { email: 'admin_commerce_1@trendy.sytes.net', nombres: 'Carlos Andrés', apellidos: 'Gómez Restrepo', cedula: '1000000001', telefono: '3000000001' },
+    { email: 'admin_commerce_2@trendy.sytes.net', nombres: 'Tomás Alberto', apellidos: 'Mendoza Ruiz', cedula: '1000000004', telefono: '3000000004' },
+    { email: 'admin_commerce_3@trendy.sytes.net', nombres: 'Héctor Fabio', apellidos: 'Prada Castro', cedula: '1000000014', telefono: '3000000014' },
+    { email: 'admin_commerce_4@trendy.sytes.net', nombres: 'Jorge Mario', apellidos: 'Giraldo Valencia', cedula: '1000000015', telefono: '3000000015' },
+    { email: 'admin_commerce_5@trendy.sytes.net', nombres: 'Ana María', apellidos: 'Ospina Duque', cedula: '1000000016', telefono: '3000000016' },
+    
     { email: 'admin_store_1@trendy.sytes.net', nombres: 'Sandro Rafael', apellidos: 'Gutiérrez Díaz', cedula: '1000000002', telefono: '3000000002' },
     { email: 'admin_store_2@trendy.sytes.net', nombres: 'Silvia Patricia', apellidos: 'Palacios Ortiz', cedula: '1000000003', telefono: '3000000003' },
-    { email: 'admin_commerce_2@trendy.sytes.net', nombres: 'Tomás Alberto', apellidos: 'Mendoza Ruiz', cedula: '1000000004', telefono: '3000000004' },
     { email: 'admin_store_3@trendy.sytes.net', nombres: 'Yuli Andrea', apellidos: 'Rincón Castiblanco', cedula: '1000000005', telefono: '3000000005' },
+    { email: 'admin_store_4@trendy.sytes.net', nombres: 'Mauricio Andrés', apellidos: 'López Pérez', cedula: '1000000007', telefono: '3000000007' },
+    { email: 'admin_store_5@trendy.sytes.net', nombres: 'Diana Marcela', apellidos: 'Castro Rojas', cedula: '1000000008', telefono: '3000000008' },
+    { email: 'admin_store_6@trendy.sytes.net', nombres: 'Juan Gabriel', apellidos: 'Ríos Vélez', cedula: '1000000009', telefono: '3000000009' },
+    { email: 'admin_store_7@trendy.sytes.net', nombres: 'Martha Liliana', apellidos: 'Pinto Silva', cedula: '1000000010', telefono: '3000000010' },
+    { email: 'admin_store_8@trendy.sytes.net', nombres: 'Francisco Luis', apellidos: 'Bernal Soto', cedula: '1000000011', telefono: '3000000011' },
+    { email: 'admin_store_9@trendy.sytes.net', nombres: 'Claudia Helena', apellidos: 'Vargas Caro', cedula: '1000000012', telefono: '3000000012' },
+    { email: 'admin_store_10@trendy.sytes.net', nombres: 'Pedro Nel', apellidos: 'Gómez Cardona', cedula: '1000000013', telefono: '3000000013' },
+    
     { email: 'admin_delivery_1@trendy.sytes.net', nombres: 'Diego Alejandro', apellidos: 'Torres Beltrán', cedula: '1000000006', telefono: '3000000006' }
   ];
 
@@ -4859,25 +4889,58 @@ async function seedLocalTestData(c) {
   const commercesData = [
     { 
       email: 'admin_commerce_1@trendy.sytes.net', 
-      nombre: 'Trattoria & Gourmet', 
+      nombre: 'Parrilla y Carbón Tolimense', 
       nit: '901234567-1', 
       nit_dv: '1', 
       type: 'Empresarial',
       telefono: '3102345678',
-      ciudad: 'Bogotá',
-      direccion: 'Carrera 7 # 100 - 01',
-      logo_url: 'https://picsum.photos/600/400'
+      ciudad: 'Yopal',
+      direccion: 'Calle 10 # 20 - 45',
+      logo_url: 'https://picsum.photos/800/600?random=11'
     },
     { 
       email: 'admin_commerce_2@trendy.sytes.net', 
-      nombre: 'Taco Loco', 
+      nombre: 'Sabor Azteca Coyoacán', 
       nit: '901234567-2', 
       nit_dv: '2', 
       type: 'Comercial',
       telefono: '3159876543',
-      ciudad: 'Bogotá',
-      direccion: 'Calle 85 # 11 - 53',
-      logo_url: 'https://picsum.photos/600/400'
+      ciudad: 'Yopal',
+      direccion: 'Calle 24 # 14 - 15',
+      logo_url: 'https://picsum.photos/800/600?random=12'
+    },
+    { 
+      email: 'admin_commerce_3@trendy.sytes.net', 
+      nombre: 'La Trattoria Da Vinci', 
+      nit: '901234567-3', 
+      nit_dv: '3', 
+      type: 'Empresarial',
+      telefono: '3124567890',
+      ciudad: 'Yopal',
+      direccion: 'Carrera 19 # 15 - 32',
+      logo_url: 'https://picsum.photos/800/600?random=13'
+    },
+    { 
+      email: 'admin_commerce_4@trendy.sytes.net', 
+      nombre: 'Wok & Sushi Express', 
+      nit: '901234567-4', 
+      nit_dv: '4', 
+      type: 'Comercial',
+      telefono: '3201234567',
+      ciudad: 'Yopal',
+      direccion: 'Calle 9 # 21 - 10',
+      logo_url: 'https://picsum.photos/800/600?random=14'
+    },
+    { 
+      email: 'admin_commerce_5@trendy.sytes.net', 
+      nombre: 'Panadería y Repostería El Maná', 
+      nit: '901234567-5', 
+      nit_dv: '5', 
+      type: 'Comercial',
+      telefono: '3119876543',
+      ciudad: 'Yopal',
+      direccion: 'Carrera 20 # 11 - 05',
+      logo_url: 'https://picsum.photos/800/600?random=15'
     }
   ];
 
@@ -4908,9 +4971,25 @@ async function seedLocalTestData(c) {
 
   // 4. Crear Sedes (Stores)
   const storesData = [
-    { commerce: 'Trattoria & Gourmet', email: 'admin_store_1@trendy.sytes.net', sucursal: 'Chapinero', matricula: 'MAT-ST-001', direccion: 'Calle 62 #7-35, Bogotá', lat: 4.6482, lng: -74.0612, telefono: '3009998881', telefono_domicilio: '3009998881', image_url: 'https://picsum.photos/600/400', contacto_directo: 'Sandro Rafael Gutiérrez Díaz' },
-    { commerce: 'Trattoria & Gourmet', email: 'admin_store_2@trendy.sytes.net', sucursal: 'Cedritos', matricula: 'MAT-ST-002', direccion: 'Calle 142 #19-20, Bogotá', lat: 4.7212, lng: -74.0412, telefono: '3009998882', telefono_domicilio: '3009998882', image_url: 'https://picsum.photos/600/400', contacto_directo: 'Silvia Patricia Palacios Ortiz' },
-    { commerce: 'Taco Loco', email: 'admin_store_3@trendy.sytes.net', sucursal: 'Centro Yopal', matricula: 'MAT-ST-003', direccion: 'Carrera 20 #9-45, Yopal', lat: 5.3378, lng: -72.3958, telefono: '3009998883', telefono_domicilio: '3009998883', image_url: 'https://picsum.photos/600/400', contacto_directo: 'Yuli Andrea Rincón Castiblanco' }
+    // Parrilla y Carbón Tolimense (Commerce 1)
+    { commerce: 'Parrilla y Carbón Tolimense', email: 'admin_store_1@trendy.sytes.net', sucursal: 'Tolimense - Centro Yopal', matricula: 'MAT-ST-001', direccion: 'Carrera 20 #9-45, Yopal', lat: 5.3378, lng: -72.3958, telefono: '3009998881', telefono_domicilio: '3009998881', image_url: 'https://picsum.photos/800/600?random=1', contacto_directo: 'Sandro Rafael Gutiérrez Díaz' },
+    { commerce: 'Parrilla y Carbón Tolimense', email: 'admin_store_2@trendy.sytes.net', sucursal: 'Tolimense - Unicentro Yopal', matricula: 'MAT-ST-002', direccion: 'Calle 30 #28-40, Yopal', lat: 5.3262, lng: -72.3895, telefono: '3009998882', telefono_domicilio: '3009998882', image_url: 'https://picsum.photos/800/600?random=2', contacto_directo: 'Silvia Patricia Palacios Ortiz' },
+    
+    // Sabor Azteca Coyoacán (Commerce 2)
+    { commerce: 'Sabor Azteca Coyoacán', email: 'admin_store_3@trendy.sytes.net', sucursal: 'Sabor Azteca - Campiña', matricula: 'MAT-ST-003', direccion: 'Calle 24 #14-25, Yopal', lat: 5.3315, lng: -72.4045, telefono: '3009998883', telefono_domicilio: '3009998883', image_url: 'https://picsum.photos/800/600?random=3', contacto_directo: 'Yuli Andrea Rincón Castiblanco' },
+    { commerce: 'Sabor Azteca Coyoacán', email: 'admin_store_4@trendy.sytes.net', sucursal: 'Sabor Azteca - Resurgimiento', matricula: 'MAT-ST-004', direccion: 'Carrera 19 #13-40, Yopal', lat: 5.3392, lng: -72.3980, telefono: '3009998884', telefono_domicilio: '3009998884', image_url: 'https://picsum.photos/800/600?random=4', contacto_directo: 'Mauricio Andrés López Pérez' },
+    
+    // La Trattoria Da Vinci (Commerce 3)
+    { commerce: 'La Trattoria Da Vinci', email: 'admin_store_5@trendy.sytes.net', sucursal: 'Da Vinci - El Hobo', matricula: 'MAT-ST-005', direccion: 'Diagonal 9 #24-10, Yopal', lat: 5.3421, lng: -72.3924, telefono: '3009998885', telefono_domicilio: '3009998885', image_url: 'https://picsum.photos/800/600?random=5', contacto_directo: 'Diana Marcela Castro Rojas' },
+    { commerce: 'La Trattoria Da Vinci', email: 'admin_store_6@trendy.sytes.net', sucursal: 'Da Vinci - Aeropuerto', matricula: 'MAT-ST-006', direccion: 'Calle 35 #18-20, Yopal', lat: 5.3491, lng: -72.3845, telefono: '3009998886', telefono_domicilio: '3009998886', image_url: 'https://picsum.photos/800/600?random=6', contacto_directo: 'Juan Gabriel Ríos Vélez' },
+    
+    // Wok & Sushi Express (Commerce 4)
+    { commerce: 'Wok & Sushi Express', email: 'admin_store_7@trendy.sytes.net', sucursal: 'Wok & Sushi - Morichal', matricula: 'MAT-ST-007', direccion: 'Calle 40 #11-15, Yopal', lat: 5.3205, lng: -72.4110, telefono: '3009998887', telefono_domicilio: '3009998887', image_url: 'https://picsum.photos/800/600?random=7', contacto_directo: 'Martha Liliana Pinto Silva' },
+    { commerce: 'Wok & Sushi Express', email: 'admin_store_8@trendy.sytes.net', sucursal: 'Wok & Sushi - La Pradera', matricula: 'MAT-ST-008', direccion: 'Carrera 29 #26-10, Yopal', lat: 5.3458, lng: -72.3995, telefono: '3009998888', telefono_domicilio: '3009998888', image_url: 'https://picsum.photos/800/600?random=8', contacto_directo: 'Francisco Luis Bernal Soto' },
+    
+    // Panadería y Repostería El Maná (Commerce 5)
+    { commerce: 'Panadería y Repostería El Maná', email: 'admin_store_9@trendy.sytes.net', sucursal: 'El Maná - Terminal', matricula: 'MAT-ST-009', direccion: 'Calle 15 #19-45, Yopal', lat: 5.3340, lng: -72.3910, telefono: '3009998890', telefono_domicilio: '3009998890', image_url: 'https://picsum.photos/800/600?random=9', contacto_directo: 'Claudia Helena Vargas Caro' },
+    { commerce: 'Panadería y Repostería El Maná', email: 'admin_store_10@trendy.sytes.net', sucursal: 'El Maná - Los Helechos', matricula: 'MAT-ST-010', direccion: 'Carrera 15 #23-30, Yopal', lat: 5.3400, lng: -72.4080, telefono: '3009998891', telefono_domicilio: '3009998891', image_url: 'https://picsum.photos/800/600?random=10', contacto_directo: 'Pedro Nel Gómez Cardona' }
   ];
 
   const storeIds = {};
@@ -4946,11 +5025,34 @@ async function seedLocalTestData(c) {
       );
     }
 
-    // Seedar horarios de atención por defecto (Lunes a Domingo, 8am a 10pm)
+    // Seedar horarios de atención específicos:
+    // - 3 sedes abiertas 24 horas (MAT-ST-001, MAT-ST-002, MAT-ST-003)
+    // - 5 sedes abiertas de 08:00 a 20:00 (MAT-ST-004 a MAT-ST-008)
+    // - 2 sedes por defecto de 08:00 a 22:00 (MAT-ST-009, MAT-ST-010)
+    let openTime = "08:00:00";
+    let closeTime = "22:00:00";
+    let is24h = 0;
+
+    if (sd.matricula === 'MAT-ST-001' || sd.matricula === 'MAT-ST-002' || sd.matricula === 'MAT-ST-003') {
+      is24h = 1;
+      openTime = "00:00:00";
+      closeTime = "23:59:59";
+    } else if (
+      sd.matricula === 'MAT-ST-004' || 
+      sd.matricula === 'MAT-ST-005' || 
+      sd.matricula === 'MAT-ST-006' || 
+      sd.matricula === 'MAT-ST-007' || 
+      sd.matricula === 'MAT-ST-008'
+    ) {
+      is24h = 0;
+      openTime = "08:00:00";
+      closeTime = "20:00:00";
+    }
+
     for (let day = 0; day <= 6; day++) {
       await c.query(
-        'INSERT IGNORE INTO store_operating_hours (store_id, day_index, status, open_time, close_time, is_24h) VALUES (?, ?, "abierto", "08:00:00", "22:00:00", 0)',
-        [storeId, day]
+        'INSERT IGNORE INTO store_operating_hours (store_id, day_index, status, open_time, close_time, is_24h) VALUES (?, ?, "abierto", ?, ?, ?)',
+        [storeId, day, openTime, closeTime, is24h]
       );
     }
   }
@@ -5053,6 +5155,8 @@ async function seedLocalTestData(c) {
   const menuNames = ['Menú Principal'];
   for (const storeName of Object.keys(storeIds)) {
     const storeId = storeIds[storeName];
+    const storeData = storesData.find(s => s.sucursal === storeName);
+    const commerceName = storeData ? storeData.commerce : 'Parrilla y Carbón Tolimense';
     for (const mn of menuNames) {
       const [menuCheck] = await c.query('SELECT id FROM menus WHERE store_id = ? AND nombre = ? AND deleted_at IS NULL', [storeId, mn]);
       let menuId;
@@ -5082,40 +5186,23 @@ async function seedLocalTestData(c) {
         }
 
         // Crear exactamente 5 Productos por Categoría
-        const prodData = cn === 'Platos Fuertes' ? [
-          { name: 'Hamburguesa Angus Premium', price: 24900.00, prep_time: 15, description: 'Hamburguesa con 150g de carne Angus premium, queso cheddar derretido, lechuga fresca, tomate en rodajas y salsa de la casa en pan brioche artesanal.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Pizza Especial de la Casa', price: 28900.00, prep_time: 18, description: 'Pizza artesanal mediana con salsa pomodoro, queso mozzarella, pepperoni, jamón, champiñones y pimentón fresco.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Tacos al Pastor (3 Unidades)', price: 18900.00, prep_time: 12, description: 'Tres deliciosos tacos con carne de cerdo marinada al pastor, piña, cebolla, cilantro fresco y salsa verde sobre tortillas de maíz.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Lasaña de Carne al Horno', price: 21900.00, prep_time: 20, description: 'Lasaña clásica con capas de pasta, carne boloñesa casera, salsa bechamel y abundante queso mozzarella gratinado.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Pollo Teriyaki con Arroz', price: 22900.00, prep_time: 15, description: 'Jugoso filete de pechuga de pollo bañado en salsa teriyaki, servido con arroz blanco y vegetales al wok.', image_url: 'https://picsum.photos/600/400' }
-        ] : cn === 'Entradas' ? [
-          { name: 'Papas Fritas Rústicas', price: 7900.00, prep_time: 8, description: 'Papas fritas de corte grueso sazonadas con sal marina y finas hierbas aromáticas.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Aros de Cebolla Crujientes', price: 8900.00, prep_time: 8, description: 'Aros de cebolla apanados y fritos a la perfección, acompañados de salsa BBQ de la casa.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Nachos con Guacamole', price: 12900.00, prep_time: 8, description: 'Totopos crujientes de maíz acompañados de guacamole fresco con pico de gallo y queso cheddar fundido.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Deditos de Queso (5 Und)', price: 9900.00, prep_time: 7, description: 'Cinco deditos de masa hojaldrada rellenos de queso mozzarella derretido, acompañados de salsa de piña.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Empanaditas Criollas (4 Und)', price: 8500.00, prep_time: 8, description: 'Cuatro empanaditas crocantes rellenas de carne desmechada y papa, acompañadas de ají casero.', image_url: 'https://picsum.photos/600/400' }
-        ] : [
-          { name: 'Coca-Cola Sabor Original 350ml', price: 4200.00, prep_time: 3, description: 'Refrescante Coca-Cola sabor original en botella de vidrio.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Jugo Natural de Lulo', price: 5500.00, prep_time: 5, description: 'Jugo natural de lulo fresco preparado al instante en agua purificada.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Limonada de Coco Fria', price: 7500.00, prep_time: 5, description: 'Deliciosa limonada cremosa de coco natural, hielo frapeado y leche condensada.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Volcán de Chocolate con Helado', price: 12500.00, prep_time: 12, description: 'Delicioso bizcocho de chocolate con centro líquido caliente, acompañado de helado de vainilla.', image_url: 'https://picsum.photos/600/400' },
-          { name: 'Cheesecake de Frutos Rojos', price: 11900.00, prep_time: 5, description: 'Tarta cremosa de queso sobre base crujiente de galleta, cubierta con coulis artesanal de frutos rojos.', image_url: 'https://picsum.photos/600/400' }
-        ];
+        const prodData = getStoreProducts(commerceName, storeName, cn);
 
         for (const pd of prodData) {
+          const finalImageUrl = `https://picsum.photos/800/600?random=${storeId * 10 + catNames.indexOf(cn) * 5 + prodData.indexOf(pd) + 1}`;
           const [prodCheck] = await c.query('SELECT id FROM products WHERE store_id = ? AND nombre = ? AND deleted_at IS NULL', [storeId, pd.name]);
           let productId;
           if (prodCheck.length === 0) {
             const [res] = await c.query(
               'INSERT INTO products (store_id, menu_id, categoria_id, nombre, precio_base, disponible, es_vegetariano, tiempo_prep_estimado, descripcion_larga, image_url) VALUES (?, ?, ?, ?, ?, 1, 0, ?, ?, ?)',
-              [storeId, menuId, catId, pd.name, pd.price, pd.prep_time, pd.description, pd.image_url]
+              [storeId, menuId, catId, pd.name, pd.price, pd.prep_time, pd.description, finalImageUrl]
             );
             productId = res.insertId;
           } else {
             productId = prodCheck[0].id;
             await c.query(
               'UPDATE products SET tiempo_prep_estimado = ?, descripcion_larga = ?, precio_base = ?, image_url = ? WHERE id = ?',
-              [pd.prep_time, pd.description, pd.price, pd.image_url, productId]
+              [pd.prep_time, pd.description, pd.price, finalImageUrl, productId]
             );
           }
 
@@ -5139,6 +5226,7 @@ async function seedLocalTestData(c) {
 
     console.log('Depositing 100 DOMIs to all stores, drivers, and customers...');
     const emailsToFund = [
+      ...commercesData.map(co => co.email),
       ...storesData.map(s => s.email),
       ...drivers.map(d => d.email),
       ...customers.map(cu => cu.email)
@@ -5189,6 +5277,176 @@ async function seedLocalTestData(c) {
         }
       }
     }
+    // 12. Seed Firebase Identities (mocking for test drivers & customers)
+    const firebaseIdentities = [
+      { email: 'driver_1@trendy.sytes.net', uid: 'mock_driver_1_uid' },
+      { email: 'driver_2@trendy.sytes.net', uid: 'mock_driver_2_uid' },
+      { email: 'customer_1@trendy.sytes.net', uid: 'mock_customer_1_uid' }
+    ];
+    for (const fi of firebaseIdentities) {
+      const [uRows] = await c.query('SELECT id FROM users WHERE email = ?', [fi.email]);
+      if (uRows.length > 0) {
+        const userId = uRows[0].id;
+        await c.query(
+          'INSERT IGNORE INTO firebase_identities (user_id, firebase_uid, provider) VALUES (?, ?, "firebase")',
+          [userId, fi.uid]
+        );
+      }
+    }
+
+    // 13. Seed Mock Invitations
+    const [adminRows] = await c.query('SELECT id FROM users WHERE rol = "admin" LIMIT 1');
+    if (adminRows.length > 0) {
+      const adminId = adminRows[0].id;
+      await c.query(
+        'INSERT IGNORE INTO invitations (sent_by_user_id, recipient_email, status) VALUES (?, "new_partner@example.com", "pending")',
+        [adminId]
+      );
+    }
+  }
+}
+
+function getStoreProducts(commerceName, sucursalName, categoryName) {
+  // Differentiator to make product names unique even for stores under the same commerce
+  const suffix = sucursalName.includes('Centro') ? 'Centro' : sucursalName.includes('Unicentro') ? 'Unicentro' : sucursalName.includes('Campiña') ? 'Campiña' : sucursalName.includes('Resurgimiento') ? 'Resurgimiento' : sucursalName.includes('Hobo') ? 'Hobo' : sucursalName.includes('Aeropuerto') ? 'Aeropuerto' : sucursalName.includes('Morichal') ? 'Morichal' : sucursalName.includes('Pradera') ? 'Pradera' : sucursalName.includes('Terminal') ? 'Terminal' : 'Helechos';
+
+  if (commerceName === 'Parrilla y Carbón Tolimense') {
+    if (categoryName === 'Platos Fuertes') {
+      return [
+        { name: `Punta de Anca Tolimense ${suffix}`, price: 29900.00, prep_time: 15, description: 'Corte madurado a la parrilla, acompañado de yuca y papa salada con hogao casero.' },
+        { name: `Picada Familiar al Carbón ${suffix}`, price: 45900.00, prep_time: 20, description: 'Mezcla de res, cerdo, pechuga de pollo, chorizo, morcilla, papa criolla y patacón.' },
+        { name: `Churrasco al Carbón Argentino ${suffix}`, price: 32900.00, prep_time: 18, description: 'Tierno lomo de res abierto a la parrilla con chimichurri tradicional de la casa.' },
+        { name: `Costillitas de Cerdo BBQ ${suffix}`, price: 28900.00, prep_time: 15, description: 'Costillas ahumadas tiernas bañadas en salsa barbacoa y porción de papas rústicas.' },
+        { name: `Pechuga Gratinada al Carbón ${suffix}`, price: 24900.00, prep_time: 15, description: 'Filete de pechuga gratinado con queso mozzarella y champiñones al ajillo.' }
+      ];
+    } else if (categoryName === 'Entradas') {
+      return [
+        { name: `Chorizo con Arepa Tolimense ${suffix}`, price: 8900.00, prep_time: 8, description: 'Chorizo artesanal asado acompañado de arepa blanca delgada con mantequilla.' },
+        { name: `Morcilla de Arroz Crujiente ${suffix}`, price: 7900.00, prep_time: 7, description: 'Porciones de morcilla tradicional frita con limón y ají criollo.' },
+        { name: `Papas Criollas con Hogao ${suffix}`, price: 6900.00, prep_time: 6, description: 'Papas criollas fritas acompañadas de salsa de tomate y cebolla guisada.' },
+        { name: `Chicharrón de Cerdo Crocante ${suffix}`, price: 12900.00, prep_time: 10, description: 'Tiras de chicharrón con piel tostada y carne tierna acompañadas de patacón.' },
+        { name: `Empanaditas de Carne Tolimenses ${suffix}`, price: 7500.00, prep_time: 8, description: 'Cuatro empanadas doradas rellenas de guiso de carne y papa.' }
+      ];
+    } else { // Bebidas y Postres
+      return [
+        { name: `Limonada Natural Cítrica ${suffix}`, price: 5500.00, prep_time: 5, description: 'Bebida fría de limón fresco exprimido al instante.' },
+        { name: `Jugo de Guanábana en Leche ${suffix}`, price: 7500.00, prep_time: 5, description: 'Cremoso jugo de pulpa de guanábana preparado con leche entera.' },
+        { name: `Gaseosa Postobón Manzana ${suffix}`, price: 3800.00, prep_time: 3, description: 'Bebida gaseosa sabor a manzana en botella personal.' },
+        { name: `Cuajada con Melado de Panela ${suffix}`, price: 8900.00, prep_time: 5, description: 'Porción de cuajada fresca bañada en dulce de panela caliente.' },
+        { name: `Flan de Caramelo Casero ${suffix}`, price: 9900.00, prep_time: 6, description: 'Tradicional flan de leche y huevos con caramelo líquido.' }
+      ];
+    }
+  }
+
+  if (commerceName === 'Sabor Azteca Coyoacán') {
+    if (categoryName === 'Platos Fuertes') {
+      return [
+        { name: `Burrito Supremo al Pastor ${suffix}`, price: 21900.00, prep_time: 12, description: 'Tortilla gigante de trigo rellena de cerdo al pastor, arroz, frijol refrito y queso.' },
+        { name: `Tacos de Birria de Res (3 Und) ${suffix}`, price: 23900.00, prep_time: 14, description: 'Tres tacos dorados con carne desmechada de birria, consomé para sumergir, cebolla y cilantro.' },
+        { name: `Enchiladas Suizas Verdes ${suffix}`, price: 22900.00, prep_time: 15, description: 'Tres tortillas rellenas de pollo, bañadas en salsa verde, crema ácida y queso gratinado.' },
+        { name: `Quesadilla de Carne Asada ${suffix}`, price: 18900.00, prep_time: 10, description: 'Tortilla de harina doblada con queso mozzarella derretido y finos trozos de res asada.' },
+        { name: `Tacos al Carbón de Res ${suffix}`, price: 19900.00, prep_time: 12, description: 'Tres tacos de tortilla de maíz con carne asada al carbón y cebollitas asadas.' }
+      ];
+    } else if (categoryName === 'Entradas') {
+      return [
+        { name: `Totopos con Guacamole Fresco ${suffix}`, price: 11900.00, prep_time: 7, description: 'Tortillas de maíz fritas crujientes con guacamole artesanal y pico de gallo.' },
+        { name: `Nachos Sabor Azteca con Queso ${suffix}`, price: 15900.00, prep_time: 9, description: 'Nachos bañados en queso fundido, frijol, jalapeños, guacamole y crema.' },
+        { name: `Elote Asado Callejero ${suffix}`, price: 7900.00, prep_time: 8, description: 'Mazorca entera asada con mayonesa, queso cotija espolvoreado y chile en polvo.' },
+        { name: `Flautas de Pollo Crujientes ${suffix}`, price: 9900.00, prep_time: 8, description: 'Tres tacos de maíz enrollados fritos, rellenos de pollo con crema y lechuga.' },
+        { name: `Sopa de Tortilla Tradicional ${suffix}`, price: 10900.00, prep_time: 10, description: 'Caldo de tomate con tiras de tortilla de maíz, aguacate, queso y crema.' }
+      ];
+    } else {
+      return [
+        { name: `Agua Fresca de Horchata ${suffix}`, price: 5900.00, prep_time: 4, description: 'Bebida tradicional de arroz, leche, canela y vainilla.' },
+        { name: `Agua Fresca de Jamaica ${suffix}`, price: 5500.00, prep_time: 4, description: 'Bebida fría infusionada con flores de jamaica y endulzada al gusto.' },
+        { name: `Corona Extra Fría ${suffix}`, price: 7900.00, prep_time: 3, description: 'Cerveza mexicana clásica tipo pilsener servida fría.' },
+        { name: `Churros con Dulce de Leche ${suffix}`, price: 9900.00, prep_time: 8, description: 'Cuatro churros fritos espolvoreados con azúcar y canela, acompañados de cajeta.' },
+        { name: `Tres Leches de Vainilla ${suffix}`, price: 10900.00, prep_time: 5, description: 'Bizcocho bañado en mezcla de tres leches y decorado con crema.' }
+      ];
+    }
+  }
+
+  if (commerceName === 'La Trattoria Da Vinci') {
+    if (categoryName === 'Platos Fuertes') {
+      return [
+        { name: `Fettuccine Alfredo con Pollo ${suffix}`, price: 25900.00, prep_time: 14, description: 'Pasta fettuccine con salsa cremosa Alfredo, queso parmesano y pechuga asada.' },
+        { name: `Lasaña Boloñesa Da Vinci ${suffix}`, price: 23900.00, prep_time: 18, description: 'Lasaña horneada con carne de res boloñesa, bechamel y queso parmesano gratinado.' },
+        { name: `Pizza Pepperoni Miel Picante ${suffix}`, price: 27900.00, prep_time: 15, description: 'Pizza personal de masa delgada con pepperoni, queso mozzarella y un toque de miel picante.' },
+        { name: `Ravioli de Espinaca y Ricotta ${suffix}`, price: 24900.00, prep_time: 12, description: 'Raviolis rellenos bañados en salsa pomodoro rústica de tomates y albahaca.' },
+        { name: `Spaghetti a la Carbonara ${suffix}`, price: 26900.00, prep_time: 13, description: 'Pasta spaghetti con tocineta crujiente, yema de huevo, pimienta negra y parmesano.' }
+      ];
+    } else if (categoryName === 'Entradas') {
+      return [
+        { name: `Bruschetta Tomate y Albahaca ${suffix}`, price: 8900.00, prep_time: 7, description: 'Tostadas de pan ciabatta con tomates picados, albahaca, ajo y aceite de oliva.' },
+        { name: `Pan de Ajo Rústico Gratinado ${suffix}`, price: 7900.00, prep_time: 6, description: 'Baguette con mantequilla de ajo y queso mozzarella gratinado al horno.' },
+        { name: `Mozzarella en Carrozza (Frita) ${suffix}`, price: 10900.00, prep_time: 8, description: 'Queso mozzarella apanado frito acompañado de salsa marinara.' },
+        { name: `Carpaccio de Res con Parmesano ${suffix}`, price: 14900.00, prep_time: 9, description: 'Finas láminas de lomo de res con rúcula, alcaparras, aceite de oliva y parmesano.' },
+        { name: `Sopa Minestrone Italiana ${suffix}`, price: 9900.00, prep_time: 10, description: 'Sopa tradicional de vegetales frescos, alubias y pasta corta.' }
+      ];
+    } else {
+      return [
+        { name: `Limonada Imperial con Hierbabuena ${suffix}`, price: 5900.00, prep_time: 5, description: 'Limonada frapeada con hojas frescas de hierbabuena.' },
+        { name: `Té Frío de Frutos Rojos ${suffix}`, price: 4900.00, prep_time: 3, description: 'Té helado de la casa con sabor a frutos del bosque.' },
+        { name: `Gaseosa Coca-Cola Zero ${suffix}`, price: 3800.00, prep_time: 3, description: 'Bebida gaseosa sin azúcar de 350ml.' },
+        { name: `Tiramisú Tradicional de Café ${suffix}`, price: 11900.00, prep_time: 5, description: 'Postre italiano con bizcochos soletilla remojados en café y crema de mascarpone.' },
+        { name: `Panna Cotta con Frutos Rojos ${suffix}`, price: 9900.00, prep_time: 5, description: 'Flan cremoso italiano de nata con coulis de fresas y moras.' }
+      ];
+    }
+  }
+
+  if (commerceName === 'Wok & Sushi Express') {
+    if (categoryName === 'Platos Fuertes') {
+      return [
+        { name: `Sushi Filadelfia Roll (10 Bocados) ${suffix}`, price: 27900.00, prep_time: 15, description: 'Rollo de sushi con salmón fresco, queso crema y aguacate espolvoreado con ajonjolí.' },
+        { name: `Arroz Chaufa Wok con Pollo y Res ${suffix}`, price: 24900.00, prep_time: 12, description: 'Arroz saltado al wok con trozos de pollo, lomo de res, huevo y cebollín.' },
+        { name: `Ramen de Cerdo Chashu Tonkotsu ${suffix}`, price: 28900.00, prep_time: 18, description: 'Fideos en caldo de cerdo concentrado con panceta asada, huevo marinado y algas.' },
+        { name: `Pad Thai de Langostinos Wok ${suffix}`, price: 29900.00, prep_time: 14, description: 'Fideos de arroz salteados con langostinos, brotes de soya, maní y salsa de tamarindo.' },
+        { name: `Pollo General Tso Agridulce ${suffix}`, price: 23900.00, prep_time: 13, description: 'Trozos de pollo tempura bañados en salsa agridulce y picante, servido con arroz.' }
+      ];
+    } else if (categoryName === 'Entradas') {
+      return [
+        { name: `Spring Rolls de Vegetales (3 Und) ${suffix}`, price: 7900.00, prep_time: 7, description: 'Rollitos primavera crujientes rellenos de vegetales con salsa agridulce.' },
+        { name: `Gyozas de Cerdo al Vapor (5 Und) ${suffix}`, price: 9900.00, prep_time: 8, description: 'Empanaditas japonesas rellenas de cerdo asadas a la plancha.' },
+        { name: `Edamames Sazonados con Sal Marina ${suffix}`, price: 6900.00, prep_time: 5, description: 'Vainas de soya tiernas al vapor espolvoreadas con sal gruesa.' },
+        { name: `Kushiages de Queso (3 Und) ${suffix}`, price: 8900.00, prep_time: 7, description: 'Brochetas japonesas de queso mozzarella apanadas y fritas.' },
+        { name: `Camarones Tempura Crujientes ${suffix}`, price: 12900.00, prep_time: 9, description: 'Camarones apanados en tempura ligera acompañados de salsa spicy mayo.' }
+      ];
+    } else {
+      return [
+        { name: `Té Matcha Helado Cremoso ${suffix}`, price: 6900.00, prep_time: 5, description: 'Bebida fría de té matcha japonés batido con leche endulzada.' },
+        { name: `Soda Hatsu de Carambolo ${suffix}`, price: 5500.00, prep_time: 3, description: 'Bebida carbonatada saborizada Hatsu.' },
+        { name: `Cerveza Club Colombia Dorada ${suffix}`, price: 4500.00, prep_time: 3, description: 'Cerveza nacional tipo lager servida helada.' },
+        { name: `Mochi de Coco y Mango (2 Und) ${suffix}`, price: 9900.00, prep_time: 5, description: 'Dulces tradicionales japoneses de masa de arroz rellenos de helado.' },
+        { name: `Banana Tempura con Helado ${suffix}`, price: 8900.00, prep_time: 8, description: 'Banano en tempura frito acompañado de helado de vainilla y chocolate.' }
+      ];
+    }
+  }
+
+  // Panadería y Repostería El Maná
+  if (categoryName === 'Platos Fuertes') {
+    return [
+      { name: `Desayuno Americano Completo ${suffix}`, price: 15900.00, prep_time: 10, description: 'Huevos revueltos, tocineta crujiente, pan tostado de la casa y mermelada.' },
+      { name: `Croissant de Jamón y Queso ${suffix}`, price: 8900.00, prep_time: 8, description: 'Croissant hojaldrado relleno de jamón seleccionado y queso derretido.' },
+      { name: `Sándwich Gourmet de Pavo y Pesto ${suffix}`, price: 14900.00, prep_time: 8, description: 'Pan baguette artesanal con jamón de pavo, queso provolone, rúcula y salsa pesto.' },
+      { name: `Calentado Criollo Paisa ${suffix}`, price: 16900.00, prep_time: 12, description: 'Mezcla de frijol y arroz con carne desmechada, huevo frito y arepa con queso.' },
+      { name: `Waffles con Frutas y Nutella ${suffix}`, price: 13900.00, prep_time: 10, description: 'Waffles calientes cubiertos con fresa, banano, crema chantilly y Nutella.' }
+    ];
+  } else if (categoryName === 'Entradas') {
+    return [
+      { name: `Pandebono Valluno Calientico ${suffix}`, price: 3200.00, prep_time: 5, description: 'Pan tradicional horneado con queso costeño y almidón de yuca.' },
+      { name: `Buñuelo Gigante Tradicional ${suffix}`, price: 2900.00, prep_time: 5, description: 'Fritura redonda crujiente por fuera y esponjosa por dentro con sabor a queso.' },
+      { name: `Almojábana con Queso Derretido ${suffix}`, price: 3500.00, prep_time: 5, description: 'Pan dulce de maíz y queso horneado al instante.' },
+      { name: `Porción de Torta de Zanahoria ${suffix}`, price: 6900.00, prep_time: 4, description: 'Rebanada de pastel húmedo de zanahoria con nueces y frosting de queso crema.' },
+      { name: `Pastel de Hojaldre de Pollo ${suffix}`, price: 5900.00, prep_time: 6, description: 'Pastel horneado de masa de hojaldre relleno de pollo desmechado guisado.' }
+    ];
+  } else {
+    return [
+      { name: `Café Espresso Italiano Doble ${suffix}`, price: 4900.00, prep_time: 4, description: 'Extracción concentrada de granos de café seleccionados.' },
+      { name: `Café Capuchino con Espuma ${suffix}`, price: 5900.00, prep_time: 5, description: 'Café espresso con leche al vapor y abundante espuma de leche.' },
+      { name: `Jugo de Naranja Exprimido ${suffix}`, price: 6500.00, prep_time: 5, description: 'Jugo de naranjas naturales dulces recién exprimidas.' },
+      { name: `Malteada de Vainilla y Arequipe ${suffix}`, price: 8900.00, prep_time: 6, description: 'Cremosa malteada de helado de vainilla batida con arequipe y crema.' },
+      { name: `Muffin de Arándanos Esponjoso ${suffix}`, price: 5500.00, prep_time: 4, description: 'Muffin suave de vainilla relleno de arándanos azules frescos.' }
+    ];
   }
 }
 

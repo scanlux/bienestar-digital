@@ -13,7 +13,7 @@ class DomiTreasuryController {
 
   async getPricingHistory(req, res) {
     try {
-      const result = await domiService.getPricingHistory();
+      const result = await domiService.getPricingHistory(req.user, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

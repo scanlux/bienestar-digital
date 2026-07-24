@@ -68,6 +68,25 @@ class CashController {
       handleControllerError(res, error);
     }
   }
+
+  async receivePhysicalPayment(req, res) {
+    try {
+      const result = await cashService.receivePhysicalPayment(req.user, req.body);
+      res.status(201).json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async searchWallets(req, res) {
+    try {
+      const { q } = req.query;
+      const result = await cashService.searchWallets(req.user, q);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
 }
 
 module.exports = new CashController();

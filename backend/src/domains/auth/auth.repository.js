@@ -146,8 +146,24 @@ class AuthRepository {
   }
 
   async findUserProfile(userId) {
-    const [rows] = await db.query('SELECT nombres, apellidos, telefono FROM profiles WHERE usuario_id = ?', [userId]);
+    const [rows] = await db.query('SELECT nombres, apellidos, telefono, cedula FROM profiles WHERE usuario_id = ?', [userId]);
     return rows[0] || {};
+  }
+
+  async findFirebaseIdentity(userId, firebaseUid) {
+    const [rows] = await db.query(
+      'SELECT id FROM firebase_identities WHERE user_id = ? AND firebase_uid = ?',
+      [userId, firebaseUid]
+    );
+    return rows[0] || null;
+  }
+
+  async insertFirebaseIdentity(userId, firebaseUid, provider, connection) {
+    const queryExecutor = connection || db;
+    await queryExecutor.query(
+      'INSERT INTO firebase_identities (user_id, firebase_uid, provider) VALUES (?, ?, ?)',
+      [userId, firebaseUid, provider || 'firebase']
+    );
   }
 }
 

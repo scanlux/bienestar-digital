@@ -213,7 +213,7 @@ export default function DeliveryDriversPage() {
               <div>
                 <ModalTitle>Afiliar por Cédula</ModalTitle>
                 <p style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.85rem', marginTop: '0.5rem', lineHeight: '1.5' }}>
-                  Ingresa la cédula del conductor registrado en Focnius para vincularlo a tu empresa de mensajería.
+                  Ingresa la cédula del conductor registrado en DOMIRIS para vincularlo a tu empresa de mensajería.
                 </p>
               </div>
               <CloseButton onClick={() => setIsModalOpen(false)} style={{ fontSize: '1.2rem', margin: 0 }}>✕</CloseButton>

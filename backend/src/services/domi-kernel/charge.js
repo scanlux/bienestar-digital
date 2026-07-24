@@ -26,8 +26,8 @@ async function chargeForOrder(orderId, storeId, driverUserId, storeCost, driverC
     const storeCostDomi = parseFloat((parseFloat(rules.store_fixed_fee_cop) / fiatPeg).toFixed(8));
     const driverCostDomi = parseFloat((parseFloat(rules.driver_fixed_fee_cop) / fiatPeg).toFixed(8));
 
-    storeCost = (storeCost > 0 || storeCost === undefined) ? storeCostDomi : 0;
-    driverCost = (driverCost > 0 || driverCost === undefined) ? driverCostDomi : 0;
+    storeCost = (storeCost === undefined || storeCost === null) ? storeCostDomi : parseFloat(storeCost);
+    driverCost = (driverCost === undefined || driverCost === null) ? driverCostDomi : parseFloat(driverCost);
   } finally {
     conn.release();
   }
@@ -109,7 +109,7 @@ async function chargeForOrder(orderId, storeId, driverUserId, storeCost, driverC
     timestamp: Date.now()
   };
   
-  await redisClient.xAdd('domi:tx_stream', '*', { payload: JSON.stringify(payload) });
+  await redisClient.xAdd('domi:tx_stream', '*', { payload: JSON.stringify(payload) }, { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 10000 } });
   console.log(`[DOMI STREAM] Pedido #${orderId} encolado para cobro asíncrono.`);
 
   return { status: 'queued', store_charged: storeCost, driver_charged: driverCost };
@@ -297,7 +297,7 @@ async function chargeDeliveryCompanyForOrder(orderId, deliveryCompanyId, deliver
     timestamp: Date.now()
   };
 
-  await redisClient.xAdd('domi:tx_stream', '*', { payload: JSON.stringify(payload) });
+  await redisClient.xAdd('domi:tx_stream', '*', { payload: JSON.stringify(payload) }, { TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: 10000 } });
   console.log(`[DOMI STREAM] Pedido #${orderId} de empresa de reparto encolado para cobro asíncrono.`);
 
   return { status: 'queued', company_charged: deliveryCompanyCost };

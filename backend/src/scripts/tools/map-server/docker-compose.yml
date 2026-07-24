@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  tileserver:
+    image: maptiler/tileserver-gl:latest
+    container_name: map-tileserver
+    ports:
+      - "8080:80"
+    volumes:
+      - ./data:/data
+    command: ["-p", "80", "--mbtiles", "colombia.mbtiles"]
+    restart: always

@@ -5,40 +5,19 @@ import Cookies from 'js-cookie';
 import axios from 'axios';
 import { useRouter, usePathname } from 'next/navigation';
 import { API_URL } from '@/constants';
-import { AlertModal } from '@/components/Common/AlertModal';
 import styled, { keyframes } from 'styled-components';
 import { useQueryClient } from '@tanstack/react-query';
+import { User, AuthContextType } from '../types/auth.types';
 
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface User {
-  id: number;
-  email: string;
-  nombre: string;
-  actorType?: 'user' | 'system_user' | 'operator';
-  rol?: 'admin' | 'customer' | 'delivery' | 'operator' | 'root' | 'system';
-  adminType?: 'commerce' | 'store' | 'delivery_company';
-  commerceId?: number;
-  storeIds?: number[];
-  deliveryCompanyId?: number;
-  permissions?: string[];
-  permissionModes?: Record<string, 'ghost' | 'hidden' | 'disabled'>;
-  systemFlags?: Record<string, boolean>;
-  roles?: string[];
-}
-
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  login: (email: string, password: string, loginType?: 'business' | 'operator' | 'system') => Promise<void>;
-  logout: (reason?: 'session_expired' | 'logged_out' | 'security_update' | any) => void;
-  refreshSession: () => Promise<void>;
-  isLoading: boolean;
-  maintenanceMode: boolean;
-  triggerMaintenance: () => void;
-  isOffline: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 let activeRefreshPromise: Promise<void> | null = null;
 
@@ -87,7 +66,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Recuperar sesión al cargar
     const savedToken = Cookies.get('auth_token');
     const savedUser = localStorage.getItem('auth_user');
 
@@ -97,10 +75,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     setIsLoading(false);
 
-    // Verificar el estado de mantenimiento al entrar al sitio/login (cargar bypass rules solo si está activo)
     checkStatus();
 
-    // Sincronizar logout y cambio de cuenta entre pestañas
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'auth_user') {
         if (!e.newValue) {
@@ -112,15 +88,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } else {
           try {
             const newUserObj = JSON.parse(e.newValue);
-            const savedToken = Cookies.get('auth_token');
-            // Si el ID del usuario cambió en otra pestaña, forzar recarga para sincronizar estados
             if (newUserObj && user && newUserObj.id !== user.id) {
               console.warn('[SESSION] Sesión cambiada a otro usuario en otra pestaña. Sincronizando...');
               window.location.reload();
             }
-          } catch (err) {
-            // Ignorar errores de parseo
-          }
+          } catch (err) {}
         }
       }
     };
@@ -161,7 +133,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!maintenanceMode) return;
 
-    // Polling cada 5 segundos para verificar si el mantenimiento terminó
     const interval = setInterval(() => {
       checkStatus();
     }, 5000);
@@ -169,7 +140,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => clearInterval(interval);
   }, [maintenanceMode]);
 
-  // Forzar cierre de sesión si el modo mantenimiento está activo y el usuario actual no es de sistema (system_user)
   const maintenanceLogoutFired = useRef(false);
 
   useEffect(() => {
@@ -177,7 +147,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       maintenanceLogoutFired.current = false;
       return;
     }
-    // Si la ruta actual está en las excepciones de página, no cerrar sesión
     const isBypass = bypassPages.some(p => pathname === p || pathname?.startsWith(p + '/'));
     if (isBypass) return;
 
@@ -191,7 +160,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!isOffline) return;
 
-    // Polling cada 3 segundos para verificar si el servidor volvió en línea
     const checkServerOnline = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/health`);
@@ -200,9 +168,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setIsOffline(false);
           window.location.reload();
         }
-      } catch (err) {
-        // Seguir intentando en silencio
-      }
+      } catch (err) {}
     };
 
     const interval = setInterval(checkServerOnline, 3000);
@@ -219,17 +185,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setToken(token);
       setUser(user);
 
-      // Persistencia
-      Cookies.set('auth_token', token, { expires: 1, path: '/' }); // 1 día
+      Cookies.set('auth_token', token, { expires: 1, path: '/' }); 
       localStorage.setItem('auth_user', JSON.stringify(user));
 
-      // Redirección por roles y tipo de actor
       if (user.actorType === 'system_user') {
         router.push('/admin/dashboard');
       } else if (user.actorType === 'operator') {
         router.push('/commerce/store-admins');
       } else {
-        // actorType === 'user'
         if (user.rol === 'admin' || user.roles?.includes('commerce_manager') || user.roles?.includes('store_admin') || user.roles?.includes('delivery_company_admin')) {
           if (user.adminType === 'commerce' || user.roles?.includes('commerce_manager')) {
             router.push('/commerce/dashboard');
@@ -250,10 +213,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     } catch (error: any) {
       if (error.response?.status === 503) {
-        // Silenciar error para evitar toast rojo (el interceptor ya configuró el estado de mantenimiento)
         throw new Error('mantenimiento_silent');
       }
-      // Si el login fue rechazado con 403 (mantenimiento activo), sincronizar el estado y silenciar error
       if (error.response?.status === 403 && (error.response?.data?.error?.includes('mantenimiento') || error.response?.data?.error?.includes('Mantenimiento'))) {
         await checkStatus();
         throw new Error('mantenimiento_silent');
@@ -305,10 +266,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = (reason?: 'session_expired' | 'logged_out' | 'security_update' | any) => {
-    const savedUserStr = localStorage.getItem('auth_user');
     let redirectPath = '/login';
 
-    // Limpiar caché global de TanStack Query para evitar fuga de datos (BOLA) entre sesiones
     try {
       queryClient.clear();
     } catch (err) {
@@ -346,9 +305,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setMaintenanceMessage(details.error || 'Servicio temporalmente no disponible por mantenimiento.');
           setEstimatedEnd(details.estimated_end || null);
           setMaintenanceMode(true);
-
-
-
           return Promise.reject(error);
         }
         if (
@@ -454,14 +410,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };
 
 const MaintenanceOverlay = styled.div`

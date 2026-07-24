@@ -343,7 +343,15 @@ class UpgradesService {
       try {
         await domiRedis.decrementBalance('user', targetUserId, price);
       } catch (redisErr) {
-        console.error('[REDIS ERROR] Failed to decrement wallet balance cache:', redisErr.message);
+        await logSecurityEvent(
+          userContext.id,
+          'REDIS_CACHE_SYNC_FAILURE',
+          'MEDIUM',
+          req,
+          { error: redisErr.message, upgradeType, userId: targetUserId, price },
+          'commerce',
+          targetCommerceId
+        );
       }
 
       return {
@@ -443,6 +451,11 @@ class UpgradesService {
       await connection.rollback();
       throw err;
     } finally {
+      try {
+        await connection.query('SET @domi_is_root = NULL, @domi_bypass_security = NULL');
+      } catch (e) {
+        // Ignorar
+      }
       connection.release();
     }
   }
@@ -522,6 +535,11 @@ class UpgradesService {
       await connection.rollback();
       throw err;
     } finally {
+      try {
+        await connection.query('SET @domi_is_root = NULL, @domi_bypass_security = NULL');
+      } catch (e) {
+        // Ignorar
+      }
       connection.release();
     }
   }
@@ -653,6 +671,11 @@ class UpgradesService {
       await connection.rollback();
       throw err;
     } finally {
+      try {
+        await connection.query('SET @domi_is_root = NULL, @domi_bypass_security = NULL');
+      } catch (e) {
+        // Ignorar
+      }
       connection.release();
     }
   }
@@ -700,6 +723,11 @@ class UpgradesService {
       await connection.rollback();
       throw err;
     } finally {
+      try {
+        await connection.query('SET @domi_is_root = NULL, @domi_bypass_security = NULL');
+      } catch (e) {
+        // Ignorar
+      }
       connection.release();
     }
   }

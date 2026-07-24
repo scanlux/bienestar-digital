@@ -14,7 +14,7 @@
  * DOMI: Devolver 100% del locked_balance al cliente (sin fee).
  * Penalización de Score: 0 puntos.
  */
-function forPendiente(order) {
+function forPendiente(order, meta = {}) {
   const isDomi = order.payment_method_customer === 'domi';
   const peg = parseFloat(order.fiat_peg_snapshot || 1.0);
   const orderTotalDomi = parseFloat((parseFloat(order.total_cop || 0) / peg).toFixed(8));
@@ -48,7 +48,7 @@ function forPendiente(order) {
  * REGLA MATRIZ DOMI:
  *   - Igual distribución pero sobre locked_balance; sin fee.
  */
-function forPreparation(order) {
+function forPreparation(order, meta = {}) {
   const isCod  = order.payment_method_customer === 'cash_cod';
   const fee    = isCod ? parseFloat(order.platform_processing_fee_rate_snapshot || 0) : 0;
   const hasDriver = !!order.driver_user_id;
@@ -86,9 +86,11 @@ function forPreparation(order) {
   const sysRetain           = parseFloat((productsCost * sysRate    * (1 - fee)).toFixed(8));
 
   // Score
-  const scorePenalty = isCod
-    ? parseFloat(order.score_penalty_cash_cancel_accepted_snapshot  || 0)
-    : parseFloat(order.score_penalty_domi_cancel_accepted_snapshot  || 0);
+  const scorePenalty = meta.skipScorePenalty
+    ? 0
+    : (isCod
+        ? parseFloat(order.score_penalty_cash_cancel_accepted_snapshot  || 0)
+        : parseFloat(order.score_penalty_domi_cancel_accepted_snapshot  || 0));
 
   // COD: deuda total a cobrar al cliente
   const debtTotal = isCod
@@ -118,7 +120,7 @@ function forPreparation(order) {
  * Misma lógica que forPreparation pero con tasas de productos de dispatch.
  * Distribución: 95% sede / 4% cliente / 1% sistema.
  */
-function forDispatch(order) {
+function forDispatch(order, meta = {}) {
   const isCod  = order.payment_method_customer === 'cash_cod';
   const fee    = isCod ? parseFloat(order.platform_processing_fee_rate_snapshot || 0) : 0;
 
@@ -145,9 +147,11 @@ function forDispatch(order) {
   const clientProductRefund = parseFloat((productsCost * clientRate * (1 - fee)).toFixed(8));
   const sysRetain           = parseFloat((productsCost * sysRate    * (1 - fee)).toFixed(8));
 
-  const scorePenalty = isCod
-    ? parseFloat(order.score_penalty_cash_cancel_dispatch_snapshot || 0)
-    : parseFloat(order.score_penalty_domi_cancel_dispatch_snapshot || 0);
+  const scorePenalty = meta.skipScorePenalty
+    ? 0
+    : (isCod
+        ? parseFloat(order.score_penalty_cash_cancel_dispatch_snapshot || 0)
+        : parseFloat(order.score_penalty_domi_cancel_dispatch_snapshot || 0));
 
   const debtTotal = isCod
     ? parseFloat((
@@ -180,7 +184,7 @@ function forDispatch(order) {
  * Si hay rescatista activo (rescue_driver_id IS NOT NULL),
  * el pago del domicilio va al rescatista, no al conductor original.
  */
-function forTransit(order) {
+function forTransit(order, meta = {}) {
   const isCod = order.payment_method_customer === 'cash_cod';
   const fee   = isCod ? parseFloat(order.platform_processing_fee_rate_snapshot || 0) : 0;
   const hasRescuer = !!order.rescue_driver_id;
@@ -206,9 +210,11 @@ function forTransit(order) {
   // DOMI: productos del locked_balance van a la sede (100%)
   const productsToStore = isCod ? 0 : productsCost;
 
-  const scorePenalty = isCod
-    ? parseFloat(order.score_penalty_cash_cancel_in_transit_snapshot || 0)
-    : parseFloat(order.score_penalty_domi_cancel_in_transit_snapshot || 0);
+  const scorePenalty = meta.skipScorePenalty
+    ? 0
+    : (isCod
+        ? parseFloat(order.score_penalty_cash_cancel_in_transit_snapshot || 0)
+        : parseFloat(order.score_penalty_domi_cancel_in_transit_snapshot || 0));
 
   // COD: deuda total a cobrar al cliente
   const debtTotal = isCod

@@ -10,6 +10,7 @@ import { useAlert } from '@/context/AlertContext';
 import { Spinner } from '@/components/Common/UIElements';
 import { EmptyState } from '@/components/Common/EmptyState';
 import { SystemRestrictionWrapper } from '@/components/Common/SystemRestrictionWrapper';
+import WalletSearchInput from '@/components/Common/Wallet/WalletSearchInput';
 
 const PageContainer = styled.div`
   display: flex;
@@ -335,12 +336,17 @@ export default function CashAndBankPage() {
   const [reconcileAction, setReconcileAction] = useState<'approve' | 'reject'>('approve');
   const [reconcileNotes, setReconcileNotes] = useState('');
 
-  // Formularios de Transacción
+  // Formularios de Transacción Administrativa
   const [cashAmount, setCashAmount] = useState('');
-  const [cashType, setCashType] = useState('income');
+  const [cashType, setCashType] = useState('expense');
   const [cashNotes, setCashNotes] = useState('');
 
-  // Formulario de Consignación
+  // Formulario de Recepción de Efectivo (Instamint)
+  const [incomeAmount, setIncomeAmount] = useState('');
+  const [incomeWalletId, setIncomeWalletId] = useState<number | null>(null);
+  const [incomeNotes, setIncomeNotes] = useState('');
+
+  // Formulario de Consignación Bancaria
   const [bankAmount, setBankAmount] = useState('');
   const [destinationWallet, setDestinationWallet] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
@@ -403,7 +409,7 @@ export default function CashAndBankPage() {
         notes: cashNotes
       }, { headers });
 
-      toast.success('Transacción de caja registrada.');
+      toast.success('Movimiento administrativo de caja registrado.');
       setCashAmount('');
       setCashNotes('');
       fetchData();
@@ -412,9 +418,42 @@ export default function CashAndBankPage() {
     }
   };
 
+  const handleIncomeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!incomeAmount || parseFloat(incomeAmount) <= 0) {
+      toast.error('Monto inválido.');
+      return;
+    }
+    if (!incomeWalletId) {
+      toast.error('Por favor busca y selecciona una billetera de destino.');
+      return;
+    }
+    if (!incomeNotes || incomeNotes.trim().length < 5) {
+      toast.error('Las notas son obligatorias (mínimo 5 caracteres).');
+      return;
+    }
+
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.post(`${API_URL}/api/cash/income`, {
+        amountCop: parseFloat(incomeAmount),
+        destinationWalletId: incomeWalletId,
+        notes: incomeNotes
+      }, { headers });
+
+      toast.success(res.data.message || 'Efectivo recibido e Instamint de DOMIs completado.');
+      setIncomeAmount('');
+      setIncomeWalletId(null);
+      setIncomeNotes('');
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Error al registrar recepción de efectivo.');
+    }
+  };
+
   const handleDepositSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bankAmount || parseFloat(bankAmount) <= 0 || !destinationWallet || !evidenceUrl) {
+    if (!bankAmount || parseFloat(bankAmount) <= 0 || !evidenceUrl) {
       toast.error('Por favor completa todos los campos requeridos y el soporte.');
       return;
     }
@@ -423,7 +462,7 @@ export default function CashAndBankPage() {
       const headers = { Authorization: `Bearer ${token}` };
       await axios.post(`${API_URL}/api/cash/bank/deposit`, {
         amountCop: parseFloat(bankAmount),
-        destinationWalletId: parseInt(destinationWallet, 10),
+        destinationWalletId: destinationWallet ? parseInt(destinationWallet, 10) : null,
         evidenceUrl,
         notes: bankNotes,
         isFromCash
@@ -538,7 +577,7 @@ export default function CashAndBankPage() {
         )}
         {canViewCash && (
           <Tab $active={activeTab === 'deposits'} onClick={() => setActiveTab('deposits')}>
-            Conciliaciones Bancarias (Acuñar)
+            Conciliaciones Bancarias
           </Tab>
         )}
         <Tab $active={activeTab === 'pin'} onClick={() => setActiveTab('pin')}>
@@ -618,38 +657,78 @@ export default function CashAndBankPage() {
               {/* Columna Derecha: Formularios */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {canManageCash && (
-                  <GlassCard>
-                    <h3 style={{ margin: 0 }}>Flujo de Caja</h3>
-                    <Form onSubmit={handleCashSubmit}>
-                      <FormGroup>
-                        <Label>Monto (Pesos COP)</Label>
-                        <Input 
-                          type="number" 
-                          required 
-                          placeholder="Ej. 50000" 
-                          value={cashAmount}
-                          onChange={(e) => setCashAmount(e.target.value)}
-                        />
-                      </FormGroup>
-                      <FormGroup>
-                        <Label>Operación</Label>
-                        <Select value={cashType} onChange={(e) => setCashType(e.target.value)}>
-                          <option value="income">Entrada de Efectivo</option>
-                          <option value="expense">Salida de Efectivo</option>
-                          <option value="adjustment">Ajuste de Arqueo (Sobrante/Faltante)</option>
-                        </Select>
-                      </FormGroup>
-                      <FormGroup>
-                        <Label>Notas explicativas</Label>
-                        <Textarea 
-                          placeholder="Escribe la razón del movimiento..." 
-                          value={cashNotes}
-                          onChange={(e) => setCashNotes(e.target.value)}
-                        />
-                      </FormGroup>
-                      <Button type="submit" $variant="primary">Registrar Movimiento</Button>
-                    </Form>
-                  </GlassCard>
+                  <>
+                    <GlassCard>
+                      <h3 style={{ margin: 0 }}>Recibir Efectivo de Cliente (Instamint)</h3>
+                      <p style={{ fontSize: '0.82rem', margin: 0, color: 'rgba(255,255,255,0.5)' }}>
+                        Registra el ingreso de efectivo físico en la caja de la oficina y acuña DOMIs de forma inmediata a la billetera del cliente.
+                      </p>
+                      <Form onSubmit={handleIncomeSubmit}>
+                        <FormGroup>
+                          <Label>Monto Recibido (COP)</Label>
+                          <Input 
+                            type="number" 
+                            required 
+                            placeholder="Ej. 50000" 
+                            value={incomeAmount}
+                            onChange={(e) => setIncomeAmount(e.target.value)}
+                          />
+                        </FormGroup>
+                        <FormGroup>
+                          <Label>Destinatario (Búsqueda de Billetera)</Label>
+                          <WalletSearchInput 
+                            selectedWalletId={incomeWalletId}
+                            onSelectWallet={(walletId) => setIncomeWalletId(walletId)}
+                          />
+                        </FormGroup>
+                        <FormGroup>
+                          <Label>Notas explicativas / Observaciones</Label>
+                          <Textarea 
+                            required
+                            placeholder="Detalles sobre quién entrega el efectivo y concepto..." 
+                            value={incomeNotes}
+                            onChange={(e) => setIncomeNotes(e.target.value)}
+                          />
+                        </FormGroup>
+                        <Button type="submit" $variant="primary">Registrar e Imprimir Recibo</Button>
+                      </Form>
+                    </GlassCard>
+
+                    <GlassCard>
+                      <h3 style={{ margin: 0 }}>Movimientos Administrativos de Caja</h3>
+                      <p style={{ fontSize: '0.82rem', margin: 0, color: 'rgba(255,255,255,0.5)' }}>
+                        Registra salidas de efectivo (egresos) o ajustes manuales de arqueo.
+                      </p>
+                      <Form onSubmit={handleCashSubmit}>
+                        <FormGroup>
+                          <Label>Monto (Pesos COP)</Label>
+                          <Input 
+                            type="number" 
+                            required 
+                            placeholder="Ej. 50000" 
+                            value={cashAmount}
+                            onChange={(e) => setCashAmount(e.target.value)}
+                          />
+                        </FormGroup>
+                        <FormGroup>
+                          <Label>Operación</Label>
+                          <Select value={cashType} onChange={(e) => setCashType(e.target.value)}>
+                            <option value="expense">Salida de Efectivo (Egreso)</option>
+                            <option value="adjustment">Ajuste de Arqueo (Sobrante/Faltante)</option>
+                          </Select>
+                        </FormGroup>
+                        <FormGroup>
+                          <Label>Notas explicativas</Label>
+                          <Textarea 
+                            placeholder="Escribe la razón del movimiento..." 
+                            value={cashNotes}
+                            onChange={(e) => setCashNotes(e.target.value)}
+                          />
+                        </FormGroup>
+                        <Button type="submit" $variant="primary">Registrar Movimiento</Button>
+                      </Form>
+                    </GlassCard>
+                  </>
                 )}
 
                 {canRegisterDeposit && (
@@ -762,7 +841,7 @@ export default function CashAndBankPage() {
                               {dep.status === 'pending' ? (
                                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                   <Button $variant="danger" onClick={() => handleReconcileAction(dep.id, 'reject')}>Rechazar</Button>
-                                  <Button $variant="primary" onClick={() => handleReconcileAction(dep.id, 'approve')}>Aprobar y Acuñar</Button>
+                                  <Button $variant="primary" onClick={() => handleReconcileAction(dep.id, 'approve')}>Aprobar y Conciliar</Button>
                                 </div>
                               ) : (
                                 <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)' }}>
@@ -833,7 +912,7 @@ export default function CashAndBankPage() {
             <form onSubmit={executeReconcile}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <p style={{ fontSize: '0.88rem', color: 'rgba(255,255,255,0.6)', margin: 0 }}>
-                  Estás a punto de **{reconcileAction === 'approve' ? 'APROBAR y ACUÑAR' : 'RECHAZAR'}** esta consignación bancaria.
+                  Estás a punto de **{reconcileAction === 'approve' ? 'APROBAR y CONCILIAR' : 'RECHAZAR'}** esta consignación bancaria.
                 </p>
                 {reconcileAction === 'approve' && (
                   <FormGroup>

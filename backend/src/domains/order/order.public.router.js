@@ -4,8 +4,11 @@ const orderController = require('./order.controller');
 const { auth, hasPermission } = require('../../middleware/auth');
 const { validateBody } = require('../../utils/validator');
 const { updateOrderStatusSchema } = require('./order.validation');
+const orderGroupRouter = require('./group/orderGroup.router');
 
 router.use(auth);
+
+router.use('/group', orderGroupRouter);
 
 // POST /api/public/orders
 router.post('/', hasPermission('spend_domis'), orderController.createOrder);

@@ -11,7 +11,7 @@ CREATE TABLE `bank_deposits` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `amount_cop` decimal(14,2) NOT NULL,
   `status` enum('pending','confirmed','rejected') NOT NULL DEFAULT 'pending',
-  `destination_wallet_id` int(11) NOT NULL,
+  `destination_wallet_id` int(11) DEFAULT NULL,
   `evidence_url` varchar(255) NOT NULL,
   `deposit_date` datetime NOT NULL,
   `notes` text DEFAULT NULL,
@@ -19,6 +19,8 @@ CREATE TABLE `bank_deposits` (
   `confirmed_at` datetime(6) DEFAULT NULL,
   `created_by` int(11) NOT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  `deposit_source` enum('vault','direct','wompi') NOT NULL DEFAULT 'direct',
+  `reconciled_vault_amount` decimal(14,2) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `fk_deposit_wallet` (`destination_wallet_id`),
   KEY `fk_deposit_creator` (`created_by`),
@@ -37,14 +39,20 @@ CREATE TABLE `cash_vault_transactions` (
   `amount_cop` decimal(14,2) NOT NULL,
   `tx_type` enum('income','expense','deposit','adjustment') NOT NULL,
   `notes` text DEFAULT NULL,
-  `destination_bank_account` varchar(100) DEFAULT NULL,
-  `reference_type` enum('order','adjustment','manual') NOT NULL DEFAULT 'manual',
+  `destination_wallet_id` int(11) DEFAULT NULL,
+  `bank_deposit_id` int(11) DEFAULT NULL,
+  `reconciled_at` datetime(6) DEFAULT NULL,
+  `reference_type` enum('order','adjustment','manual','cash_mint') NOT NULL DEFAULT 'manual',
   `reference_id` int(11) DEFAULT NULL,
   `created_by` int(11) NOT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   PRIMARY KEY (`id`),
   KEY `fk_cash_tx_user` (`created_by`),
-  CONSTRAINT `fk_cash_tx_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)
+  KEY `idx_cvt_deposit` (`bank_deposit_id`),
+  KEY `idx_cvt_wallet` (`destination_wallet_id`),
+  CONSTRAINT `fk_cash_tx_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_cvt_wallet` FOREIGN KEY (`destination_wallet_id`) REFERENCES `wallets` (`id`),
+  CONSTRAINT `fk_cvt_deposit` FOREIGN KEY (`bank_deposit_id`) REFERENCES `bank_deposits` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
 
 -- ==========================================
@@ -254,6 +262,8 @@ CREATE TABLE `domi_packages` (
   `payment_ref` varchar(100) DEFAULT NULL,
   `status` enum('pendiente','confirmado','anulado') NOT NULL DEFAULT 'pendiente',
   `is_confirmed` tinyint(1) NOT NULL DEFAULT 0,
+  `bank_deposit_id` int(11) DEFAULT NULL,
+  `vault_tx_id` int(11) DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   `confirmed_at` datetime(6) DEFAULT NULL,
   `confirmed_by` int(11) DEFAULT NULL,
@@ -262,8 +272,12 @@ CREATE TABLE `domi_packages` (
   UNIQUE KEY `uq_payment_ref` (`payment_ref`),
   KEY `fk_pkg_store` (`store_id`),
   KEY `fk_pkg_wallet` (`wallet_id`),
+  KEY `idx_pkg_deposit` (`bank_deposit_id`),
+  KEY `idx_pkg_vault_tx` (`vault_tx_id`),
   CONSTRAINT `fk_pkg_store` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`),
-  CONSTRAINT `fk_pkg_wallet` FOREIGN KEY (`wallet_id`) REFERENCES `wallets` (`id`)
+  CONSTRAINT `fk_pkg_wallet` FOREIGN KEY (`wallet_id`) REFERENCES `wallets` (`id`),
+  CONSTRAINT `fk_pkg_deposit` FOREIGN KEY (`bank_deposit_id`) REFERENCES `bank_deposits` (`id`),
+  CONSTRAINT `fk_pkg_vault_tx` FOREIGN KEY (`vault_tx_id`) REFERENCES `cash_vault_transactions` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Historial de compras de paquetes DOMI por establecimientos.';;
 
 -- ==========================================
@@ -570,6 +584,23 @@ CREATE TABLE `order_offer_rejections` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
 
 -- ==========================================
+-- Table: order_groups
+-- ==========================================
+DROP TABLE IF EXISTS `order_groups`;
+CREATE TABLE `order_groups` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `customer_user_id` int(11) NOT NULL,
+  `total_amount_cop` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `total_domi_cost` decimal(18,4) NOT NULL DEFAULT 0.0000,
+  `driver_deposit_status` enum('no_deposit','pending','paid','expired') NOT NULL DEFAULT 'no_deposit',
+  `driver_deposit_grace_expiry` datetime(6) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  PRIMARY KEY (`id`),
+  KEY `fk_order_group_customer` (`customer_user_id`),
+  CONSTRAINT `fk_order_group_customer` FOREIGN KEY (`customer_user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agrupador de sub-ordenes multi-sede.';;
+
+-- ==========================================
 -- Table: orders
 -- ==========================================
 DROP TABLE IF EXISTS `orders`;
@@ -578,6 +609,7 @@ CREATE TABLE `orders` (
   `store_id` int(11) NOT NULL,
   `customer_user_id` int(11) NOT NULL,
   `driver_user_id` int(11) DEFAULT NULL,
+  `group_order_id` int(11) DEFAULT NULL,
   `total_cop` decimal(14,2) NOT NULL DEFAULT 0.00,
   `domi_cost` decimal(18,4) NOT NULL DEFAULT 0.0000,
   `driver_domi_cost` decimal(18,4) NOT NULL DEFAULT 0.0000,
@@ -643,11 +675,13 @@ CREATE TABLE `orders` (
   KEY `fk_order_driver` (`driver_user_id`),
   KEY `idx_orders_delivery_company` (`delivery_company_id`),
   KEY `fk_orders_current_offer_driver` (`current_offer_driver_id`),
+  KEY `fk_orders_group` (`group_order_id`),
   CONSTRAINT `fk_order_customer` FOREIGN KEY (`customer_user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_order_delivery_company` FOREIGN KEY (`delivery_company_id`) REFERENCES `delivery_companies` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_order_driver` FOREIGN KEY (`driver_user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_order_store` FOREIGN KEY (`store_id`) REFERENCES `stores` (`id`),
-  CONSTRAINT `fk_orders_current_offer_driver` FOREIGN KEY (`current_offer_driver_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_orders_current_offer_driver` FOREIGN KEY (`current_offer_driver_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_orders_group` FOREIGN KEY (`group_order_id`) REFERENCES `order_groups` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Pedidos del marketplace.';;
 
 -- ==========================================
@@ -920,6 +954,7 @@ CREATE TABLE `protocol_rules` (
   `customer_cancel_driver_delivery_pct_dispatch_rate` decimal(8,6) NOT NULL DEFAULT 0.500000,
   `driver_commission_refund_on_store_cancel_rate` decimal(8,6) NOT NULL DEFAULT 0.900000,
   `block_meters` int(11) NOT NULL DEFAULT 100,
+  `cash_income_pin_threshold_cop` decimal(12,2) NOT NULL DEFAULT 500000.00,
   `effective_date` date NOT NULL,
   `notes` text DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -1397,7 +1432,7 @@ DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `email` varchar(255) NOT NULL,
-  `password_hash` varchar(255) NOT NULL,
+  `password_hash` varchar(255) DEFAULT NULL,
   `financial_pin_hash` varchar(60) DEFAULT NULL,
   `financial_pin_locked` tinyint(1) NOT NULL DEFAULT 0,
   `financial_pin_attempts` int(11) NOT NULL DEFAULT 0,
@@ -2283,6 +2318,61 @@ CREATE TABLE `system_notifications` (
   KEY `idx_user_unread` (`user_id`,`is_read`),
   CONSTRAINT `fk_notification_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
+
+-- ==========================================
+-- Table: firebase_identities
+-- ==========================================
+DROP TABLE IF EXISTS `firebase_identities`;
+CREATE TABLE `firebase_identities` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `firebase_uid` varchar(128) NOT NULL,
+  `provider` varchar(20) DEFAULT 'firebase',
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_id` (`user_id`),
+  UNIQUE KEY `firebase_uid` (`firebase_uid`),
+  CONSTRAINT `fk_firebase_identities_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
+
+-- ==========================================
+-- Table: invitations
+-- ==========================================
+DROP TABLE IF EXISTS `invitations`;
+CREATE TABLE `invitations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `sent_by_user_id` int(11) NOT NULL,
+  `recipient_email` varchar(255) NOT NULL,
+  `status` enum('pending','accepted','expired') DEFAULT 'pending',
+  `sent_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  `details_json` json DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sent_by_user_id` (`sent_by_user_id`),
+  CONSTRAINT `fk_invitations_sender` FOREIGN KEY (`sent_by_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
+
+-- ==========================================
+-- Trigger: prevent_package_status_rollback
+-- ==========================================
+DROP TRIGGER IF EXISTS `prevent_package_status_rollback`;
+DELIMITER //
+CREATE DEFINER=`bienestar_admin_prod`@`localhost` TRIGGER prevent_package_status_rollback
+BEFORE UPDATE ON `domi_packages` FOR EACH ROW
+BEGIN
+  IF OLD.status = 'confirmado' AND NEW.status <> 'confirmado' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Seguridad DB: Un paquete de DOMIs confirmado no puede revertirse a otro estado.';
+  END IF;
+END;
+//
+DELIMITER ;
+
+-- ==========================================
+-- Performance Indexes for Financial Hardening
+-- ==========================================
+ALTER TABLE `domi_ledger` ADD INDEX `idx_ledger_created_type` (`created_at`, `tx_type`);
+ALTER TABLE `orders` ADD INDEX `idx_orders_created_status` (`created_at`, `status`);
+ALTER TABLE `rescue_assignments` ADD INDEX `idx_rescue_created` (`created_at`);
 
 SET FOREIGN_KEY_CHECKS = 1;
 

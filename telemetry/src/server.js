@@ -160,7 +160,7 @@ const startServer = async () => {
 
       // Handle location updates from the driver's device
       socket.on('location:update', async (data) => {
-        const { latitude, longitude, orderId } = data;
+        const { latitude, longitude, heading, orderId } = data;
 
         if (!latitude || !longitude) {
           console.warn(`[WARN] Invalid coordinates received from driver ${userId}`);
@@ -169,6 +169,7 @@ const startServer = async () => {
 
         const latNum = parseFloat(latitude);
         const lonNum = parseFloat(longitude);
+        const headNum = heading !== undefined && heading !== null ? parseFloat(heading) : null;
 
         try {
           const activeKey = `driver:active:${userId}`;
@@ -190,6 +191,7 @@ const startServer = async () => {
               driverId: userId,
               latitude: latNum,
               longitude: lonNum,
+              heading: headNum,
               timestamp: Date.now()
             });
 

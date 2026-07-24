@@ -8,5 +8,5 @@ export const DEFAULT_SCHEDULE = DAYS.map((day, index) => ({
   is_24h: 0
 }));
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://trendy.sytes.net';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';

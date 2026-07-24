@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const cashController = require('./cash.controller');
-const { auth, hasPermission, validateFinancialPin } = require('../../middleware/auth');
+const { auth, hasPermission, validateFinancialPin, conditionalFinancialPin } = require('../../middleware/auth');
 
 // Rutas protegidas globalmente por token JWT
 router.use(auth);
@@ -12,6 +12,12 @@ router.get('/summary', hasPermission('view_cash_vault'), cashController.getSumma
 // Transacciones de caja física (Ingresos, Egresos, Ajustes)
 router.get('/transactions', hasPermission('view_cash_vault'), cashController.getCashTransactions);
 router.post('/transaction', hasPermission('manage_cash_vault'), cashController.createCashTransaction);
+
+// Recepción de efectivo e Instamint de DOMIs
+router.post('/income', hasPermission('receive_cash_payment'), conditionalFinancialPin, cashController.receivePhysicalPayment);
+
+// Búsqueda de wallets para operadores de caja
+router.get('/wallets/search', hasPermission('view_cash_vault'), cashController.searchWallets);
 
 // Registro de consignaciones bancarias (Bancolombia)
 router.get('/bank/deposits', hasPermission('view_cash_vault'), cashController.getBankDeposits);

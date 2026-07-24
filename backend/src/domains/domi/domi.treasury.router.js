@@ -25,8 +25,6 @@ router.post('/withdrawals/:id/process', auth, hasPermission('approve_withdrawals
 
 // Reserve declaration and cash minting
 router.post('/reserve/declare', auth, hasPermission('declare_domi_reserve'), validateBody(declareReserveSchema), domiTreasuryController.declareReserve);
-router.post('/mint/cash', auth, hasPermission('mint_domi_cash'), validateBody(mintCashSchema), domiTreasuryController.mintCash);
-router.post('/mint/confirm/:packageId', auth, hasPermission('confirm_domi_reserve'), domiTreasuryController.confirmCashMint);
 
 // Peg and Yield adjustments
 router.post('/yield/propose', auth, hasPermission('manage_domi_peg'), validateBody(proposeYieldAdjustmentSchema), domiTreasuryController.proposeYieldAdjustment);

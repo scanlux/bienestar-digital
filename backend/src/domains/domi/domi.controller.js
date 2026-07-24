@@ -209,7 +209,7 @@ class DomiController {
 
   async getPricingHistory(req, res) {
     try {
-      const result = await domiService.getPricingHistory();
+      const result = await domiService.getPricingHistory(req.user, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);
@@ -303,7 +303,7 @@ class DomiController {
 
   async getDebts(req, res) {
     try {
-      const result = await domiService.getUserDebts(req.user.id);
+      const result = await domiService.getUserDebts(req.user, req.user.id, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

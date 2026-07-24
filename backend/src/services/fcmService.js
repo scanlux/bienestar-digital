@@ -46,7 +46,6 @@ async function sendPush(token, payload) {
       android: {
         notification: {
           sound: 'default',
-          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
         }
       },
       apns: {

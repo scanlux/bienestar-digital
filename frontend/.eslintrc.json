@@ -1,3 +1,16 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "Literal[value=/trendy\\.sytes\\.net/]",
+        "message": "Do not hardcode production URLs (trendy.sytes.net) in source code. Use environment variables instead."
+      },
+      {
+        "selector": "TemplateElement[value.raw=/trendy\\.sytes\\.net/]",
+        "message": "Do not hardcode production URLs (trendy.sytes.net) in source code. Use environment variables instead."
+      }
+    ]
+  }
 }

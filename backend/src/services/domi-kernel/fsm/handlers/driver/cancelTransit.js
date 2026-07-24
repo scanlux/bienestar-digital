@@ -21,82 +21,95 @@ const wallet_ops = require('../../ops/wallet.ops');
 const driver_ops = require('../../ops/driver.ops');
 const debt_ops   = require('../../ops/debt.ops');
 
-async function cancelTransit({ order, conn }) {
-  const amounts = calc.forTransit(order);
-  const meta    = { referenceId: order.id };
+async function cancelTransit({ order, conn, meta }) {
+  const metaObj = { referenceId: order.id };
   const fiatPeg = parseFloat(order.fiat_peg_snapshot || 400.0);
 
-  // 1. PENALIZAR CONTADOR DE PRIORIDAD
-  await driver_ops.addPriorityPenalty(order, amounts.priorityPenaltyPoints, conn);
-
-  // 2. RECUPERAR / DISTRIBUIR
-  if (amounts.isCod) {
-    // COD: Repartidor es debitado 3% del producto
-    const recovered = await driver_ops.tryDebitDriver(order, amounts.driverProductPenalty, conn);
-    const remaining = parseFloat((amounts.driverProductPenalty - recovered).toFixed(8));
-
-    // Acreditar 2% al cliente como indemnización en DOMIs
-    if (amounts.productsToClient > 0) {
-      await wallet_ops.creditAvailableUser(order.customer_user_id, amounts.productsToClient, conn, {
-        ...meta, notes: `Indemnización cliente COD (2%) por abandono de repartidor #${order.id}`
-      });
-    }
-
-    // Si el repartidor no tiene saldo, el sistema asume temporalmente el pago del bono
-    // y crea una Compensación Automática contra el repartidor a favor del sistema
-    if (remaining > 0) {
-      const { ownerId } = driver_ops.resolveDriverWallet(order);
-      await debt_ops.create({
-        orderId: order.id,
-        debtorId: ownerId,
-        beneficiaryType: 'system',
-        beneficiaryId: null,
-        amountDomis: remaining,
-        fiatPeg: fiatPeg
-      }, conn);
-    }
-
-  } else {
-    // DOMI: Reembolsar 100% al cliente desde el locked_balance
-    const peg = parseFloat(order.fiat_peg_snapshot || 1.0);
-    const orderTotalDomi = parseFloat((parseFloat(order.total_cop || 0) / peg).toFixed(8));
-    const domiCost = parseFloat(order.driver_domi_cost || 0);
-    const totalToDebit = parseFloat((orderTotalDomi + domiCost).toFixed(8));
-    await wallet_ops.debitLocked(order.customer_user_id, totalToDebit, conn);
-    await wallet_ops.creditAvailableUser(order.customer_user_id, amounts.productsToClient, conn, {
-      ...meta, notes: `Reembolso completo DOMI por abandono de repartidor en ruta #${order.id}`
-    });
-
-    // Conductor compensa 100% a la sede por productos
-    const recovered = await driver_ops.tryDebitDriver(order, amounts.driverProductPenalty, conn);
-    const remaining = parseFloat((amounts.driverProductPenalty - recovered).toFixed(8));
-
-    if (recovered > 0) {
-      await wallet_ops.creditAvailableStore(order.store_id, recovered, conn, {
-        ...meta, notes: `Compensación productos por abandono de repartidor #${order.id}`
-      });
-    }
-
-    if (remaining > 0) {
-      const { ownerId } = driver_ops.resolveDriverWallet(order);
-      await debt_ops.create({
-        orderId: order.id,
-        debtorId: ownerId,
-        beneficiaryType: 'store',
-        beneficiaryId: order.store_id,
-        amountDomis: remaining,
-        fiatPeg: fiatPeg
-      }, conn);
-    }
+  // 1. Obtener todas las sub-órdenes del grupo si aplica
+  let ordersToProcess = [order];
+  if (order.group_order_id) {
+    const [groupOrders] = await conn.query('SELECT * FROM orders WHERE group_order_id = ? FOR UPDATE', [order.group_order_id]);
+    ordersToProcess = groupOrders;
   }
 
-  // Marcar la hora de cancelación de la orden
-  await conn.execute(
-    'UPDATE orders SET cancelled_at = NOW(6) WHERE id = ?',
-    [order.id]
-  );
+  const firstOrder = ordersToProcess[0];
+  const priorityPoints = parseFloat(firstOrder.driver_penalty_points_transit_snapshot || 3);
 
-  return { amounts };
+  // 2. Penalizar contador de prioridad del conductor una sola vez por el grupo
+  if (!meta || !meta.skipPriorityPenalty) {
+    await driver_ops.addPriorityPenalty(firstOrder, priorityPoints, conn);
+  }
+
+  // 3. Procesar cada orden en el grupo
+  for (const ord of ordersToProcess) {
+    const amounts = calc.forTransit(ord);
+
+    if (amounts.isCod) {
+      // COD: Repartidor es debitado 3% del producto
+      const recovered = await driver_ops.tryDebitDriver(ord, amounts.driverProductPenalty, conn);
+      const remaining = parseFloat((amounts.driverProductPenalty - recovered).toFixed(8));
+
+      // Acreditar 2% al cliente como indemnización en DOMIs
+      if (amounts.productsToClient > 0) {
+        await wallet_ops.creditAvailableUser(ord.customer_user_id, amounts.productsToClient, conn, {
+          referenceId: ord.id, notes: `Indemnización cliente COD (2%) por abandono de repartidor #${ord.id}`
+        });
+      }
+
+      if (remaining > 0) {
+        const { ownerId } = driver_ops.resolveDriverWallet(ord);
+        await debt_ops.create({
+          orderId: ord.id,
+          debtorId: ownerId,
+          beneficiaryType: 'system',
+          beneficiaryId: null,
+          amountDomis: remaining,
+          fiatPeg: fiatPeg
+        }, conn);
+      }
+    } else {
+      // DOMI: Reembolsar 100% al cliente desde el locked_balance (productos + domicilio)
+      const peg = parseFloat(ord.fiat_peg_snapshot || 1.0);
+      const orderTotalDomi = parseFloat((parseFloat(ord.total_cop || 0) / peg).toFixed(8));
+      const domiCost = parseFloat(ord.driver_domi_cost || 0);
+      const totalToDebit = parseFloat((orderTotalDomi + domiCost).toFixed(8));
+      
+      await wallet_ops.debitLocked(ord.customer_user_id, totalToDebit, conn);
+      await wallet_ops.creditAvailableUser(ord.customer_user_id, totalToDebit, conn, {
+        referenceId: ord.id, notes: `Reembolso completo DOMI por abandono de repartidor en ruta #${ord.id}`
+      });
+
+      // Conductor compensa 100% a la sede por productos
+      const recovered = await driver_ops.tryDebitDriver(ord, amounts.driverProductPenalty, conn);
+      const remaining = parseFloat((amounts.driverProductPenalty - recovered).toFixed(8));
+
+      if (recovered > 0) {
+        await wallet_ops.creditAvailableStore(ord.store_id, recovered, conn, {
+          referenceId: ord.id, notes: `Compensación productos por abandono de repartidor #${ord.id}`
+        });
+      }
+
+      if (remaining > 0) {
+        const { ownerId } = driver_ops.resolveDriverWallet(ord);
+        await debt_ops.create({
+          orderId: ord.id,
+          debtorId: ownerId,
+          beneficiaryType: 'store',
+          beneficiaryId: ord.store_id,
+          amountDomis: remaining,
+          fiatPeg: fiatPeg
+        }, conn);
+      }
+    }
+
+    // Marcar la orden como cancelada
+    await conn.execute(
+      "UPDATE orders SET status = 'cancelado', cancelled_at = NOW(6) WHERE id = ?",
+      [ord.id]
+    );
+  }
+
+  return { amounts: calc.forTransit(order) };
 }
 
 module.exports = cancelTransit;

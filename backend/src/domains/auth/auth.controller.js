@@ -35,7 +35,7 @@ class AuthController {
   async checkUser(req, res) {
     try {
       const { email } = req.query;
-      const result = await authService.checkUser(email);
+      const result = await authService.checkUser(email, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);
@@ -44,7 +44,7 @@ class AuthController {
 
   async mobileRegisterFull(req, res) {
     try {
-      const result = await authService.mobileRegisterFull(req.body);
+      const result = await authService.mobileRegisterFull(req.body, req);
       res.status(201).json(result);
     } catch (error) {
       handleControllerError(res, error);
@@ -73,7 +73,7 @@ class AuthController {
 
   async refreshSession(req, res) {
     try {
-      const result = await authService.refreshSession(req.user);
+      const result = await authService.refreshSession(req.user, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

@@ -4,6 +4,7 @@ const userRepository = require('../domains/user/user.repository');
 const sessionStampService = require('../services/sessionStampService');
 const redisClient = require('../config/redis');
 const appLogger = require('../utils/appLogger');
+const db = require('../config/db');
 
 
 if (!process.env.JWT_SECRET) {
@@ -224,7 +225,37 @@ const validateFinancialPin = async (req, res, next) => {
   }
 };
 
+const conditionalFinancialPin = async (req, res, next) => {
+  const { amountCop } = req.body;
+  if (!amountCop) {
+    return next();
+  }
+
+  try {
+    const [[rule]] = await db.query(
+      "SELECT rule_value FROM protocol_rules WHERE rule_key = 'cash_income_pin_threshold_cop'"
+    );
+    const threshold = rule ? parseFloat(rule.rule_value) : 500000;
+    
+    if (parseFloat(amountCop) >= threshold) {
+      return validateFinancialPin(req, res, next);
+    }
+    next();
+  } catch (error) {
+    console.error('[CONDITIONAL PIN ERROR]', error);
+    res.status(500).json({ error: 'Error interno al evaluar el umbral del PIN financiero.' });
+  }
+};
+
 const bcrypt = require('bcryptjs');
 
-module.exports = { auth, rootOnly, hasPermission, hasAnyPermission, verifyInternalKey, validateFinancialPin };
+module.exports = { 
+  auth, 
+  rootOnly, 
+  hasPermission, 
+  hasAnyPermission, 
+  verifyInternalKey, 
+  validateFinancialPin,
+  conditionalFinancialPin
+};
 

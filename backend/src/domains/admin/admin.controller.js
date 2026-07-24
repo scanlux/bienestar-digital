@@ -38,7 +38,7 @@ class AdminController {
     try {
       const { id } = req.params;
       const { missingFields } = req.body;
-      const result = await adminService.getInfoRequestPreview(req.user, id, { missingFields });
+      const result = await adminService.getInfoRequestPreview(req.user, id, { missingFields }, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);
@@ -196,7 +196,7 @@ class AdminController {
 
   async getSystemParameters(req, res) {
     try {
-      const result = await adminService.getSystemParameters();
+      const result = await adminService.getSystemParameters(req.user, req);
       res.json(result);
     } catch (error) {
       handleControllerError(res, error);

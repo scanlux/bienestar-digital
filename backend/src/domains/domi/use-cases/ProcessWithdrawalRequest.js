@@ -215,13 +215,21 @@ class ProcessWithdrawalRequest {
           { requestId, amountDomis: withdrawalReq.amount_domis, reason: notes }
         );
 
-        // Sincronizar cache de Redis
-        const ownerType = wallet.owner_type;
-        const ownerId = wallet.owner_id;
-        await domiRedis.incrementBalance(ownerType, ownerId, totalRefund);
       }
 
       await conn.commit();
+
+      // Sincronizar cache de Redis post-commit
+      if (action === 'approve') {
+        await domiRedis.decrementBalance('system', null, parseFloat(withdrawalReq.amount_domis));
+      } else {
+        const ownerType = wallet.owner_type;
+        const ownerId = wallet.owner_id;
+        const totalRefund = parseFloat(withdrawalReq.amount_domis) + parseFloat(withdrawalReq.exit_fee_domis);
+        await domiRedis.incrementBalance(ownerType, ownerId, totalRefund);
+        await domiRedis.decrementBalance('system', null, totalRefund);
+      }
+
       return { success: true, requestId, action };
     } catch (err) {
       await conn.rollback();

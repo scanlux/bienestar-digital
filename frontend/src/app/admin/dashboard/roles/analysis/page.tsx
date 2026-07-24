@@ -237,19 +237,23 @@ export default function PermissionsAnalysisPage() {
                         ))}
                       </TableBadgeList>
                     </td>
-                    <td style={{ verticalAlign: 'top', minWidth: '200px' }}>
+                     <td style={{ verticalAlign: 'top', minWidth: '200px' }}>
                       <EndpointList>
-                        {p.endpoints.map((ep: string) => {
-                          const parts = ep.split(' ');
-                          const method = parts[0];
-                          const route = parts.slice(1).join(' ');
-                          return (
-                            <EndpointRow key={ep}>
-                              <MethodBadge method={method}>{method}</MethodBadge>
-                              <RouteCode>{route}</RouteCode>
-                            </EndpointRow>
-                          );
-                        })}
+                        {p.endpoints && p.endpoints.length > 0 && p.endpoints[0] !== '' ? (
+                          p.endpoints.map((ep: string) => {
+                            const parts = ep.split(' ');
+                            const method = parts[0];
+                            const route = parts.slice(1).join(' ');
+                            return (
+                              <EndpointRow key={ep}>
+                                <MethodBadge method={method}>{method}</MethodBadge>
+                                <RouteCode>{route}</RouteCode>
+                              </EndpointRow>
+                            );
+                          })
+                        ) : (
+                          <NoEndpointsBadge>Exclusivo de Interfaz</NoEndpointsBadge>
+                        )}
                       </EndpointList>
                     </td>
                     <td style={{ verticalAlign: 'top', textAlign: 'center' }}>
@@ -334,17 +338,21 @@ export default function PermissionsAnalysisPage() {
 
                 <TagTitle>Endpoints Protegidos:</TagTitle>
                 <EndpointList>
-                  {p.endpoints.map((ep: string) => {
-                    const parts = ep.split(' ');
-                    const method = parts[0];
-                    const route = parts.slice(1).join(' ');
-                    return (
-                      <EndpointRow key={ep}>
-                        <MethodBadge method={method}>{method}</MethodBadge>
-                        <RouteCode>{route}</RouteCode>
-                      </EndpointRow>
-                    );
-                  })}
+                  {p.endpoints && p.endpoints.length > 0 && p.endpoints[0] !== '' ? (
+                    p.endpoints.map((ep: string) => {
+                      const parts = ep.split(' ');
+                      const method = parts[0];
+                      const route = parts.slice(1).join(' ');
+                      return (
+                        <EndpointRow key={ep}>
+                          <MethodBadge method={method}>{method}</MethodBadge>
+                          <RouteCode>{route}</RouteCode>
+                        </EndpointRow>
+                      );
+                    })
+                  ) : (
+                    <NoEndpointsBadge>Exclusivo de Interfaz</NoEndpointsBadge>
+                  )}
                 </EndpointList>
               </AnalysisCard>
             ))
@@ -727,6 +735,18 @@ const MethodBadge = styled.span<{method: string}>`
         return `color: #ffa500; background: rgba(255, 165, 0, 0.12); border: 1px solid rgba(255, 165, 0, 0.2);`;
     }
   }}
+`;
+
+const NoEndpointsBadge = styled.span`
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  text-align: center;
+  color: #ff9800;
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.25);
+  display: inline-block;
 `;
 
 const RouteCode = styled.code`

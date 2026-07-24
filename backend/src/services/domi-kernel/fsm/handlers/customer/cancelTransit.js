@@ -9,8 +9,8 @@ const wallet_ops = require('../../ops/wallet.ops');
 const driver_ops = require('../../ops/driver.ops');
 const debt_ops   = require('../../ops/debt.ops');
 
-async function cancelTransit({ order, conn }) {
-  const amounts = calc.forTransit(order);
+async function cancelTransit({ order, conn, meta: fsmMeta }) {
+  const amounts = calc.forTransit(order, fsmMeta);
   const meta    = { referenceId: order.id };
   const fiatPeg = parseFloat(order.fiat_peg_snapshot || 400.0);
 

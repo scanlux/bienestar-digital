@@ -85,12 +85,14 @@ async function reclaimOrphanedTransactions(client) {
               payload.driverCost
             );
             await client.xAck(STREAM_NAME, GROUP_NAME, msg.id);
+            await client.xDel(STREAM_NAME, msg.id);
             appLogger.info(`[WORKER_RECOVERY] Pedido huérfano #${payload.orderId} procesado con éxito.`);
           } catch (err) {
             appLogger.error(`[WORKER_RECOVERY_ERROR] Error al procesar pedido huérfano #${payload.orderId}: ${err.message}`);
             if (isFatalError(err)) {
               appLogger.error(`[WORKER_RECOVERY_FAIL_FATAL] Transacción huérfana inválida detectada. Haciendo ACK para descartar. Pedido #${payload.orderId}`);
               await client.xAck(STREAM_NAME, GROUP_NAME, msg.id);
+              await client.xDel(STREAM_NAME, msg.id);
             }
           }
         } else if (payload.action === 'charge_delivery_company_order') {
@@ -102,12 +104,14 @@ async function reclaimOrphanedTransactions(client) {
               payload.cost
             );
             await client.xAck(STREAM_NAME, GROUP_NAME, msg.id);
+            await client.xDel(STREAM_NAME, msg.id);
             appLogger.info(`[WORKER_RECOVERY] Pedido huérfano de empresa #${payload.orderId} procesado con éxito.`);
           } catch (err) {
             appLogger.error(`[WORKER_RECOVERY_ERROR] Error al procesar pedido huérfano de empresa #${payload.orderId}: ${err.message}`);
             if (isFatalError(err)) {
               appLogger.error(`[WORKER_RECOVERY_FAIL_FATAL] Transacción huérfana de empresa inválida detectada. Haciendo ACK para descartar. Pedido #${payload.orderId}`);
               await client.xAck(STREAM_NAME, GROUP_NAME, msg.id);
+              await client.xDel(STREAM_NAME, msg.id);
             }
           }
         }
@@ -189,6 +193,7 @@ async function startWorker() {
               
               // Confirmar lectura y procesamiento exitoso
               await workerRedis.xAck(STREAM_NAME, GROUP_NAME, msg.id);
+              await workerRedis.xDel(STREAM_NAME, msg.id);
               appLogger.info(`[TRANSACTION_PROCESSED] Pedido #${payload.orderId} persistido en MariaDB con éxito.`);
             } catch (businessErr) {
               appLogger.error(`[WORKER_ERROR] Reglas de Negocio / Trigger (Pedido #${payload.orderId}): ${businessErr.message}`);
@@ -197,6 +202,7 @@ async function startWorker() {
               if (isFatalError(businessErr)) {
                  appLogger.error(`[WORKER_FAIL_FATAL] Transacción inválida detectada (BD / Negocio). Haciendo ACK para descartar. Pedido #${payload.orderId}`);
                  await workerRedis.xAck(STREAM_NAME, GROUP_NAME, msg.id);
+                 await workerRedis.xDel(STREAM_NAME, msg.id);
               } else {
                  // Error de infraestructura/red (no de negocio): no hacemos ACK para reintento en el próximo ciclo o por otro worker.
                  appLogger.warn(`[WORKER_RETRY] Error recuperable para Pedido #${payload.orderId}. Esperando 5s antes de reintentar.`);
@@ -212,6 +218,7 @@ async function startWorker() {
               );
               
               await workerRedis.xAck(STREAM_NAME, GROUP_NAME, msg.id);
+              await workerRedis.xDel(STREAM_NAME, msg.id);
               appLogger.info(`[TRANSACTION_PROCESSED] Pedido de empresa de reparto #${payload.orderId} persistido en MariaDB con éxito.`);
             } catch (businessErr) {
               appLogger.error(`[WORKER_ERROR] Reglas de Negocio / Trigger (Pedido de empresa #${payload.orderId}): ${businessErr.message}`);
@@ -219,6 +226,7 @@ async function startWorker() {
               if (isFatalError(businessErr)) {
                  appLogger.error(`[WORKER_FAIL_FATAL] Transacción de empresa inválida detectada (BD / Negocio). Haciendo ACK para descartar. Pedido #${payload.orderId}`);
                  await workerRedis.xAck(STREAM_NAME, GROUP_NAME, msg.id);
+                 await workerRedis.xDel(STREAM_NAME, msg.id);
               } else {
                  appLogger.warn(`[WORKER_RETRY] Error recuperable para Pedido de empresa #${payload.orderId}. Esperando 5s antes de reintentar.`);
                  await new Promise(resolve => setTimeout(resolve, 5000));
@@ -227,7 +235,8 @@ async function startWorker() {
           } else {
              appLogger.warn(`[WORKER_WARN] Acción no reconocida en stream: ${payload.action}`);
              await workerRedis.xAck(STREAM_NAME, GROUP_NAME, msg.id);
-          }
+             await workerRedis.xDel(STREAM_NAME, msg.id);
+           }
         }
       }
     } catch (err) {

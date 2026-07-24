@@ -30,7 +30,6 @@ async function settleOrderPayment(conn, order, costDetails) {
     'UPDATE wallets SET balance_custody = balance_custody + ? WHERE id = ?',
     [orderTotalDomi, storeWallet.id]
   );
-  await domiRedis.incrementBalance('store', order.store_id, orderTotalDomi);
 
   // Acreditar envío al conductor (o a su empresa de reparto)
   let driverWallet = null;
@@ -50,7 +49,6 @@ async function settleOrderPayment(conn, order, costDetails) {
       'UPDATE wallets SET balance_custody = balance_custody + ? WHERE id = ?',
       [deliveryDomi, driverWallet.id]
     );
-    await domiRedis.incrementBalance(driverOwnerType, driverOwnerId, deliveryDomi);
   }
 
   // Registrar en el ledger
@@ -106,7 +104,15 @@ async function settleOrderPayment(conn, order, costDetails) {
     await domiCashbackEngine.incrementScore(order.customer_user_id, scoreDelta, conn);
   }
 
-  return { cashback, orderTotalDomi };
+  return { 
+    cashback, 
+    orderTotalDomi, 
+    storeId: order.store_id, 
+    driverOwnerType, 
+    driverOwnerId, 
+    deliveryDomi,
+    hasDriverPayment: (deliveryDomi > 0 && driverWallet) ? true : false
+  };
 }
 
 module.exports = {

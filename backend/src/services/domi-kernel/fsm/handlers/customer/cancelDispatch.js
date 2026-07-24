@@ -8,8 +8,8 @@ const wallet_ops = require('../../ops/wallet.ops');
 const driver_ops = require('../../ops/driver.ops');
 const debt_ops   = require('../../ops/debt.ops');
 
-async function cancelDispatch({ order, conn }) {
-  const amounts = calc.forDispatch(order);
+async function cancelDispatch({ order, conn, meta: fsmMeta }) {
+  const amounts = calc.forDispatch(order, fsmMeta);
   const meta    = { referenceId: order.id };
   const fiatPeg = parseFloat(order.fiat_peg_snapshot || 400.0);
 

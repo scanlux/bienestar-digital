@@ -23,16 +23,31 @@ async function cancelDispatch({ order, conn }) {
   // 1. PENALIZAR CONFIABILIDAD SEDE
   await store_ops.addReliabilityPenalty(order.store_id, amounts.storePenaltyPoints, conn);
 
-  // 2. COMPENSAR CONDUCTOR ASIGNADO (desde el balance de utilidad del sistema)
+  // 2. COMPENSAR CONDUCTOR ASIGNADO (comisión devuelta por sistema)
   if (amounts.driverCommissionFromSystem > 0) {
     await wallet_ops.creditFromSystem(order.driver_user_id, amounts.driverCommissionFromSystem, conn, {
-      ...meta, notes: `Comisión conductor cubierta por sistema por cancelación de sede en despacho #${order.id}`
+      ...meta, notes: `Comisión conductor reembolsada por sistema por cancelación de sede en despacho #${order.id}`
     });
   }
+  // Compensación del 50% del domicilio al conductor: cobrado a la sede, pagado al conductor
   if (amounts.driverDeliveryFromSystem > 0) {
-    await wallet_ops.creditFromSystem(order.driver_user_id, amounts.driverDeliveryFromSystem, conn, {
-      ...meta, notes: `Compensación 50% domicilio conductor cubierta por sistema por cancelación de sede en despacho #${order.id}`
+    const recoveredDriverDelivery = await wallet_ops.tryDebitStore(order.store_id, amounts.driverDeliveryFromSystem, conn);
+    const remainingDriverDelivery = parseFloat((amounts.driverDeliveryFromSystem - recoveredDriverDelivery).toFixed(8));
+
+    await wallet_ops.creditAvailableUser(order.driver_user_id, amounts.driverDeliveryFromSystem, conn, {
+      ...meta, notes: `Compensación 50% domicilio pagada por la sede por cancelación en despacho #${order.id}`
     });
+
+    if (remainingDriverDelivery > 0) {
+      await debt_ops.createStoreDebt({
+        orderId: order.id,
+        storeId: order.store_id,
+        beneficiaryType: 'system',
+        beneficiaryId: null,
+        amountDomis: remainingDriverDelivery,
+        fiatPeg: fiatPeg
+      }, conn);
+    }
   }
 
   // 3. COMPENSAR CLIENTE (bono de fidelización)

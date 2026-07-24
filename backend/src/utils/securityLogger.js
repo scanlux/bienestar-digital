@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const appLogger = require('./appLogger');
 const redisClient = require('../config/redis');
+const auditConstants = require('./auditConstants');
 
 /**
  * Registra un evento de seguridad en la base de datos y la consola del sistema.
@@ -17,6 +18,10 @@ async function logSecurityEvent(
   userId, eventType, severity, req = null,
   details = null, resourceType = null, resourceId = null
 ) {
+  if (!Object.values(auditConstants).includes(eventType)) {
+    appLogger.warn(`[SECURITY WARNING] Event type "${eventType}" is not registered in auditConstants.js`);
+  }
+
   let ipAddress = null;
   let userAgent = null;
 

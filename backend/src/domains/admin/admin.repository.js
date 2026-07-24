@@ -347,6 +347,19 @@ class AdminRepository {
       );
     }
   }
+
+  async protectedUpdateProtocolRules(fields, values, connection) {
+    const queryExecutor = connection || db;
+    try {
+      await queryExecutor.query('SET @domi_bypass_security = 1');
+      await queryExecutor.query(
+        `UPDATE protocol_rules SET ${fields.join(', ')} WHERE id = 1`,
+        values
+      );
+    } finally {
+      await queryExecutor.query('SET @domi_bypass_security = NULL');
+    }
+  }
 }
 
 module.exports = new AdminRepository();

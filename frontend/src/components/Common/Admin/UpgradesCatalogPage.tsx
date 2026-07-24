@@ -10,6 +10,10 @@ import { useToast } from '@/context/ToastContext';
 import { Spinner } from '@/components/Common/UIElements';
 import { fadeIn } from '@/components/Common/PageStyles';
 
+import UpgradeStatusBadge from './upgrades/UpgradeStatusBadge';
+import UpgradeActionPanel from './upgrades/UpgradeActionPanel';
+import UpgradeDetail from './upgrades/UpgradeDetail';
+
 // Styled Components
 const Container = styled.div`
   padding: 30px;
@@ -250,29 +254,9 @@ const CardIconWrapper = styled.div<{ $type: string }>`
     props.$type === 'adicionar_sede' ? '#f59e0b' : 'rgba(255, 255, 255, 0.8)'};
 `;
 
-const Badge = styled.span<{ $variant: 'success' | 'danger' | 'info' | 'warning' | 'neutral' }>`
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: ${props => 
-    props.$variant === 'success' ? 'rgba(16, 185, 129, 0.1)' : 
-    props.$variant === 'danger' ? 'rgba(239, 68, 68, 0.1)' : 
-    props.$variant === 'info' ? 'rgba(59, 130, 246, 0.1)' : 
-    props.$variant === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(255, 255, 255, 0.05)'};
-  color: ${props => 
-    props.$variant === 'success' ? '#10b981' : 
-    props.$variant === 'danger' ? '#ef4444' : 
-    props.$variant === 'info' ? '#3b82f6' : 
-    props.$variant === 'warning' ? '#f59e0b' : 'rgba(255, 255, 255, 0.6)'};
-  border: 1px solid ${props => 
-    props.$variant === 'success' ? 'rgba(16, 185, 129, 0.15)' : 
-    props.$variant === 'danger' ? 'rgba(239, 68, 68, 0.15)' : 
-    props.$variant === 'info' ? 'rgba(59, 130, 246, 0.15)' : 
-    props.$variant === 'warning' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.08)'};
-`;
+const Badge = ({ $variant, children, style }: any) => (
+  <UpgradeStatusBadge variant={$variant} style={style}>{children}</UpgradeStatusBadge>
+);
 
 const UpgradeTitle = styled.h3`
   margin: 0;
@@ -900,30 +884,24 @@ export default function UpgradesCatalogPage() {
             Gestione las mejoras operativas del ecosistema, configure precios y duraciones, otorgue manuales y visualice comercios afectados.
           </Subtitle>
         </div>
-        <HeaderActions>
-          <Button 
-            onClick={() => setEditingCatalogItem({
-              upgrade_key: '',
-              label: '',
-              description: '',
-              icon: 'star',
-              price_domis: '0',
-              duration_days: '30',
-              is_subscription: 0,
-              max_per_commerce: null,
-              max_per_entity: null,
-              benefit_scope: 'global',
-              target_role: 'commerce_manager',
-              is_active: 1,
-              is_create: true
-            })}
-          >
-            <PlusIcon /> Crear Mejora
-          </Button>
-          <Button $variant="primary" onClick={() => setShowGrantModal(true)}>
-            👥 Otorgar sin Cobro
-          </Button>
-        </HeaderActions>
+        <UpgradeActionPanel 
+          onCreateUpgrade={() => setEditingCatalogItem({
+            upgrade_key: '',
+            label: '',
+            description: '',
+            icon: 'star',
+            price_domis: '0',
+            duration_days: '30',
+            is_subscription: 0,
+            max_per_commerce: null,
+            max_per_entity: null,
+            benefit_scope: 'global',
+            target_role: 'commerce_manager',
+            is_active: 1,
+            is_create: true
+          })} 
+          onGrantUpgrade={() => setShowGrantModal(true)} 
+        />
       </Header>
 
       {/* Stats Summary Block */}
@@ -1403,102 +1381,13 @@ export default function UpgradesCatalogPage() {
       )}
 
       {/* MODAL 2: Ver Comercios Afectados */}
-      {viewingCommercesForItem && (
-        <ModalOverlay>
-          <ModalContent $width="750px">
-            <ModalHeader>
-              <div>
-                <ModalTitle>Comercios Afectados</ModalTitle>
-                <Subtitle style={{ margin: '2px 0 0 0' }}>Mejora: {viewingCommercesForItem.label}</Subtitle>
-              </div>
-              <CloseButton onClick={() => { setViewingCommercesForItem(null); setViewingSearch(''); }}>&times;</CloseButton>
-            </ModalHeader>
-
-            <FormInput 
-              type="text"
-              placeholder="Buscar comercio por nombre o correo..."
-              value={viewingSearch}
-              onChange={e => setViewingSearch(e.target.value)}
-            />
-
-            <TableContainer style={{ maxHeight: '350px', overflowY: 'auto' }}>
-              <Table>
-                <thead>
-                  <tr>
-                    <th>Comercio</th>
-                    <th>Beneficiario</th>
-                    <th>Administrador (Email)</th>
-                    <th>Adquirida</th>
-                    <th>Expiración</th>
-                    <th>Días Rest.</th>
-                    <th>Precio de Adquisición</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedItemActiveContracts.map((u: any) => {
-                    const daysRemaining = getDaysRemaining(u.expires_at);
-                    return (
-                      <tr key={u.id}>
-                        <td>
-                          <div style={{ fontWeight: 700 }}>{u.razon_social}</div>
-                          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>ID: #{u.commerce_id}</span>
-                        </td>
-                        <td>
-                          {u.store_id ? (
-                            <div>
-                              <div style={{ color: 'var(--emerald)', fontWeight: 600, fontSize: '12px' }}>Sede</div>
-                              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-                                {u.store_name || `ID: #${u.store_id}`}
-                              </span>
-                            </div>
-                          ) : u.delivery_company_id ? (
-                            <div>
-                              <div style={{ color: '#60a5fa', fontWeight: 600, fontSize: '12px' }}>Empresa Delivery</div>
-                              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-                                {u.delivery_company_name || `ID: #${u.delivery_company_id}`}
-                              </span>
-                            </div>
-                          ) : u.user_id ? (
-                            <div>
-                              <div style={{ color: '#fb7185', fontWeight: 600, fontSize: '12px' }}>Usuario</div>
-                              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-                                {u.target_user_email || `ID: #${u.user_id}`}
-                              </span>
-                            </div>
-                          ) : (
-                            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>Global (Comercio)</span>
-                          )}
-                        </td>
-                        <td>
-                          <div>{u.email}</div>
-                          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>Rol: {u.rol}</span>
-                        </td>
-                        <td>{new Date(u.created_at).toLocaleDateString()}</td>
-                        <td>{new Date(u.expires_at).toLocaleDateString()}</td>
-                        <td style={{ fontWeight: 600, color: daysRemaining < 5 ? '#ef4444' : '#48d64c' }}>
-                          {daysRemaining} días
-                        </td>
-                        <td>{parseFloat(u.price_domis) === 0 ? 'Cortesia (Manual)' : `${parseFloat(u.price_domis).toFixed(2)} DOMI`}</td>
-                      </tr>
-                    );
-                  })}
-                  {selectedItemActiveContracts.length === 0 && (
-                    <tr>
-                      <td colSpan={8} style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', padding: '2rem' }}>
-                        Ningún comercio tiene activa esta mejora actualmente.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </Table>
-            </TableContainer>
-
-            <Button style={{ width: '100%', justifyContent: 'center' }} onClick={() => { setViewingCommercesForItem(null); setViewingSearch(''); }}>
-              Cerrar Listado
-            </Button>
-          </ModalContent>
-        </ModalOverlay>
-      )}
+      <UpgradeDetail 
+        viewingCommercesForItem={viewingCommercesForItem}
+        viewingSearch={viewingSearch}
+        setViewingSearch={setViewingSearch}
+        selectedItemActiveContracts={selectedItemActiveContracts}
+        onClose={() => { setViewingCommercesForItem(null); setViewingSearch(''); }}
+      />
 
       {/* MODAL 3: Otorgar Mejora Manual (Otorgar sin Cobro) */}
       {showGrantModal && (

@@ -11,17 +11,26 @@
 const calc = require('../../calculators/driverCancel.calc');
 const driver_ops = require('../../ops/driver.ops');
 
-async function cancelPreparation({ order, conn }) {
+async function cancelPreparation({ order, conn, meta }) {
   const amounts = calc.forPreparation(order);
 
   // 1. Penalizar contador de prioridad del conductor
-  await driver_ops.addPriorityPenalty(order, amounts.priorityPenaltyPoints, conn);
+  if (!meta || !meta.skipPriorityPenalty) {
+    await driver_ops.addPriorityPenalty(order, amounts.priorityPenaltyPoints, conn);
+  }
 
   // 2. Limpiar el conductor asignado en la orden para que el sistema busque otro
-  await conn.execute(
-    'UPDATE orders SET driver_user_id = NULL WHERE id = ?',
-    [order.id]
-  );
+  if (order.group_order_id) {
+    await conn.execute(
+      'UPDATE orders SET driver_user_id = NULL WHERE group_order_id = ?',
+      [order.group_order_id]
+    );
+  } else {
+    await conn.execute(
+      'UPDATE orders SET driver_user_id = NULL WHERE id = ?',
+      [order.id]
+    );
+  }
 
   return { amounts };
 }

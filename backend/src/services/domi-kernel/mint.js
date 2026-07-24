@@ -4,10 +4,13 @@ const wallets = require('./wallets');
 const ledger = require('./ledger');
 const domiRedis = require('../domiRedis');
 
-async function mintDomis(ownerType, ownerId, fiatAmount, paymentRef, isConfirmed = true, confirmedBy = null) {
-  const conn = await db.getConnection();
+async function mintDomis(ownerType, ownerId, fiatAmount, paymentRef, isConfirmed = true, confirmedBy = null, vaultTxId = null, externalConn = null) {
+  const conn = externalConn || await db.getConnection();
+  const isInternalTx = !externalConn;
   try {
-    await conn.beginTransaction();
+    if (isInternalTx) {
+      await conn.beginTransaction();
+    }
 
     // Verificación de idempotencia ANTES de cualquier operación
     if (paymentRef) {
@@ -18,7 +21,9 @@ async function mintDomis(ownerType, ownerId, fiatAmount, paymentRef, isConfirmed
       if (existing.length > 0) {
         // Pago ya procesado — retornar respuesta idempotente sin crear duplicado
         console.log(`[DOMI] Mint idempotente: paymentRef '${paymentRef}' ya existe (pkg #${existing[0].id}). Retornando resultado original.`);
-        await conn.rollback();
+        if (isInternalTx) {
+          await conn.rollback();
+        }
         return { 
           packageId: existing[0].id, 
           domis: parseFloat(existing[0].domis_purchased), 
@@ -56,8 +61,8 @@ async function mintDomis(ownerType, ownerId, fiatAmount, paymentRef, isConfirmed
     const [pkgResult] = await conn.query(`
       INSERT INTO domi_packages (
         store_id, wallet_id, domis_purchased, fiat_paid_cop, 
-        exchange_rate, payment_ref, status, is_confirmed, confirmed_at, confirmed_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        exchange_rate, payment_ref, status, is_confirmed, confirmed_at, confirmed_by, vault_tx_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       ownerType === 'store' ? ownerId : null, 
       wallet.id, 
@@ -68,7 +73,8 @@ async function mintDomis(ownerType, ownerId, fiatAmount, paymentRef, isConfirmed
       isConfirmed ? 'confirmado' : 'pendiente',
       isConfirmed ? 1 : 0,
       isConfirmed ? new Date() : null,
-      confirmedBy
+      confirmedBy,
+      vaultTxId
     ]);
     const packageId = pkgResult.insertId;
 
@@ -82,18 +88,24 @@ async function mintDomis(ownerType, ownerId, fiatAmount, paymentRef, isConfirmed
       notes: `Mint ${domis} DOMI para ${ownerType} #${ownerId}`
     });
 
-    await conn.commit();
-    
-    // Sincronizar Caché de Redis
-    await domiRedis.incrementBalance(ownerType, ownerId, domis);
+    if (isInternalTx) {
+      await conn.commit();
+      
+      // Sincronizar Caché de Redis (solo si finalizamos transacción interna aquí)
+      await domiRedis.incrementBalance(ownerType, ownerId, domis);
+    }
     
     console.log(`[DOMI] Mint: ${domis} DOMI para ${ownerType} #${ownerId} (Paquete #${packageId}, confirmado=${isConfirmed})`);
     return { packageId, domis, fiatAmount, exchangeRate: fiatPeg };
   } catch (err) {
-    await conn.rollback();
+    if (isInternalTx) {
+      await conn.rollback();
+    }
     throw err;
   } finally {
-    conn.release();
+    if (isInternalTx) {
+      conn.release();
+    }
   }
 }
 

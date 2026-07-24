@@ -72,6 +72,16 @@ ${html}
       return { success: true, simulated: true };
     }
   }
+
+  renderTemplate(templateBody, variables = {}) {
+    if (!templateBody) return '';
+    let rendered = templateBody;
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+      rendered = rendered.replace(regex, value !== undefined && value !== null ? String(value) : '');
+    }
+    return rendered;
+  }
 }
 
 module.exports = new EmailService();

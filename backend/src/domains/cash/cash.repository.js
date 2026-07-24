@@ -36,12 +36,13 @@ class CashRepository {
     return result.insertId;
   }
 
-  async createBankDeposit(amountCop, destinationWalletId, evidenceUrl, depositDate, notes, createdBy) {
-    const [result] = await db.query(`
+  async createBankDeposit(amountCop, destinationWalletId, evidenceUrl, depositDate, notes, createdBy, depositSource = 'direct', connection) {
+    const queryExecutor = connection || db;
+    const [result] = await queryExecutor.query(`
       INSERT INTO bank_deposits 
-      (amount_cop, status, destination_wallet_id, evidence_url, deposit_date, notes, created_by)
-      VALUES (?, 'pending', ?, ?, ?, ?, ?)
-    `, [amountCop, destinationWalletId, evidenceUrl, depositDate, notes || null, createdBy]);
+      (amount_cop, status, destination_wallet_id, evidence_url, deposit_date, notes, created_by, deposit_source)
+      VALUES (?, 'pending', ?, ?, ?, ?, ?, ?)
+    `, [amountCop, destinationWalletId || null, evidenceUrl, depositDate, notes || null, createdBy, depositSource]);
     return result.insertId;
   }
 
