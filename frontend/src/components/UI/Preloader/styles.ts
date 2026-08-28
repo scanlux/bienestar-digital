@@ -15,6 +15,11 @@ export const Wrapper = styled.div`
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
+
+  @media (max-width: 768px) {
+    align-items: center;
+    justify-content: center;
+  }
 `;
 
 export const Inner = styled.div`
@@ -42,16 +47,19 @@ export const Inner = styled.div`
   }
 
   @media (max-width: 768px) {
-    gap: 1rem;
-    height: 13rem;
+    flex-direction: column;
+    gap: 1.5rem;
+    height: auto;
+    padding: 0;
+
     img {
-      width: 7rem;
-      height: 100%;
+      width: 8rem;
+      height: 8rem;
     }
 
     div {
       div {
-        font-size: 6rem;
+        font-size: 4.5rem;
       }
     }
   }
