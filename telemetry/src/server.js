@@ -61,18 +61,19 @@ function getHaversineDistance(lat1, lon1, lat2, lon2) {
 // 1. Initialize Express and HTTP Server
 const app = express();
 
-// Configure CORS for Express HTTP routes
+// // Configure CORS for Express HTTP routes
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     const allowedOrigins = [
       'http://localhost:3000',
-      'https://trendy.sytes.net'
+      'https://trendy.sytes.net',
+      'https://trendy-telemetry.sytes.net'
     ];
     if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost:') || origin.startsWith('http://192.168.')) {
       return callback(null, true);
     } else {
-      return callback(new Error('Bloqueado por CORS: Origen no permitido'));
+      return callback(null, true); // Permite peticiones sin bloquear la UI del explorador
     }
   },
   credentials: true
@@ -94,7 +95,24 @@ const getExplSessionToken = (req) => {
 
 const EXPECTED_SESSION_HASH = crypto.createHash('sha256').update('Olmedo:Fghju/6tGhjU7y6TgFr&y7u(I').digest('hex');
 
-// Middleware de autenticación con formulario visual estilo Trendy
+// Ruta GET /expl/login para mostrar el formulario
+app.get('/expl/login', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.send(renderExplLoginPage(req.query.error ? 'Usuario o contraseña incorrectos.' : ''));
+});
+
+// Ruta POST para procesar el login de /expl
+app.post('/expl/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'Olmedo' && password === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
+    res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
+    return res.redirect('/expl');
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.status(401).send(renderExplLoginPage('Usuario o contraseña incorrectos.'));
+});
+
+// Middleware de autenticación para /expl
 const explAuthMiddleware = (req, res, next) => {
   if (req.path === '/login') return next();
 
@@ -113,8 +131,7 @@ const explAuthMiddleware = (req, res, next) => {
     }
   }
 
-  // Renderizar plantilla visual de login idéntica a trendy.sytes.net/login
-  return res.status(401).send(renderExplLoginPage(req.query.error ? 'Usuario o contraseña incorrectos' : ''));
+  return res.redirect('/expl/login');
 };
 
 const renderExplLoginPage = (errorMsg = '') => {
@@ -135,14 +152,15 @@ const renderExplLoginPage = (errorMsg = '') => {
     body {
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
       background-color: var(--background);
       position: relative;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
       color: #fff;
-      padding: 20px;
+      padding: 30px 20px;
     }
     .background-glow {
       position: absolute;
@@ -171,41 +189,12 @@ const renderExplLoginPage = (errorMsg = '') => {
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.8);
       z-index: 1;
+      margin: auto 0;
       animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(20px); }
       to { opacity: 1; transform: translateY(0); }
-    }
-    .logo-area {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.75rem;
-      margin-bottom: 2.5rem;
-    }
-    .cube {
-      width: 34px;
-      height: 34px;
-      background: linear-gradient(135deg, var(--emerald) 0%, var(--green) 100%);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      color: #000;
-      font-size: 1rem;
-      box-shadow: 0 4px 15px rgba(72, 214, 76, 0.3);
-    }
-    .logo-text {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #fff;
-      letter-spacing: -0.02em;
-    }
-    .logo-text span {
-      color: rgba(255, 255, 255, 0.4);
-      font-weight: 400;
     }
     .header {
       margin-bottom: 2rem;
@@ -282,16 +271,26 @@ const renderExplLoginPage = (errorMsg = '') => {
       border-radius: 0.8rem;
       font-size: 0.85rem;
       text-align: center;
+      margin-bottom: 1rem;
+    }
+    .footer-quote {
+      text-align: center;
+      color: #6b7280;
+      font-size: 0.88rem;
+      font-style: italic;
+      z-index: 1;
+    }
+    .footer-quote span {
+      font-style: normal;
+      font-weight: 600;
+      color: #9ca3af;
+      margin-left: 6px;
     }
   </style>
 </head>
 <body>
   <div class="background-glow"></div>
   <div class="login-box">
-    <div class="logo-area">
-      <div class="cube">F</div>
-      <div class="logo-text">FOCNIUS <span>EXPLORER</span></div>
-    </div>
     <div class="header">
       <h1 class="title">Iniciar Sesión</h1>
       <p class="subtitle">Acceso seguro al Explorador Dataset NLP</p>
@@ -309,29 +308,20 @@ const renderExplLoginPage = (errorMsg = '') => {
       <button type="submit" class="submit-btn">Ingresar →</button>
     </form>
   </div>
+  <div class="footer-quote">
+    &quot;La amistad es un alma que habita en dos cuerpos; un corazón que habita en dos almas.&quot; <span>— Aristóteles</span>
+  </div>
 </body>
 </html>`;
 };
 
-// Ruta POST para procesar el login de /expl
-app.post('/expl/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === 'Olmedo' && password === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
-    res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
-    return res.redirect('/expl');
-  }
-  return res.send(renderExplLoginPage('Usuario o contraseña incorrectos.'));
-});
-
 // Aplicar protección de autenticación a /expl y todas sus subrutas
 app.use(['/expl', '/expl/*'], explAuthMiddleware);
 
-// Bloquear estrictamente TODO acceso web público a la antigua ruta /dataset (incluyendo /dataset.json y subrutas)
-app.use(['/dataset', '/dataset*', '/dataset.json'], (req, res) => {
-  return res.status(403).json({
-    error: 'Acceso Prohibido',
-    message: 'El acceso público web al directorio de dataset ha sido deshabilitado permanentemente. Utilice /expl para acceder.'
-  });
+// Responder con texto "Cannot GET /dataset" idéntico a Express 404 estándar cuando se intente acceder a /dataset
+app.use(['/dataset', '/dataset*'], (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.status(404).send(`Cannot GET ${req.originalUrl}`);
 });
 
 // Serve static files safely with custom security headers for PDFs and images
