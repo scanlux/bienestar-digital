@@ -1288,9 +1288,6 @@ const startServer = async () => {
               <div>
                 <div class="card-header">
                   <div class="card-title">📱 ${d.id}</div>
-                  <button type="button" onclick="event.preventDefault(); event.stopPropagation(); copyDeviceUrl('${d.id}')" class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px; border-color:#374151; color:#9ca3af;" title="Copiar URL del dispositivo">
-                    📋 Copiar Link
-                  </button>
                 </div>
                 <div class="card-meta">
                   <span>Registros escritos: <strong>${d.lineCount}</strong></span>
@@ -1307,7 +1304,9 @@ const startServer = async () => {
                   </button>
                 ` : ''}
               </div>
-              <a href="/expl/devices/${d.id}" class="btn btn-secondary" style="font-size:0.8rem; padding:8px 14px; text-decoration:none;">Explorar Apps →</a>
+              <button type="button" onclick="copyDeviceUrl('${d.id}')" class="btn btn-secondary" style="font-size:0.8rem; padding:8px 14px; border-color:#374151; color:#e5e7eb;" title="Copiar URL del dispositivo">
+                📋 Copiar Link
+              </button>
             </div>
           </div>
         `).join('')}
