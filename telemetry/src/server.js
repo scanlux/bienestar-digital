@@ -80,6 +80,39 @@ app.use(cors({
 
 app.use(express.json());
 
+// Basic Auth Middleware para proteger /expl y subrutas
+const explAuthMiddleware = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Explorador Telemetria NLP", charset="UTF-8"');
+    return res.status(401).send('Acceso Requerido: Ingrese usuario y contraseña.');
+  }
+
+  const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf8');
+  const [user, pass] = credentials.split(':');
+
+  const expectedUser = 'Old';
+  const expectedPass = 'Fghju/6tGhjU7y6TgFr&y7u(I';
+
+  if (user === expectedUser && pass === expectedPass) {
+    return next();
+  }
+
+  res.setHeader('WWW-Authenticate', 'Basic realm="Explorador Telemetria NLP", charset="UTF-8"');
+  return res.status(401).send('Credenciales incorrectas.');
+};
+
+// Aplicar protección de autenticación a /expl y todas sus subrutas
+app.use(['/expl', '/expl/*'], explAuthMiddleware);
+
+// Bloquear acceso público web a /dataset y todas sus subcarpetas/subrutas
+app.use(['/dataset', '/dataset/*'], (req, res) => {
+  return res.status(403).json({
+    error: 'Acceso Prohibido',
+    message: 'El acceso público web al directorio de dataset ha sido deshabilitado por razones de seguridad.'
+  });
+});
+
 // Serve static files safely with custom security headers for PDFs and images
 app.use('/uploads', express.static(UPLOAD_DIR, {
   setHeaders: (res, filePath) => {
@@ -1242,19 +1275,25 @@ const startServer = async () => {
   };
 
   const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl }) => {
+    const cleanTitle = (appPackage && level === 3) 
+      ? `${getAppDisplayName(appPackage)}` 
+      : String(title).replace(/<[^>]*>/g, '').trim();
+
     return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} - Explorador NLP</title>
+  <title>${cleanTitle} - Explorador NLP</title>
   <link rel="icon" href="https://trendy.sytes.net/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="https://trendy.sytes.net/favicon.ico">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0b0f19; color: #f3f4f6; line-height: 1.5; padding: 24px; min-height: 100vh; }
-    .container { max-width: 1240px; margin: 0 auto; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0b0f19; color: #f3f4f6; line-height: 1.5; padding: 24px; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
+    .container { max-width: 1240px; margin: 0 auto; width: 100%; flex: 1; }
+    .footer-quote { text-align: center; margin-top: 48px; padding-top: 24px; border-top: 1px solid #1f2937; color: #6b7280; font-size: 0.88rem; font-style: italic; }
+    .footer-quote span { font-style: normal; font-weight: 600; color: #9ca3af; margin-left: 6px; }
     
     .nav-breadcrumbs { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #9ca3af; margin-bottom: 16px; flex-wrap: wrap; }
     .nav-breadcrumbs a { color: #38bdf8; text-decoration: none; font-weight: 500; }
@@ -1424,6 +1463,10 @@ const startServer = async () => {
 
   </div>
 
+  <div class="footer-quote">
+    &quot;La amistad es un alma que habita en dos cuerpos; un corazón que habita en dos almas.&quot; <span>— Aristóteles</span>
+  </div>
+
   <div class="modal-overlay" id="sysModal" onclick="if(event.target === this) closeSystemModal()">
     <div class="modal-card">
       <div class="modal-header">
@@ -1548,7 +1591,6 @@ const startServer = async () => {
           card.innerHTML = \`
             <div class="record-header">
               <span>⏰ \${dateStr}</span>
-              <span>ID: \${item.device_id || 'dispositivo'}</span>
             </div>
             \${contentHtml}
             <button class="copy-btn" onclick="copyText('\${escapeHtml(textClean)}')">📋 Copiar</button>
