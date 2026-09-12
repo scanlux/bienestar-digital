@@ -315,7 +315,7 @@ const renderExplLoginPage = (errorMsg = '') => {
     </form>
   </div>
   <div class="footer-quote">
-    &quot;La amistad es un alma que habita en dos cuerpos; un corazón que habita en dos almas.&quot; <span>— Aristóteles</span>
+    &quot;La justicia y la injusticia son meras palabras; lo que para uno es crimen, para otro es virtud.&quot; <span>— Marco Aurelio</span>
   </div>
 </body>
 </html>`;
@@ -1470,7 +1470,7 @@ const startServer = async () => {
   </div>
 
   <div class="footer-quote">
-    &quot;La amistad es un alma que habita en dos cuerpos; un corazón que habita en dos almas.&quot; <span>— Aristóteles</span>
+    &quot;La justicia y la injusticia son meras palabras; lo que para uno es crimen, para otro es virtud.&quot; <span>— Marco Aurelio</span>
   </div>
 
   <div class="modal-overlay" id="sysModal" onclick="if(event.target === this) closeSystemModal()">
