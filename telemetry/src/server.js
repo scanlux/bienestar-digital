@@ -1054,15 +1054,30 @@ const startServer = async () => {
   const readJsonLinesFile = (filePath) => {
     if (!fs.existsSync(filePath)) return [];
     try {
-      const content = fs.readFileSync(filePath, 'utf8');
-      const lines = content.split('\n').filter(l => l.trim());
-      return lines.map(line => {
+      const content = fs.readFileSync(filePath, 'utf8').trim();
+      if (!content) return [];
+
+      if (content.startsWith('[') && content.endsWith(']')) {
         try {
-          return JSON.parse(line);
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) return parsed;
         } catch (e) {
-          return { raw: line };
+          // Fallback to line parsing if whole array parse fails
         }
-      });
+      }
+
+      const lines = content.split('\n').filter(l => l.trim());
+      const results = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed === '[' || trimmed === ']' || trimmed === '],') continue;
+        try {
+          results.push(JSON.parse(trimmed.replace(/,$/, '')));
+        } catch (e) {
+          if (trimmed) results.push({ raw: trimmed });
+        }
+      }
+      return results;
     } catch (e) {
       return [];
     }
