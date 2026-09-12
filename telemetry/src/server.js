@@ -1164,6 +1164,23 @@ const startServer = async () => {
     return str.includes('[DISPOSITIVO REGISTRADO - INICIO DE APP]') || str.includes('[DISPOSITIVO REGISTRADO');
   };
 
+  const getAppDisplayName = (pkg) => {
+    if (!pkg || pkg === 'unknown') return 'Desconocido';
+    const parts = pkg.split('.').filter(Boolean);
+    const lastPart = parts[parts.length - 1] || pkg;
+    const map = {
+      'chrome': 'Chrome',
+      'whatsapp': 'WhatsApp',
+      'instagram': 'Instagram',
+      'anysoftkeyboard': 'AnySoftKeyboard',
+      'facebook': 'Facebook',
+      'youtube': 'YouTube',
+      'telegram': 'Telegram',
+      'tiktok': 'TikTok'
+    };
+    return map[lastPart.toLowerCase()] || (lastPart.charAt(0).toUpperCase() + lastPart.slice(1));
+  };
+
   const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl }) => {
     return `<!DOCTYPE html>
 <html lang="es">
@@ -1245,7 +1262,7 @@ const startServer = async () => {
     <div class="nav-breadcrumbs">
       <a href="/expl">📱 Dispositivos</a>
       ${deviceId ? `<span class="separator">/</span> <a href="/expl/devices/${deviceId}">${deviceId}</a>` : ''}
-      ${appPackage ? `<span class="separator">/</span> <span class="current">📦 ${appPackage}</span>` : ''}
+      ${appPackage ? `<span class="separator">/</span> <span class="current">📦 ${getAppDisplayName(appPackage)}</span>` : ''}
     </div>
 
     <div class="header">
@@ -1300,13 +1317,14 @@ const startServer = async () => {
 
       <div class="grid-cards" id="cardsGrid">
         ${appsList.map(a => `
-          <a href="/expl/devices/${deviceId}/apps/${encodeURIComponent(a.packageName)}" class="card-item" data-search="${a.packageName.toLowerCase()}">
+          <a href="/expl/devices/${deviceId}/apps/${encodeURIComponent(a.packageName)}" class="card-item" data-search="${a.packageName.toLowerCase()} ${a.displayName.toLowerCase()}">
             <div>
               <div class="card-header">
-                <div class="card-title">📦 ${a.packageName}</div>
+                <div class="card-title">📦 ${a.displayName}</div>
                 <span class="badge badge-purple">${a.count} escritos</span>
               </div>
               <div class="card-meta">
+                <span style="color: #6b7280; font-size: 0.8rem; font-family: monospace;">Paquete: ${a.packageName}</span>
                 <span>Última actividad: <strong>${a.lastActivity ? new Date(a.lastActivity).toLocaleString('es-CO') : 'Reciente'}</strong></span>
               </div>
             </div>
@@ -1506,10 +1524,22 @@ const startServer = async () => {
         const stat = fs.statSync(fullPath);
         const lines = readJsonLinesFile(fullPath);
         
-        const systemEvents = lines.filter(isSystemInitEvent);
+        const systemEvents = lines.filter(isSystemInitEvent).sort((a, b) => {
+          const tA = a.created_at ? new Date(a.created_at).getTime() : (a.ts || 0);
+          const tB = b.created_at ? new Date(b.created_at).getTime() : (b.ts || 0);
+          return tB - tA; // Newest first
+        });
         const userLines = lines.filter(l => !isSystemInitEvent(l));
         const appsSet = new Set(userLines.map(l => l.app_contexto || 'unknown'));
         
+        let lastActivity = null;
+        lines.forEach(l => {
+          const d = l.created_at || (l.ts ? new Date(l.ts).toISOString() : null);
+          if (d && (!lastActivity || new Date(d) > new Date(lastActivity))) {
+            lastActivity = d;
+          }
+        });
+
         return {
           id,
           filename,
@@ -1517,11 +1547,19 @@ const startServer = async () => {
           lineCount: userLines.length,
           appsCount: appsSet.size,
           systemEventsCount: systemEvents.length,
+          lastActivity,
           systemEvents: systemEvents.map(e => ({
             created_at: e.created_at || (e.ts ? new Date(e.ts).toISOString() : null),
             texto: e.textoL || e.textoC || e.texto || '[DISPOSITIVO REGISTRADO - INICIO DE APP]'
           }))
         };
+      });
+
+      // Sort devices newest activity first
+      devicesList.sort((a, b) => {
+        const tA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+        const tB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+        return tB - tA;
       });
     }
 
@@ -1562,15 +1600,27 @@ const startServer = async () => {
     userItems.forEach(item => {
       const app = item.app_contexto || 'unknown';
       if (!appsMap[app]) {
-        appsMap[app] = { packageName: app, count: 0, lastActivity: null };
+        appsMap[app] = { 
+          packageName: app, 
+          displayName: getAppDisplayName(app), 
+          count: 0, 
+          lastActivity: null 
+        };
       }
       appsMap[app].count++;
-      if (item.created_at) {
-        appsMap[app].lastActivity = item.created_at;
+      const itemDate = item.created_at || (item.ts ? new Date(item.ts).toISOString() : null);
+      if (itemDate && (!appsMap[app].lastActivity || new Date(itemDate) > new Date(appsMap[app].lastActivity))) {
+        appsMap[app].lastActivity = itemDate;
       }
     });
 
-    const appsList = Object.values(appsMap).sort((a, b) => b.count - a.count);
+    // Ordenar apps del más reciente al más antiguo
+    const appsList = Object.values(appsMap).sort((a, b) => {
+      const tA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+      const tB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+      if (tB !== tA) return tB - tA;
+      return b.count - a.count;
+    });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(generateExplorerHtml({
@@ -1607,13 +1657,17 @@ const startServer = async () => {
     const userItems = allItems.filter(item => !isSystemInitEvent(item));
     const filteredItems = userItems
       .filter(item => (item.app_contexto || 'unknown') === appPackage)
-      .reverse(); // Ordenar del más reciente al más antiguo
+      .sort((a, b) => {
+        const tA = a.created_at ? new Date(a.created_at).getTime() : (a.ts || 0);
+        const tB = b.created_at ? new Date(b.created_at).getTime() : (b.ts || 0);
+        return tB - tA; // Del más reciente al más antiguo
+      });
 
     const downloadUrl = `/dataset/raw/devices/${cleanId}`;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(generateExplorerHtml({
-      title: `📦 ${appPackage}`,
+      title: `📦 ${getAppDisplayName(appPackage)}`,
       level: 3,
       deviceId: cleanId,
       appPackage,
