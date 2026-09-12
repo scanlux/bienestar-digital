@@ -78,38 +78,259 @@ app.use(cors({
   credentials: true
 }));
 
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Basic Auth Middleware para proteger /expl y subrutas
+// Cookie simple de sesión para /expl
+const getExplSessionToken = (req) => {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return null;
+  const cookies = Object.fromEntries(cookieHeader.split(';').map(c => {
+    const [k, v] = c.trim().split('=');
+    return [k, decodeURIComponent(v)];
+  }));
+  return cookies['expl_session'];
+};
+
+const EXPECTED_SESSION_HASH = crypto.createHash('sha256').update('Olmedo:Fghju/6tGhjU7y6TgFr&y7u(I').digest('hex');
+
+// Middleware de autenticación con formulario visual estilo Trendy
 const explAuthMiddleware = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Explorador Telemetria NLP", charset="UTF-8"');
-    return res.status(401).send('Acceso Requerido: Ingrese usuario y contraseña.');
-  }
+  if (req.path === '/login') return next();
 
-  const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf8');
-  const [user, pass] = credentials.split(':');
-
-  const expectedUser = 'Old';
-  const expectedPass = 'Fghju/6tGhjU7y6TgFr&y7u(I';
-
-  if (user === expectedUser && pass === expectedPass) {
+  const token = getExplSessionToken(req);
+  if (token === EXPECTED_SESSION_HASH) {
     return next();
   }
 
-  res.setHeader('WWW-Authenticate', 'Basic realm="Explorador Telemetria NLP", charset="UTF-8"');
-  return res.status(401).send('Credenciales incorrectas.');
+  // Si viene con Basic Auth en headers (API/curl)
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Basic ')) {
+    const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf8');
+    const [user, pass] = credentials.split(':');
+    if (user === 'Olmedo' && pass === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
+      return next();
+    }
+  }
+
+  // Renderizar plantilla visual de login idéntica a trendy.sytes.net/login
+  return res.status(401).send(renderExplLoginPage(req.query.error ? 'Usuario o contraseña incorrectos' : ''));
 };
+
+const renderExplLoginPage = (errorMsg = '') => {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar Sesión — Explorador NLP</title>
+  <link rel="icon" href="https://trendy.sytes.net/favicon.ico" type="image/x-icon">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --emerald: #48d64c;
+      --green: #22c55e;
+      --background: #09090b;
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--background);
+      position: relative;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+      color: #fff;
+      padding: 20px;
+    }
+    .background-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(72, 214, 76, 0.08) 0%, transparent 60%);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 0;
+      animation: pulseGlow 6s ease-in-out infinite;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.05); }
+    }
+    .login-box {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(15, 15, 15, 0.6);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      padding: 3rem;
+      border-radius: 2rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.8);
+      z-index: 1;
+      animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .logo-area {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+    .cube {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, var(--emerald) 0%, var(--green) 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #000;
+      font-size: 1rem;
+      box-shadow: 0 4px 15px rgba(72, 214, 76, 0.3);
+    }
+    .logo-text {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.02em;
+    }
+    .logo-text span {
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 400;
+    }
+    .header {
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 0.9rem;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .input-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.6);
+      margin-left: 0.25rem;
+    }
+    input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 1rem 1.25rem;
+      border-radius: 1rem;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+    input:focus {
+      border-color: var(--emerald);
+      background: rgba(72, 214, 76, 0.02);
+      box-shadow: 0 0 0 4px rgba(72, 214, 76, 0.05);
+    }
+    input::placeholder {
+      color: rgba(255, 255, 255, 0.15);
+    }
+    .submit-btn {
+      margin-top: 1rem;
+      width: 100%;
+      background: linear-gradient(135deg, var(--emerald) 0%, var(--green) 100%);
+      color: #000;
+      border: none;
+      padding: 1rem;
+      border-radius: 1rem;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 10px 25px -5px rgba(72, 214, 76, 0.4);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .submit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 35px -5px rgba(72, 214, 76, 0.5);
+    }
+    .error-msg {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+      padding: 0.8rem 1rem;
+      border-radius: 0.8rem;
+      font-size: 0.85rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="background-glow"></div>
+  <div class="login-box">
+    <div class="logo-area">
+      <div class="cube">F</div>
+      <div class="logo-text">FOCNIUS <span>EXPLORER</span></div>
+    </div>
+    <div class="header">
+      <h1 class="title">Iniciar Sesión</h1>
+      <p class="subtitle">Acceso seguro al Explorador Dataset NLP</p>
+    </div>
+    ${errorMsg ? `<div class="error-msg">${errorMsg}</div>` : ''}
+    <form action="/expl/login" method="POST">
+      <div class="input-wrapper">
+        <label for="username">Usuario</label>
+        <input type="text" id="username" name="username" placeholder="Olmedo" required autofocus />
+      </div>
+      <div class="input-wrapper">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" name="password" placeholder="••••••••••••" required />
+      </div>
+      <button type="submit" class="submit-btn">Ingresar →</button>
+    </form>
+  </div>
+</body>
+</html>`;
+};
+
+// Ruta POST para procesar el login de /expl
+app.post('/expl/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'Olmedo' && password === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
+    res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
+    return res.redirect('/expl');
+  }
+  return res.send(renderExplLoginPage('Usuario o contraseña incorrectos.'));
+});
 
 // Aplicar protección de autenticación a /expl y todas sus subrutas
 app.use(['/expl', '/expl/*'], explAuthMiddleware);
 
-// Bloquear acceso público web a /dataset y todas sus subcarpetas/subrutas
-app.use(['/dataset', '/dataset/*'], (req, res) => {
+// Bloquear estrictamente TODO acceso web público a la antigua ruta /dataset (incluyendo /dataset.json y subrutas)
+app.use(['/dataset', '/dataset*', '/dataset.json'], (req, res) => {
   return res.status(403).json({
     error: 'Acceso Prohibido',
-    message: 'El acceso público web al directorio de dataset ha sido deshabilitado por razones de seguridad.'
+    message: 'El acceso público web al directorio de dataset ha sido deshabilitado permanentemente. Utilice /expl para acceder.'
   });
 });
 
@@ -930,263 +1151,6 @@ const startServer = async () => {
       });
     });
   });
-
-  // --------------------------------------------------------------------------
-  // Dataset NLP Visualizer Web Interface (/dataset, /dataset/devices)
-  // --------------------------------------------------------------------------
-  const generateDatasetHtml = ({ title, deviceId, items, devicesList = [], downloadUrl }) => {
-    return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} - Telemetría</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; line-height: 1.5; }
-    .container { max-width: 1200px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 16px; flex-wrap: wrap; gap: 12px; }
-    h1 { font-size: 1.35rem; font-weight: 700; color: #38bdf8; margin: 0; display: flex; align-items: center; gap: 10px; }
-    .subtitle { color: #94a3b8; font-size: 0.9rem; margin-top: 4px; }
-    .controls { display: flex; gap: 16px; align-items: center; background: #1e293b; padding: 14px 20px; border-radius: 10px; margin-bottom: 24px; border: 1px solid #334155; flex-wrap: wrap; }
-    .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; font-size: 0.95rem; color: #f1f5f9; font-weight: 600; background: #0f172a; padding: 8px 14px; border-radius: 6px; border: 1px solid #475569; }
-    .checkbox-label input { width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6; }
-    .badge { background: #0284c7; color: #ffffff; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
-    .search-input { background: #0f172a; border: 1px solid #475569; color: #f8fafc; padding: 8px 14px; border-radius: 6px; font-size: 0.9rem; flex: 1; min-width: 200px; outline: none; }
-    .search-input:focus { border-color: #38bdf8; }
-    .btn { background: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.88rem; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; }
-    .btn:hover { background: #1d4ed8; }
-    .btn-secondary { background: #334155; color: #e2e8f0; }
-    .btn-secondary:hover { background: #475569; }
-    
-    #dataset-container { display: flex; flex-direction: column; gap: 12px; }
-    .entry-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 14px 18px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.88rem; transition: border-color 0.2s; }
-    .entry-card:hover { border-color: #475569; }
-    .entry-card.formatted { white-space: pre-wrap; word-break: break-word; color: #34d399; }
-    .entry-card.raw { white-space: nowrap; overflow-x: auto; color: #e2e8f0; }
-    
-    pre { margin: 0; font-family: inherit; white-space: pre-wrap; word-break: break-word; font-size: 0.88rem; line-height: 1.6; color: #34d399; }
-    
-    .device-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 20px; }
-    .device-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px 20px; text-decoration: none; color: inherit; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
-    .device-card:hover { border-color: #38bdf8; transform: translateY(-2px); background: #26334d; }
-    .device-name { font-weight: 600; color: #f8fafc; font-size: 0.95rem; word-break: break-all; }
-    .device-size { color: #94a3b8; font-size: 0.82rem; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div>
-        <h1>📊 ${title}</h1>
-        <div class="subtitle">Servidor de Telemetría y Dataset NLP - KeyboardAndroid</div>
-      </div>
-      <div>
-        ${deviceId ? `<a href="/dataset" class="btn btn-secondary">← Volver a Dispositivos</a>` : ''}
-        ${downloadUrl ? `<a href="${downloadUrl}" download class="btn">⬇ Descargar JSON</a>` : ''}
-      </div>
-    </div>
-
-    ${devicesList.length > 0 ? `
-      <h2 style="font-size: 1.1rem; color: #94a3b8; margin-top: 24px;">Dispositivos Registrados (${devicesList.length})</h2>
-      <div class="device-list">
-        <a href="/dataset" class="device-card" style="border-color: #0284c7;">
-          <div>
-            <div class="device-name" style="color: #38bdf8;">🌐 Dataset Global Acumulado</div>
-            <div class="device-size">Todas las muestras combinadas</div>
-          </div>
-          <span class="badge">GLOBAL</span>
-        </a>
-        ${devicesList.map(d => `
-          <a href="/dataset/devices/${d.id}" class="device-card">
-            <div>
-              <div class="device-name">📱 ${d.id}</div>
-              <div class="device-size">${d.lineCount} registros • ${(d.size / 1024).toFixed(1)} KB</div>
-            </div>
-            <span class="btn btn-secondary" style="font-size:0.75rem; padding:4px 8px;">Ver →</span>
-          </a>
-        `).join('')}
-      </div>
-    ` : ''}
-
-    ${items ? `
-      <div class="controls">
-        <label class="checkbox-label">
-          <input type="checkbox" id="formatCheck" checked />
-          Dar formato al texto (JSON Identado)
-        </label>
-
-        <input type="text" id="searchInput" placeholder="Filtrar por texto, app_contexto o timestamp..." class="search-input" />
-
-        <span class="badge" id="recordCount">Total registros: ${items.length}</span>
-      </div>
-
-      <div id="dataset-container"></div>
-    ` : ''}
-  </div>
-
-  ${items ? `
-  <script>
-    const rawItems = ${JSON.stringify(items)};
-    const checkbox = document.getElementById('formatCheck');
-    const searchInput = document.getElementById('searchInput');
-    const container = document.getElementById('dataset-container');
-    const recordCount = document.getElementById('recordCount');
-
-    function render() {
-      const isFormatted = checkbox.checked;
-      const query = searchInput.value.toLowerCase().trim();
-      
-      const filtered = rawItems.filter(item => {
-        if (!query) return true;
-        const str = typeof item === 'string' ? item : JSON.stringify(item);
-        return str.toLowerCase().includes(query);
-      });
-
-      recordCount.textContent = 'Total registros: ' + filtered.length + (filtered.length !== rawItems.length ? ' (de ' + rawItems.length + ')' : '');
-      container.innerHTML = '';
-
-      if (filtered.length === 0) {
-        container.innerHTML = '<div style="color:#94a3b8; padding:30px; text-align:center; background:#1e293b; border-radius:8px;">No se encontraron registros que coincidan con la búsqueda.</div>';
-        return;
-      }
-
-      filtered.forEach((item) => {
-        const card = document.createElement('div');
-        card.className = 'entry-card ' + (isFormatted ? 'formatted' : 'raw');
-        
-        if (isFormatted) {
-          const pre = document.createElement('pre');
-          pre.textContent = typeof item === 'object' ? JSON.stringify(item, null, 2) : item;
-          card.appendChild(pre);
-        } else {
-          card.textContent = typeof item === 'object' ? JSON.stringify(item) : item;
-        }
-        
-        container.appendChild(card);
-      });
-    }
-
-    checkbox.addEventListener('change', render);
-    searchInput.addEventListener('input', render);
-    render();
-  </script>
-  ` : ''}
-</body>
-</html>`;
-  };
-
-  const getDatasetDir = () => {
-    let targetDir = '/var/www/bienestar/dataset_nlp';
-    if (!fs.existsSync(targetDir)) {
-      targetDir = path.join(__dirname, '../uploads/dataset_nlp');
-    }
-    return targetDir;
-  };
-
-  const readJsonLinesFile = (filePath) => {
-    if (!fs.existsSync(filePath)) return [];
-    try {
-      const content = fs.readFileSync(filePath, 'utf8').trim();
-      if (!content) return [];
-
-      if (content.startsWith('[') && content.endsWith(']')) {
-        try {
-          const parsed = JSON.parse(content);
-          if (Array.isArray(parsed)) return parsed;
-        } catch (e) {
-          // Fallback to line parsing if whole array parse fails
-        }
-      }
-
-      const lines = content.split('\n').filter(l => l.trim());
-      const results = [];
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed === '[' || trimmed === ']' || trimmed === '],') continue;
-        try {
-          results.push(JSON.parse(trimmed.replace(/,$/, '')));
-        } catch (e) {
-          if (trimmed) results.push({ raw: trimmed });
-        }
-      }
-      return results;
-    } catch (e) {
-      return [];
-    }
-  };
-
-  // Main dataset view or devices list
-  app.get(['/dataset', '/dataset/', '/dataset/devices', '/dataset/devices/'], (req, res) => {
-    const targetDir = getDatasetDir();
-    const devicesDir = path.join(targetDir, 'devices');
-    const globalFilePath = path.join(targetDir, 'dataset_lenguaje_humano.json');
-
-    let devicesList = [];
-    if (fs.existsSync(devicesDir)) {
-      const files = fs.readdirSync(devicesDir).filter(f => f.endsWith('.json'));
-      devicesList = files.map(filename => {
-        const id = filename.replace(/^dataset_/, '').replace(/\.json$/, '');
-        const fullPath = path.join(devicesDir, filename);
-        const stat = fs.statSync(fullPath);
-        const lines = readJsonLinesFile(fullPath);
-        return {
-          id,
-          filename,
-          size: stat.size,
-          lineCount: lines.length
-        };
-      });
-    }
-
-    const items = readJsonLinesFile(globalFilePath);
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.send(generateDatasetHtml({
-      title: 'Dataset NLP - Global (Todos los dispositivos)',
-      items,
-      devicesList,
-      downloadUrl: fs.existsSync(globalFilePath) ? '/dataset.json' : null
-    }));
-  });
-
-  // Dataset view for specific device
-  app.get(['/dataset/devices/:deviceId', '/dataset/devices/:deviceId/'], (req, res) => {
-    const rawId = req.params.deviceId;
-    const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
-    
-    const targetDir = getDatasetDir();
-    const devicesDir = path.join(targetDir, 'devices');
-    
-    let deviceFilePath = path.join(devicesDir, `dataset_${cleanId}.json`);
-    if (!fs.existsSync(deviceFilePath)) {
-      deviceFilePath = path.join(devicesDir, `${cleanId}.json`);
-    }
-    if (!fs.existsSync(deviceFilePath)) {
-      deviceFilePath = path.join(devicesDir, rawId);
-    }
-
-    if (!fs.existsSync(deviceFilePath)) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(404).send(generateDatasetHtml({
-        title: `Dispositivo no encontrado: ${cleanId}`,
-        items: [],
-        devicesList: []
-      }));
-    }
-
-    const items = readJsonLinesFile(deviceFilePath);
-    const downloadUrl = `/dataset/raw/devices/${cleanId}`;
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.send(generateDatasetHtml({
-      title: `Dataset NLP - Dispositivo: ${cleanId}`,
-      deviceId: cleanId,
-      items,
-      downloadUrl
-    }));
-  });
-
 
   // --------------------------------------------------------------------------
   // Plataforma Web Explorador Dataset NLP (/expl)
