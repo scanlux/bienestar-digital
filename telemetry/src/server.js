@@ -1158,6 +1158,12 @@ const startServer = async () => {
   // --------------------------------------------------------------------------
   // Plataforma Web Explorador Dataset NLP (/expl)
   // --------------------------------------------------------------------------
+  const isSystemInitEvent = (item) => {
+    if (!item) return false;
+    const str = String(item.textoL || item.textoC || item.texto || item.raw || '');
+    return str.includes('[DISPOSITIVO REGISTRADO - INICIO DE APP]') || str.includes('[DISPOSITIVO REGISTRADO');
+  };
+
   const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl }) => {
     return `<!DOCTYPE html>
 <html lang="es">
@@ -1217,6 +1223,20 @@ const startServer = async () => {
 
     .copy-btn { position: absolute; top: 16px; right: 18px; background: #1f2937; color: #9ca3af; border: 1px solid #374151; padding: 4px 10px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; transition: all 0.2s; }
     .copy-btn:hover { background: #374151; color: #f3f4f6; }
+
+    /* Modal Overlay Styles */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
+    .modal-overlay.active { display: flex; }
+    .modal-card { background: #111827; border: 1px solid #374151; border-radius: 16px; width: 100%; max-width: 580px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.6); overflow: hidden; animation: modalFadeIn 0.2s ease-out; }
+    @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .modal-header { padding: 18px 22px; border-bottom: 1px solid #1f2937; display: flex; justify-content: space-between; align-items: center; background: #151d30; }
+    .modal-title { font-size: 1.05rem; font-weight: 700; color: #f9fafb; display: flex; align-items: center; gap: 8px; }
+    .modal-close { background: #1f2937; border: 1px solid #374151; color: #9ca3af; font-size: 1.2rem; cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: all 0.2s; }
+    .modal-close:hover { color: #f3f4f6; background: #374151; }
+    .modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .sys-event-item { background: #0b0f19; border: 1px solid #1f2937; border-radius: 10px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; }
+    .sys-event-time { color: #38bdf8; font-weight: 600; font-family: monospace; }
+    .sys-event-badge { color: #10b981; font-weight: 600; font-size: 0.8rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 3px 10px; border-radius: 12px; }
   </style>
 </head>
 <body>
@@ -1246,21 +1266,28 @@ const startServer = async () => {
       
       <div class="grid-cards" id="cardsGrid">
         ${devicesList.map(d => `
-          <a href="/expl/devices/${d.id}" class="card-item" data-search="${d.id.toLowerCase()}">
-            <div>
-              <div class="card-header">
-                <div class="card-title">📱 ${d.id}</div>
-                <span class="badge">${d.appsCount} Apps</span>
+          <div class="card-item" data-search="${d.id.toLowerCase()}">
+            <a href="/expl/devices/${d.id}" style="text-decoration:none; color:inherit;">
+              <div>
+                <div class="card-header">
+                  <div class="card-title">📱 ${d.id}</div>
+                  <span class="badge">${d.appsCount} Apps</span>
+                </div>
+                <div class="card-meta">
+                  <span>Registros escritos: <strong>${d.lineCount}</strong></span>
+                  <span>Tamaño: <strong>${(d.size / 1024).toFixed(1)} KB</strong></span>
+                </div>
               </div>
-              <div class="card-meta">
-                <span>Registros totales: <strong>${d.lineCount}</strong></span>
-                <span>Tamaño: <strong>${(d.size / 1024).toFixed(1)} KB</strong></span>
-              </div>
+            </a>
+            <div style="margin-top: 16px; display:flex; justify-content:space-between; align-items:center;">
+              ${d.systemEventsCount > 0 ? `
+                <button type="button" onclick="openSystemModal('${d.id}')" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px; border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;">
+                  🚀 Inicios (${d.systemEventsCount})
+                </button>
+              ` : '<span></span>'}
+              <a href="/expl/devices/${d.id}" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px; text-decoration:none;">Explorar Apps →</a>
             </div>
-            <div style="margin-top: 16px; display:flex; justify-content:flex-end;">
-              <span class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px;">Explorar Apps →</span>
-            </div>
-          </a>
+          </div>
         `).join('')}
       </div>
     ` : ''}
@@ -1309,6 +1336,16 @@ const startServer = async () => {
 
   </div>
 
+  <div class="modal-overlay" id="sysModal" onclick="if(event.target === this) closeSystemModal()">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">🚀 Inicios de App Registrados</div>
+        <button type="button" class="modal-close" onclick="closeSystemModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
   <script>
     // Buscador interactivo en vivo
     const searchInput = document.getElementById('searchInput');
@@ -1329,6 +1366,42 @@ const startServer = async () => {
         if (countBadge) countBadge.textContent = 'Resultados: ' + visibleCount;
       });
     }
+
+    ${level === 1 ? `
+      const systemEventsData = ${JSON.stringify(devicesList.reduce((acc, d) => { acc[d.id] = d.systemEvents || []; return acc; }, {}))};
+
+      function openSystemModal(deviceId) {
+        const events = systemEventsData[deviceId] || [];
+        const modal = document.getElementById('sysModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+
+        modalTitle.textContent = '🚀 Inicios de App — ' + deviceId;
+        
+        if (events.length === 0) {
+          modalBody.innerHTML = '<div style="color:#9ca3af; text-align:center; padding:20px;">No se registraron eventos de inicio para este dispositivo.</div>';
+        } else {
+          modalBody.innerHTML = events.map(e => {
+            const dateStr = e.created_at ? new Date(e.created_at).toLocaleString('es-CO') : 'Reciente';
+            return '<div class="sys-event-item">' +
+              '<span class="sys-event-badge">INICIO DE APP</span>' +
+              '<span class="sys-event-time">⏰ ' + dateStr + '</span>' +
+            '</div>';
+          }).join('');
+        }
+        
+        modal.classList.add('active');
+      }
+
+      function closeSystemModal() {
+        const modal = document.getElementById('sysModal');
+        if (modal) modal.classList.remove('active');
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeSystemModal();
+      });
+    ` : ''}
 
     ${level === 3 ? `
       const rawItems = ${JSON.stringify(items)};
@@ -1419,9 +1492,6 @@ const startServer = async () => {
 </html>`;
   };
 
-  // --------------------------------------------------------------------------
-  // Rutas de la Nueva Plataforma /expl
-  // --------------------------------------------------------------------------
   // Nivel 1: Lista de Dispositivos
   app.get(['/expl', '/expl/', '/expl/devices', '/expl/devices/'], (req, res) => {
     const targetDir = getDatasetDir();
@@ -1436,15 +1506,21 @@ const startServer = async () => {
         const stat = fs.statSync(fullPath);
         const lines = readJsonLinesFile(fullPath);
         
-        // Contar apps distintas en el dispositivo
-        const appsSet = new Set(lines.map(l => l.app_contexto || 'unknown'));
+        const systemEvents = lines.filter(isSystemInitEvent);
+        const userLines = lines.filter(l => !isSystemInitEvent(l));
+        const appsSet = new Set(userLines.map(l => l.app_contexto || 'unknown'));
         
         return {
           id,
           filename,
           size: stat.size,
-          lineCount: lines.length,
-          appsCount: appsSet.size
+          lineCount: userLines.length,
+          appsCount: appsSet.size,
+          systemEventsCount: systemEvents.length,
+          systemEvents: systemEvents.map(e => ({
+            created_at: e.created_at || (e.ts ? new Date(e.ts).toISOString() : null),
+            texto: e.textoL || e.textoC || e.texto || '[DISPOSITIVO REGISTRADO - INICIO DE APP]'
+          }))
         };
       });
     }
@@ -1479,10 +1555,11 @@ const startServer = async () => {
     }
 
     const items = readJsonLinesFile(deviceFilePath);
+    const userItems = items.filter(item => !isSystemInitEvent(item));
     
-    // Agrupar muestras por app_contexto
+    // Agrupar muestras por app_contexto (excluyendo inicios de app)
     const appsMap = {};
-    items.forEach(item => {
+    userItems.forEach(item => {
       const app = item.app_contexto || 'unknown';
       if (!appsMap[app]) {
         appsMap[app] = { packageName: app, count: 0, lastActivity: null };
@@ -1527,7 +1604,8 @@ const startServer = async () => {
     }
 
     const allItems = readJsonLinesFile(deviceFilePath);
-    const filteredItems = allItems
+    const userItems = allItems.filter(item => !isSystemInitEvent(item));
+    const filteredItems = userItems
       .filter(item => (item.app_contexto || 'unknown') === appPackage)
       .reverse(); // Ordenar del más reciente al más antiguo
 
