@@ -1288,7 +1288,9 @@ const startServer = async () => {
               <div>
                 <div class="card-header">
                   <div class="card-title">📱 ${d.id}</div>
-                  <span class="badge">${d.appsCount} Apps</span>
+                  <button type="button" onclick="event.preventDefault(); event.stopPropagation(); copyDeviceUrl('${d.id}')" class="btn btn-secondary" style="font-size:0.75rem; padding:4px 10px; border-color:#374151; color:#9ca3af;" title="Copiar URL del dispositivo">
+                    📋 Copiar Link
+                  </button>
                 </div>
                 <div class="card-meta">
                   <span>Registros escritos: <strong>${d.lineCount}</strong></span>
@@ -1296,13 +1298,16 @@ const startServer = async () => {
                 </div>
               </div>
             </a>
-            <div style="margin-top: 16px; display:flex; justify-content:space-between; align-items:center;">
-              ${d.systemEventsCount > 0 ? `
-                <button type="button" onclick="openSystemModal('${d.id}')" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px; border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;">
-                  🚀 Inicios (${d.systemEventsCount})
-                </button>
-              ` : '<span></span>'}
-              <a href="/expl/devices/${d.id}" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px; text-decoration:none;">Explorar Apps →</a>
+            <div style="margin-top: 18px; display:flex; justify-content:space-between; align-items:flex-end;">
+              <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
+                <span class="badge">${d.appsCount} Apps</span>
+                ${d.systemEventsCount > 0 ? `
+                  <button type="button" onclick="openSystemModal('${d.id}')" class="btn btn-secondary" style="font-size:0.8rem; padding:5px 12px; border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;">
+                    🚀 Inicios (${d.systemEventsCount})
+                  </button>
+                ` : ''}
+              </div>
+              <a href="/expl/devices/${d.id}" class="btn btn-secondary" style="font-size:0.8rem; padding:8px 14px; text-decoration:none;">Explorar Apps →</a>
             </div>
           </div>
         `).join('')}
@@ -1387,6 +1392,12 @@ const startServer = async () => {
 
     ${level === 1 ? `
       const systemEventsData = ${JSON.stringify(devicesList.reduce((acc, d) => { acc[d.id] = d.systemEvents || []; return acc; }, {}))};
+
+      function copyDeviceUrl(deviceId) {
+        const fullUrl = window.location.origin + '/expl/devices/' + deviceId;
+        navigator.clipboard.writeText(fullUrl);
+        alert('Link copiado: ' + fullUrl);
+      }
 
       function openSystemModal(deviceId) {
         const events = systemEventsData[deviceId] || [];
