@@ -106,7 +106,7 @@ app.post('/expl/login', (req, res) => {
   const { username, password } = req.body;
   if (username === 'Olmedo' && password === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
     res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
-    return res.redirect('/expl');
+    return res.redirect(303, '/expl');
   }
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.status(401).send(renderExplLoginPage('Usuario o contraseña incorrectos.'));
@@ -1145,6 +1145,46 @@ const startServer = async () => {
   // --------------------------------------------------------------------------
   // Plataforma Web Explorador Dataset NLP (/expl)
   // --------------------------------------------------------------------------
+  const getDatasetDir = () => {
+    let targetDir = '/var/www/bienestar/dataset_nlp';
+    if (!fs.existsSync(targetDir)) {
+      targetDir = path.join(__dirname, '../uploads/dataset_nlp');
+    }
+    return targetDir;
+  };
+
+  const readJsonLinesFile = (filePath) => {
+    if (!fs.existsSync(filePath)) return [];
+    try {
+      const content = fs.readFileSync(filePath, 'utf8').trim();
+      if (!content) return [];
+
+      if (content.startsWith('[') && content.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) return parsed;
+        } catch (e) {
+          // Fallback to line parsing if whole array parse fails
+        }
+      }
+
+      const lines = content.split('\n').filter(l => l.trim());
+      const results = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed === '[' || trimmed === ']' || trimmed === '],') continue;
+        try {
+          results.push(JSON.parse(trimmed.replace(/,$/, '')));
+        } catch (e) {
+          if (trimmed) results.push({ raw: trimmed });
+        }
+      }
+      return results;
+    } catch (e) {
+      return [];
+    }
+  };
+
   const isSystemInitEvent = (item) => {
     if (!item) return false;
     const str = String(item.textoL || item.textoC || item.texto || item.raw || '');
