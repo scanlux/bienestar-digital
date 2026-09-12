@@ -1181,6 +1181,22 @@ const startServer = async () => {
     return map[lastPart.toLowerCase()] || (lastPart.charAt(0).toUpperCase() + lastPart.slice(1));
   };
 
+  const getAppIcon = (pkg) => {
+    if (!pkg || pkg === 'unknown') return '📦';
+    const p = pkg.toLowerCase();
+    if (p.includes('chrome')) return '🌐';
+    if (p.includes('whatsapp')) return '💬';
+    if (p.includes('instagram')) return '📸';
+    if (p.includes('messenger') || p.includes('orca')) return '⚡';
+    if (p.includes('facebook') || p.includes('katana')) return '📘';
+    if (p.includes('telegram')) return '✈️';
+    if (p.includes('tiktok') || p.includes('musically') || p.includes('trill')) return '🎵';
+    if (p.includes('messaging') || p.includes('mms') || p.includes('sms')) return '💬';
+    if (p.includes('youtube')) return '🔴';
+    if (p.includes('anysoftkeyboard') || p.includes('keyboard')) return '⌨️';
+    return '📦';
+  };
+
   const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl }) => {
     return `<!DOCTYPE html>
 <html lang="es">
@@ -1188,6 +1204,9 @@ const startServer = async () => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title} - Explorador NLP</title>
+  <link rel="icon" href="https://trendy.sytes.net/favicon.ico" type="image/x-icon">
+  <link rel="shortcut icon" href="https://trendy.sytes.net/favicon.ico">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0b0f19; color: #f3f4f6; line-height: 1.5; padding: 24px; min-height: 100vh; }
@@ -1215,12 +1234,14 @@ const startServer = async () => {
     .badge { background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; }
     .badge-purple { background: rgba(168, 85, 247, 0.1); color: #c084fc; border-color: rgba(168, 85, 247, 0.3); }
 
+    .app-icon { font-size: 1.35rem; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; transform: scale(1.15); margin-right: 6px; }
+
     /* Level 1 Grid - Devices */
     .grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
     .card-item { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 20px; text-decoration: none; color: inherit; transition: all 0.2s ease; display: flex; flex-direction: column; justify-content: space-between; }
     .card-item:hover { border-color: #38bdf8; transform: translateY(-3px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); background: #151d30; }
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-    .card-title { font-weight: 700; color: #f9fafb; font-size: 1.05rem; word-break: break-all; }
+    .card-title { font-weight: 700; color: #f9fafb; font-size: 1.05rem; word-break: break-all; display: flex; align-items: center; }
     .card-meta { color: #9ca3af; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 
     /* Level 3 Records */
@@ -1262,7 +1283,7 @@ const startServer = async () => {
     <div class="nav-breadcrumbs">
       <a href="/expl">📱 Dispositivos</a>
       ${deviceId ? `<span class="separator">/</span> <a href="/expl/devices/${deviceId}">${deviceId}</a>` : ''}
-      ${appPackage ? `<span class="separator">/</span> <span class="current">📦 ${getAppDisplayName(appPackage)}</span>` : ''}
+      ${appPackage ? `<span class="separator">/</span> <span class="current"><span class="app-icon">${getAppIcon(appPackage)}</span>${getAppDisplayName(appPackage)}</span>` : ''}
     </div>
 
     <div class="header">
@@ -1324,7 +1345,7 @@ const startServer = async () => {
           <a href="/expl/devices/${deviceId}/apps/${encodeURIComponent(a.packageName)}" class="card-item" data-search="${a.packageName.toLowerCase()} ${a.displayName.toLowerCase()}">
             <div>
               <div class="card-header">
-                <div class="card-title">📦 ${a.displayName}</div>
+                <div class="card-title"><span class="app-icon">${getAppIcon(a.packageName)}</span>${a.displayName}</div>
                 <span class="badge badge-purple">${a.count} escritos</span>
               </div>
               <div class="card-meta">
