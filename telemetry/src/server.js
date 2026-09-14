@@ -1325,6 +1325,7 @@ const startServer = async () => {
   <link rel="icon" href="https://trendy.sytes.net/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="https://trendy.sytes.net/favicon.ico">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
+  <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0b0f19; color: #f3f4f6; line-height: 1.5; padding-top: 70px; padding-bottom: 24px; padding-left: 24px; padding-right: 24px; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
@@ -1650,7 +1651,7 @@ const startServer = async () => {
                     const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
 
                     return `
-                      <tr style="border-bottom:1px solid #1f2937;">
+                      <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${f.name}">
                         <td style="padding:12px 16px; text-align:center;">
                           <input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />
                         </td>
@@ -1660,13 +1661,13 @@ const startServer = async () => {
                         <td style="padding:12px 16px; color:#9ca3af;">
                           ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : 'Desconocido'}
                         </td>
-                        <td style="padding:12px 16px;">
+                        <td style="padding:12px 16px;" class="status-cell">
                           ${isDownloaded ? '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4);">✓ Sincronizado</span>' : 
                             isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4);">⏳ Solicitado</span>' :
                             '<span class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.4);">En Dispositivo</span>'
                           }
                         </td>
-                        <td style="padding:12px 16px; text-align:right;">
+                        <td style="padding:12px 16px; text-align:right;" class="action-cell">
                           ${isDownloaded ? (
                             isAudio ? `
                               <button type="button" onclick="playAudio('${fileContentUrl}', '${f.name}')" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>
@@ -1702,6 +1703,58 @@ const startServer = async () => {
         </div>
 
         <script>
+          // Conexión Socket.io en tiempo real para actualización en vivo del Explorador
+          if (typeof io !== 'undefined') {
+            try {
+              const syncSocket = io('/device-sync', {
+                auth: { deviceId: '${deviceId}', isWeb: true },
+                query: { deviceId: '${deviceId}', isWeb: true }
+              });
+
+              syncSocket.on('connect', function() {
+                console.log('[REALTIME_SYNC] Conectado a sala web del dispositivo: ${deviceId}');
+              });
+
+              syncSocket.on('file:uploaded', function(data) {
+                console.log('[REALTIME_SYNC] Evento file:uploaded recibido:', data);
+                if (!data || !data.path) return;
+
+                const normPath = data.path.replace(/\\\\/g, '/');
+                const rows = document.querySelectorAll('tr[data-file-path]');
+
+                rows.forEach(function(tr) {
+                  const rowPath = tr.getAttribute('data-file-path');
+                  const rowName = tr.getAttribute('data-file-name');
+
+                  if (rowPath === normPath || rowPath === data.path || rowName === data.filename) {
+                    const statusCell = tr.querySelector('.status-cell');
+                    const actionCell = tr.querySelector('.action-cell');
+                    const fileContentUrl = '/api/telemetry/file-content?deviceId=' + encodeURIComponent('${deviceId}') + '&path=' + encodeURIComponent(rowPath || data.path);
+                    const fileName = rowName || data.filename || '';
+
+                    if (statusCell) {
+                      statusCell.innerHTML = '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Sincronizado</span>';
+                    }
+
+                    if (actionCell) {
+                      const isAudio = Boolean(fileName && (/\\.(opus|ogg|mp3|wav)$/i).test(fileName));
+                      const isImage = Boolean(fileName && (/\\.(jpg|jpeg|png|webp|gif)$/i).test(fileName));
+
+                      if (isAudio) {
+                        actionCell.innerHTML = '<button type="button" onclick="playAudio(\'' + fileContentUrl + '\', \'' + fileName + '\')" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>';
+                      } else if (isImage) {
+                        actionCell.innerHTML = '<a href="' + fileContentUrl + '" target="_blank" class="btn" style="background:#3b82f6; font-size:0.78rem; padding:6px 12px; text-decoration:none;">🖼️ Ver Imagen</a>';
+                      } else {
+                        actionCell.innerHTML = '<a href="' + fileContentUrl + '" target="_blank" download class="btn" style="font-size:0.78rem; padding:6px 12px;">⬇ Descargar</a>';
+                      }
+                    }
+                  }
+                });
+              });
+            } catch (e) {
+              console.error('[REALTIME_SYNC_ERROR]', e);
+            }
+          }
           function updateSelectedCount() {
             const checkboxes = document.querySelectorAll('.select-checkbox:checked');
             const count = checkboxes.length;
