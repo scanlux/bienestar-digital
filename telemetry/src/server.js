@@ -2137,7 +2137,9 @@ const startServer = async () => {
     const filename = remotePath ? path.basename(remotePath) : req.file.originalname;
     const destPath = path.join(downloadsDir, filename);
 
-    fs.renameSync(req.file.path, destPath);
+    // Use copy + unlink to safely handle cross-device mount points in Docker
+    fs.copyFileSync(req.file.path, destPath);
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
 
     // Marcar como COMPLETED en sync_rules.json
     const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
