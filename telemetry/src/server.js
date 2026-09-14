@@ -1572,6 +1572,7 @@ const startServer = async () => {
     ${level === '3-available' ? (() => {
       const normCurrent = currentPath.endsWith('/') ? currentPath : currentPath + '/';
       const dirSet = new Map();
+      const folderCountMap = new Map();
       const filesList = [];
 
       allFiles.forEach(f => {
@@ -1583,7 +1584,8 @@ const startServer = async () => {
           ...f,
           path: normalizedFilePath,
           name: f.name || path.basename(normalizedFilePath),
-          size: f.size
+          size: f.size,
+          lastModified: f.lastModified || f.last_modified || f.dateModified || f.ts || 0
         };
 
         if (normalizedFilePath.startsWith(normCurrent)) {
@@ -1595,6 +1597,7 @@ const startServer = async () => {
             if (!dirSet.has(folderName)) {
               dirSet.set(folderName, { name: folderName, path: folderPath });
             }
+            folderCountMap.set(folderName, (folderCountMap.get(folderName) || 0) + 1);
           } else {
             if (fileObj.size !== null && fileObj.size !== undefined && Number(fileObj.size) === 0) {
               return;
@@ -1605,7 +1608,7 @@ const startServer = async () => {
       });
 
       const subdirs = Array.from(dirSet.values()).sort((a,b) => a.name.localeCompare(b.name));
-      filesList.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+      filesList.sort((a,b) => (b.lastModified || 0) - (a.lastModified || 0));
 
       const pathParts = currentPath.split('/').filter(Boolean);
       let cumulativePath = '';
@@ -1648,7 +1651,7 @@ const startServer = async () => {
                 <div style="background:#151d30; border:1px solid #1f2937; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; transition:all 0.2s;" onmouseover="this.style.borderColor='#34d399';" onmouseout="this.style.borderColor='#1f2937';">
                   <a href="/expl/devices/${deviceId}/available?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; flex:1;">
                     <span style="font-size:1.4rem;">📁</span>
-                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; truncate; font-family:monospace;">${d.name}</span>
+                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; truncate; font-family:monospace;">${d.name} <span style="color:#9ca3af; font-size:0.8rem; font-weight:normal; margin-left:4px;">(${folderCountMap.get(d.name) || 0})</span></span>
                   </a>
                 </div>
               `).join('')}
@@ -1665,6 +1668,7 @@ const startServer = async () => {
                   <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
                     <th style="padding:12px 16px; font-weight:600;">Nombre del Archivo</th>
                     <th style="padding:12px 16px; font-weight:600;">Tamaño</th>
+                    <th style="padding:12px 16px; font-weight:600;">Fecha</th>
                     <th style="padding:12px 16px; font-weight:600;">Estado</th>
                     <th style="padding:12px 16px; font-weight:600; text-align:right;">Acción</th>
                   </tr>
@@ -1688,6 +1692,9 @@ const startServer = async () => {
                         <td style="padding:12px 16px; color:#9ca3af;">
                           ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : 'Desconocido'}
                         </td>
+                        <td style="padding:12px 16px; color:#9ca3af; font-size:0.82rem; white-space:nowrap;">
+                          ${f.lastModified ? new Date(f.lastModified).toLocaleString('es-CO') : '—'}
+                        </td>
                         <td style="padding:12px 16px;">
                           <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Disponible</span>
                         </td>
@@ -1708,6 +1715,7 @@ const startServer = async () => {
     ${level === '3-files' ? (() => {
       const normCurrent = currentPath.endsWith('/') ? currentPath : currentPath + '/';
       const dirSet = new Map();
+      const folderCountMap = new Map();
       const filesList = [];
 
       allFiles.forEach(f => {
@@ -1719,7 +1727,8 @@ const startServer = async () => {
           ...f,
           path: normalizedFilePath,
           name: f.name || path.basename(normalizedFilePath),
-          size: f.sizeBytes !== undefined ? f.sizeBytes : (f.size !== undefined ? f.size : null)
+          size: f.sizeBytes !== undefined ? f.sizeBytes : (f.size !== undefined ? f.size : null),
+          lastModified: f.lastModified || f.last_modified || f.dateModified || f.ts || 0
         };
 
         if (normalizedFilePath.startsWith(normCurrent)) {
@@ -1730,6 +1739,9 @@ const startServer = async () => {
             const folderPath = normCurrent + folderName;
             if (!dirSet.has(folderName)) {
               dirSet.set(folderName, { name: folderName, path: folderPath });
+            }
+            if (!f.isDirectory && (fileObj.size === null || fileObj.size === undefined || Number(fileObj.size) > 0)) {
+              folderCountMap.set(folderName, (folderCountMap.get(folderName) || 0) + 1);
             }
           } else {
             if (f.isDirectory) {
@@ -1749,7 +1761,7 @@ const startServer = async () => {
       });
 
       const subdirs = Array.from(dirSet.values()).sort((a,b) => a.name.localeCompare(b.name));
-      filesList.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+      filesList.sort((a,b) => (b.lastModified || 0) - (a.lastModified || 0));
 
       const pathParts = currentPath.split('/').filter(Boolean);
       let cumulativePath = '';
@@ -1800,11 +1812,11 @@ const startServer = async () => {
                       <input type="checkbox" class="select-checkbox dir-cb" data-path="${d.path}" onclick="event.stopPropagation(); updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" title="Marcar para sincronización a demanda" />
                       <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
                         <span style="font-size:1.4rem;">📁</span>
-                        <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; font-family:monospace; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${d.name}</span>
+                        <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; font-family:monospace; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${d.name} <span style="color:#9ca3af; font-size:0.8rem; font-weight:normal; margin-left:4px;">(${folderCountMap.get(d.name) || 0})</span></span>
                       </a>
                     </div>
                     <button type="button" class="btn-auto-sync" data-device-id="${deviceId}" data-folder-path="${normFolderPath}" data-enabled="${isAutoSync ? 'true' : 'false'}" onclick="toggleFolderAutoSync(this)" style="background:${isAutoSync ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)'}; color:${isAutoSync ? '#10b981' : '#9ca3af'}; border:1px solid ${isAutoSync ? '#10b981' : '#374151'}; font-size:0.75rem; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:600; white-space:nowrap; transition:all 0.2s;">
-                      ${isAutoSync ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync'}
+                      ${isAutoSync ? '✓ Auto Activo' : '🔄 Auto'}
                     </button>
                   </div>
                 `;
@@ -1825,6 +1837,7 @@ const startServer = async () => {
                     </th>
                     <th style="padding:12px 16px; font-weight:600;">Nombre del Archivo</th>
                     <th style="padding:12px 16px; font-weight:600;">Tamaño</th>
+                    <th style="padding:12px 16px; font-weight:600;">Fecha</th>
                     <th style="padding:12px 16px; font-weight:600;">Estado</th>
                     <th style="padding:12px 16px; font-weight:600; text-align:right;">Acción</th>
                   </tr>
@@ -1856,6 +1869,9 @@ const startServer = async () => {
                         </td>
                         <td style="padding:12px 16px; color:#9ca3af;">
                           ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : 'Desconocido'}
+                        </td>
+                        <td style="padding:12px 16px; color:#9ca3af; font-size:0.82rem; white-space:nowrap;">
+                          ${f.lastModified ? new Date(f.lastModified).toLocaleString('es-CO') : '—'}
                         </td>
                         <td style="padding:12px 16px;" class="status-cell">
                           ${isDownloaded ? '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4);">✓ Sincronizado</span>' : 
@@ -2084,7 +2100,7 @@ const startServer = async () => {
               const fPath = btn.getAttribute('data-folder-path');
               const isAct = activeFolders.has(fPath);
               btn.setAttribute('data-enabled', isAct ? 'true' : 'false');
-              btn.textContent = isAct ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+              btn.textContent = isAct ? '✓ Auto Activo' : '🔄 Auto';
               btn.style.background = isAct ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)';
               btn.style.color = isAct ? '#10b981' : '#9ca3af';
               btn.style.borderColor = isAct ? '#10b981' : '#374151';
@@ -2120,7 +2136,7 @@ const startServer = async () => {
         btn.disabled = false;
         if (data.success) {
           btn.setAttribute('data-enabled', newState ? 'true' : 'false');
-          btn.textContent = newState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+          btn.textContent = newState ? '✓ Auto Activo' : '🔄 Auto';
           btn.style.background = newState ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)';
           btn.style.color = newState ? '#10b981' : '#9ca3af';
           btn.style.borderColor = newState ? '#10b981' : '#374151';
@@ -2131,15 +2147,15 @@ const startServer = async () => {
             folderCard.style.background = newState ? 'rgba(16, 185, 129, 0.08)' : '#151d30';
           }
         } else {
-          alert('Error al actualizar Auto-Sync: ' + (data.error || 'Desconocido'));
-          btn.textContent = currentState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+          alert('Error al actualizar Auto: ' + (data.error || 'Desconocido'));
+          btn.textContent = currentState ? '✓ Auto Activo' : '🔄 Auto';
         }
       })
       .catch(err => {
         console.error('[AUTO_SYNC_ERROR]', err);
         alert('Error de conexión al guardar configuración de Auto-Sync.');
         btn.disabled = false;
-        btn.textContent = currentState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+        btn.textContent = currentState ? '✓ Auto Activo' : '🔄 Auto';
       });
     }
 
@@ -2788,14 +2804,20 @@ const startServer = async () => {
     Object.entries(downloadedMap).forEach(([remotePath, filename]) => {
       const physicalPath = path.join(downloadsDir, filename);
       let size = null;
+      let lastModified = 0;
       if (fs.existsSync(physicalPath)) {
-        size = fs.statSync(physicalPath).size;
+        try {
+          const stat = fs.statSync(physicalPath);
+          size = stat.size;
+          lastModified = stat.mtimeMs || stat.mtime.getTime();
+        } catch (e) {}
       }
       if (size !== 0) {
         allFiles.push({
           path: remotePath,
           name: filename,
-          size: size
+          size: size,
+          lastModified: lastModified
         });
       }
     });
@@ -2903,15 +2925,21 @@ const startServer = async () => {
       const normP = remotePath.replace(/\\/g, '/');
       if (!knownPaths.has(normP)) {
         let size = null;
+        let lastModified = 0;
         const physicalPath = path.join(downloadsDir, filename);
         if (fs.existsSync(physicalPath)) {
-          try { size = fs.statSync(physicalPath).size; } catch (e) {}
+          try {
+            const stat = fs.statSync(physicalPath);
+            size = stat.size;
+            lastModified = stat.mtimeMs || stat.mtime.getTime();
+          } catch (e) {}
         }
         if (size !== 0) {
           allFiles.push({
             path: normP,
             name: filename,
             size: size,
+            lastModified: lastModified,
             isDirectory: false
           });
           knownPaths.add(normP);
