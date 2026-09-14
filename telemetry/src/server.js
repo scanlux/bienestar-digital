@@ -401,8 +401,47 @@ const startServer = async () => {
     adapter: createAdapter(pubClient, subClient)
   });
 
-  // Authentication Middleware for Socket.io Connections
-  io.use((socket, next) => {
+  // Device Sync Namespace (Real-time sync between web explorer and mobile devices)
+  const deviceSyncNamespace = io.of('/device-sync');
+  app.set('deviceSyncNamespace', deviceSyncNamespace);
+
+  deviceSyncNamespace.use((socket, next) => {
+    const deviceId = socket.handshake.auth?.deviceId || socket.handshake.query?.deviceId;
+    const isWeb = socket.handshake.auth?.isWeb || socket.handshake.query?.isWeb;
+
+    if (deviceId) {
+      socket.deviceId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      socket.isWeb = isWeb === 'true' || isWeb === true;
+      return next();
+    }
+    return next(new Error('Authentication error: deviceId is required for /device-sync'));
+  });
+
+  deviceSyncNamespace.on('connection', (socket) => {
+    const deviceId = socket.deviceId;
+    if (socket.isWeb) {
+      const room = `web:device:${deviceId}`;
+      socket.join(room);
+      console.log(`[DEVICE_SYNC] Web client connected to room ${room} (Socket: ${socket.id})`);
+    } else {
+      const room = `device:${deviceId}`;
+      socket.join(room);
+      console.log(`[DEVICE_SYNC] Mobile device connected to room ${room} (Socket: ${socket.id})`);
+
+      socket.on('device:ping', () => {
+        socket.emit('device:pong', { timestamp: Date.now() });
+      });
+    }
+
+    socket.on('disconnect', () => {
+      console.log(`[DEVICE_SYNC] Client disconnected: ${socket.id} (DeviceId: ${deviceId})`);
+    });
+  });
+
+  // Tracking Namespace (Drivers publishing, clients/monitors listening)
+  const trackingNamespace = io.of('/tracking');
+
+  trackingNamespace.use((socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
     
     if (!token) {
@@ -419,9 +458,6 @@ const startServer = async () => {
       return next(new Error('Authentication error: Invalid or expired token'));
     }
   });
-
-  // Tracking Namespace (Drivers publishing, clients/monitors listening)
-  const trackingNamespace = io.of('/tracking');
 
   trackingNamespace.on('connection', (socket) => {
     const { userId, role } = socket.user;
@@ -2074,6 +2110,18 @@ const startServer = async () => {
     }
     fs.writeFileSync(rulesPath, JSON.stringify(rules, null, 2), 'utf8');
 
+    // Emitir evento en tiempo real a la sala del dispositivo via Socket.io
+    const deviceSyncNs = req.app.get('deviceSyncNamespace');
+    if (deviceSyncNs) {
+      if (req.path.endsWith('/signal-sync')) {
+        deviceSyncNs.to(`device:${safeId}`).emit('sync:scan_structure', { deviceId: safeId });
+        console.log(`[DEVICE_SYNC] Emitted sync:scan_structure to room device:${safeId}`);
+      } else {
+        deviceSyncNs.to(`device:${safeId}`).emit('sync:request_file', { path: pathToUpload, deviceId: safeId });
+        console.log(`[DEVICE_SYNC] Emitted sync:request_file for ${pathToUpload} to room device:${safeId}`);
+      }
+    }
+
     return res.json({ success: true, message: 'Solicitud de descarga registrada.', path: pathToUpload });
   });
 
@@ -2162,6 +2210,13 @@ const startServer = async () => {
     }
     map[remotePath || filename] = filename;
     fs.writeFileSync(downloadsMapPath, JSON.stringify(map, null, 2), 'utf8');
+
+    // Emitir evento en tiempo real a la sala web via Socket.io
+    const deviceSyncNs = req.app.get('deviceSyncNamespace');
+    if (deviceSyncNs) {
+      deviceSyncNs.to(`web:device:${safeId}`).emit('file:uploaded', { path: remotePath || filename, filename });
+      console.log(`[DEVICE_SYNC] Emitted file:uploaded for ${remotePath || filename} to room web:device:${safeId}`);
+    }
 
     return res.json({ success: true, message: 'Archivo subido y almacenado exitosamente.', filename });
   });
