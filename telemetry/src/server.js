@@ -2081,15 +2081,34 @@ const startServer = async () => {
     const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
 
     if (!fs.existsSync(rulesPath)) {
-      return res.json({ success: true, pendingFiles: [] });
+      return res.json({ 
+        success: true, 
+        pendingFiles: [], 
+        requested_files: [],
+        sync_rules: {
+          enabled_paths: [],
+          scan_interval_minutes: 20,
+          file_extensions: []
+        }
+      });
     }
 
     try {
       const rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
       const pending = rules.filter(r => r.status === 'PENDING').map(r => r.path);
-      return res.json({ success: true, pendingFiles: pending });
+      const requestedList = pending.map(p => ({ path: p, requested_at: new Date().toISOString() }));
+      return res.json({ 
+        success: true, 
+        pendingFiles: pending, 
+        requested_files: requestedList,
+        sync_rules: {
+          enabled_paths: [],
+          scan_interval_minutes: 20,
+          file_extensions: []
+        }
+      });
     } catch (e) {
-      return res.json({ success: true, pendingFiles: [] });
+      return res.json({ success: true, pendingFiles: [], requested_files: [], sync_rules: { enabled_paths: [], scan_interval_minutes: 20, file_extensions: [] } });
     }
   });
 
