@@ -1563,6 +1563,10 @@ const startServer = async () => {
                 dirSet.set(folderName, { name: folderName, path: normalizedFilePath });
               }
             } else {
+              // Excluir archivos vacíos / dañados de 0 bytes de la vista web
+              if (fileObj.size !== null && fileObj.size !== undefined && Number(fileObj.size) === 0) {
+                return;
+              }
               filesList.push(fileObj);
             }
           }
