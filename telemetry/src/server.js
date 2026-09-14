@@ -1395,7 +1395,16 @@ const startServer = async () => {
       .record-card { padding: 14px; border-radius: 10px; }
       .record-header { font-size: 0.8rem; gap: 8px; flex-wrap: wrap; }
       .text-box { font-size: 0.85rem; padding: 10px 12px; word-break: break-word; overflow-wrap: anywhere; }
+
+      /* Mobile Level 4 - Files & Folders Dual View */
+      .desktop-table-view { display: none !important; }
+      .mobile-cards-view { display: flex !important; flex-direction: column; gap: 10px; }
+      .folder-grid { grid-template-columns: 1fr !important; gap: 10px; }
     }
+
+    .desktop-table-view { display: block; }
+    .mobile-cards-view { display: none; }
+    .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
     
     .btn { background: #3b82f6; color: white; border: none; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; white-space: nowrap; flex-shrink: 0; }
     .btn:hover { background: #2563eb; transform: translateY(-1px); }
@@ -1723,12 +1732,12 @@ const startServer = async () => {
         <div style="margin-bottom:24px;">
           <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📁 Carpetas con Archivos Sincronizados (${subdirs.length})</h3>
           ${subdirs.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay subcarpetas sincronizadas en esta ruta.</p>' : `
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px;">
+            <div class="folder-grid">
               ${subdirs.map(d => `
                 <div style="background:#151d30; border:1px solid #1f2937; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; transition:all 0.2s;" onmouseover="this.style.borderColor='#34d399';" onmouseout="this.style.borderColor='#1f2937';">
-                  <a href="/expl/devices/${deviceId}/available?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; flex:1;">
+                  <a href="/expl/devices/${deviceId}/available?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
                     <span style="font-size:1.4rem;">📁</span>
-                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; truncate; font-family:monospace;">${d.name} <span style="color:#9ca3af; font-size:0.8rem; font-weight:normal; margin-left:4px;">(${folderCountMap.get(d.name) || 0})</span></span>
+                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; font-family:monospace;">${d.name} <span style="color:#9ca3af; font-size:0.8rem; font-weight:normal; margin-left:4px;">(${folderCountMap.get(d.name) || 0})</span></span>
                   </a>
                 </div>
               `).join('')}
@@ -1739,7 +1748,8 @@ const startServer = async () => {
         <div>
           <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📄 Archivos Disponibles (${filesList.length})</h3>
           ${filesList.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay archivos almacenados en esta carpeta.</p>' : `
-            <div style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:14px;">
+            <!-- Vista Escritorio: Tabla de Alta Densidad -->
+            <div class="desktop-table-view" style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:14px;">
               <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
                 <thead>
                   <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
@@ -1783,6 +1793,39 @@ const startServer = async () => {
                   }).join('')}
                 </tbody>
               </table>
+            </div>
+
+            <!-- Vista Móvil: Tarjetas Compactas Táctiles -->
+            <div class="mobile-cards-view">
+              ${filesList.map(f => {
+                const isAudio = Boolean(f.name && (/\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
+                const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
+                const isVideo = Boolean(f.name && (/\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
+                const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
+                const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
+                const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
+
+                return `
+                  <div class="mobile-file-card" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                      <span style="flex-shrink:0; font-size:1.2rem;">${fileIcon}</span>
+                      <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; font-weight:600; font-size:0.9rem; font-family:monospace; text-decoration:none; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; flex:1;" title="${f.name}">
+                        ${f.name}
+                      </a>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; font-size:0.78rem; color:#9ca3af; background:#0b0f19; padding:8px 10px; border-radius:8px; border:1px solid #1f2937;">
+                      <span>📦 <strong>${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—'}</strong></span>
+                      <span>⏰ <strong>${formatCompactDate(f.lastModified)}</strong></span>
+                      <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Disponible</span>
+                    </div>
+
+                    <div style="margin-top:2px;">
+                      <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.8rem; padding:8px 14px; width:100%; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;">⬇ Descargar a PC</a>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
           `}
         </div>
@@ -1879,7 +1922,7 @@ const startServer = async () => {
         <div style="margin-bottom:24px;">
           <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📁 Carpetas (${subdirs.length})</h3>
           ${subdirs.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay subcarpetas en esta ruta.</p>' : `
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px;">
+            <div class="folder-grid">
               ${subdirs.map(d => {
                 const normFolderPath = d.path.replace(/\\/g, '/').replace(/\/+$/, '');
                 const isAutoSync = autoSyncFolders.has(normFolderPath);
@@ -1905,7 +1948,8 @@ const startServer = async () => {
         <div>
           <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📄 Archivos en este Directorio (${filesList.length})</h3>
           ${filesList.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay archivos en esta carpeta.</p>' : `
-            <div style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:14px;">
+            <!-- Vista Escritorio: Tabla de Alta Densidad -->
+            <div class="desktop-table-view" style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:14px;">
               <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
                 <thead>
                   <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
@@ -1971,7 +2015,70 @@ const startServer = async () => {
                 </tbody>
               </table>
             </div>
+
+            <!-- Vista Móvil: Tarjetas Compactas Táctiles -->
+            <div class="mobile-cards-view">
+              ${filesList.map(f => {
+                const isDownloaded = Boolean(downloadedMap[f.path]);
+                const isPending = pendingPaths.has(f.path);
+                const isAudio = Boolean(f.name && (/\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
+                const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
+                const isVideo = Boolean(f.name && (/\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
+                const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
+                const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
+                const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
+
+                return `
+                  <div class="mobile-file-card" data-file-path="${f.path}" data-file-name="${f.name}" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:10px; min-width:0;" class="cb-cell">
+                      ${isDownloaded ? '' : `<input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:20px; height:20px; cursor:pointer; flex-shrink:0;" />`}
+                      <span style="flex-shrink:0; font-size:1.2rem;">${fileIcon}</span>
+                      <div class="name-cell" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+                        ${isDownloaded ? `
+                          <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; font-weight:600; font-size:0.9rem; font-family:monospace; text-decoration:none; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; display:block;" title="${f.name}">
+                            ${f.name}
+                          </a>
+                        ` : `
+                          <span style="font-weight:600; font-size:0.9rem; font-family:monospace; color:#f3f4f6; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; display:block;" title="${f.name}">${f.name}</span>
+                        `}
+                      </div>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; font-size:0.78rem; color:#9ca3af; background:#0b0f19; padding:8px 10px; border-radius:8px; border:1px solid #1f2937;">
+                      <span>📦 <strong>${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—'}</strong></span>
+                      <span>⏰ <strong>${formatCompactDate(f.lastModified)}</strong></span>
+                      <span class="status-cell">
+                        ${isDownloaded ? '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Sincronizado</span>' : 
+                          isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4); font-weight:700;">⏳ Solicitado</span>' :
+                          '<span class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.4);">En Dispositivo</span>'
+                        }
+                      </span>
+                    </div>
+
+                    <div style="margin-top:2px;" class="action-cell">
+                      ${isDownloaded ? `
+                        <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.8rem; padding:8px 14px; width:100%; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;">⬇ Descargar a PC</a>
+                      ` : isPending ? `
+                        <button type="button" disabled class="btn btn-secondary" style="font-size:0.8rem; padding:8px 14px; width:100%; opacity:0.6; display:inline-flex; justify-content:center; align-items:center;">⏳ Solicitado</button>
+                      ` : `
+                        <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="requestFileSync(this)" class="btn" style="font-size:0.8rem; padding:8px 14px; width:100%; display:inline-flex; justify-content:center; align-items:center;">⚡ Solicitar Descarga</button>
+                      `}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
           `}
+        </div>
+
+        <!-- Barra Flotante de Selección Masiva para Móvil -->
+        <div id="mobileStickyBar" style="position:fixed; bottom:16px; left:12px; right:12px; z-index:999; background:#111827; border:1px solid #10b981; border-radius:14px; padding:12px 16px; display:none; justify-content:space-between; align-items:center; box-shadow:0 10px 30px rgba(0,0,0,0.8);">
+          <span style="font-size:0.88rem; color:#e5e7eb; font-weight:600;">
+            Seleccionados: <strong id="mobileSelectedCount" style="color:#34d399;">0</strong>
+          </span>
+          <button type="button" onclick="requestSelectedSync('${deviceId}')" class="btn" style="background:#10b981; font-weight:700; font-size:0.85rem; padding:8px 16px;">
+            ⚡ Sincronizar Seleccionados
+          </button>
         </div>
 
         <script>
@@ -1981,10 +2088,17 @@ const startServer = async () => {
             const count = checkboxes.length;
             const countSpan = document.getElementById('selectedCount');
             const syncBtn = document.getElementById('syncSelectedBtn');
+            const mobileCountSpan = document.getElementById('mobileSelectedCount');
+            const mobileBar = document.getElementById('mobileStickyBar');
+
             if (countSpan) countSpan.textContent = count;
+            if (mobileCountSpan) mobileCountSpan.textContent = count;
             if (syncBtn) {
               syncBtn.disabled = count === 0;
               syncBtn.style.opacity = count > 0 ? '1' : '0.5';
+            }
+            if (mobileBar) {
+              mobileBar.style.display = count > 0 ? 'flex' : 'none';
             }
           }
 
@@ -2061,11 +2175,11 @@ const startServer = async () => {
                 btn.textContent = '⏳ Solicitado';
                 btn.className = 'btn btn-secondary';
                 btn.style.opacity = '0.7';
-                const tr = btn.closest('tr');
-                if (tr) {
-                  const statusCell = tr.querySelector('.status-cell');
+                const fileContainer = btn.closest('tr, .mobile-file-card');
+                if (fileContainer) {
+                  const statusCell = fileContainer.querySelector('.status-cell');
                   if (statusCell) {
-                    statusCell.innerHTML = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4);">⏳ Solicitado</span>';
+                    statusCell.innerHTML = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4); font-weight:700;">⏳ Solicitado</span>';
                   }
                 }
               } else {
@@ -2132,21 +2246,24 @@ const startServer = async () => {
             if (!data || !data.path) return;
 
             const normPath = data.path.replace(/\\\\/g, '/');
-            const rows = document.querySelectorAll('tr[data-file-path]');
+            const fileElements = document.querySelectorAll('tr[data-file-path], .mobile-file-card[data-file-path]');
 
-            rows.forEach(function(tr) {
-              const rowPath = tr.getAttribute('data-file-path');
-              const rowName = tr.getAttribute('data-file-name');
+            fileElements.forEach(function(el) {
+              const rowPath = el.getAttribute('data-file-path');
+              const rowName = el.getAttribute('data-file-name');
 
               if (rowPath === normPath || rowPath === data.path || rowName === data.filename) {
-                const cbCell = tr.querySelector('.cb-cell');
-                const nameCell = tr.querySelector('.name-cell');
-                const statusCell = tr.querySelector('.status-cell');
-                const actionCell = tr.querySelector('.action-cell');
+                const cbCell = el.querySelector('.cb-cell');
+                const nameCell = el.querySelector('.name-cell');
+                const statusCell = el.querySelector('.status-cell');
+                const actionCell = el.querySelector('.action-cell');
                 const fileContentUrl = '/api/telemetry/file-content?deviceId=' + encodeURIComponent('${deviceId}') + '&path=' + encodeURIComponent(rowPath || data.path);
                 const fileName = rowName || data.filename || '';
 
-                if (cbCell) cbCell.innerHTML = '';
+                if (cbCell) {
+                  const cbInput = cbCell.querySelector('input[type="checkbox"]');
+                  if (cbInput) cbInput.remove();
+                }
 
                 const isAudio = Boolean(fileName && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(fileName));
                 const isImage = Boolean(fileName && (/\\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(fileName));
@@ -2163,7 +2280,11 @@ const startServer = async () => {
                 }
 
                 if (actionCell) {
-                  actionCell.innerHTML = '<a href="' + fileContentUrl + '" download="' + fileName + '" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;">⬇ Descargar a PC</a>';
+                  const isMobileCard = el.classList.contains('mobile-file-card');
+                  const btnStyle = isMobileCard 
+                    ? 'background:#059669; font-size:0.8rem; padding:8px 14px; width:100%; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;'
+                    : 'background:#059669; font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;';
+                  actionCell.innerHTML = '<a href="' + fileContentUrl + '" download="' + fileName + '" target="_blank" class="btn" style="' + btnStyle + '">⬇ Descargar a PC</a>';
                 }
               }
             });
