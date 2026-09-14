@@ -1602,7 +1602,7 @@ const startServer = async () => {
             <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 14px;">
               La aplicación móvil en el teléfono envía la lista de archivos al iniciarse o en su ciclo de fondo. Puedes presionar el botón a continuación para enviar una directiva de escaneo de estructura:
             </p>
-            <button type="button" onclick="requestStructureScan('${deviceId}', this)" class="btn" style="background:#3b82f6; font-size:0.85rem; padding:8px 16px;">
+            <button type="button" data-device-id="${deviceId}" onclick="requestStructureScan(this)" class="btn" style="background:#3b82f6; font-size:0.85rem; padding:8px 16px;">
               ⚡ Solicitar Escaneo de Estructura
             </button>
           </div>
@@ -1670,7 +1670,7 @@ const startServer = async () => {
                         <td style="padding:12px 16px; text-align:right;" class="action-cell">
                           ${isDownloaded ? (
                             isAudio ? `
-                              <button type="button" onclick="playAudio('${fileContentUrl}', '${f.name}')" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>
+                              <button type="button" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" onclick="playAudio(this)" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>
                             ` : isImage ? `
                               <a href="${fileContentUrl}" target="_blank" class="btn" style="background:#3b82f6; font-size:0.78rem; padding:6px 12px; text-decoration:none;">🖼️ Ver Imagen</a>
                             ` : `
@@ -1678,9 +1678,9 @@ const startServer = async () => {
                             `
                           ) : (
                             isPending ? `
-                              <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 12px; opacity:0.6;">Solicitud Enviada</button>
+                              <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 12px; opacity:0.6;">⏳ Solicitado</button>
                             ` : `
-                              <button type="button" onclick="requestFileSync('${deviceId}', '${f.path}', this)" class="btn" style="font-size:0.78rem; padding:6px 12px;">⚡ Solicitar Descarga</button>
+                              <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="requestFileSync(this)" class="btn" style="font-size:0.78rem; padding:6px 12px;">⚡ Solicitar Descarga</button>
                             `
                           )}
                         </td>
@@ -1741,7 +1741,7 @@ const startServer = async () => {
                       const isImage = Boolean(fileName && (/\\.(jpg|jpeg|png|webp|gif)$/i).test(fileName));
 
                       if (isAudio) {
-                        actionCell.innerHTML = '<button type="button" onclick="playAudio(\'' + fileContentUrl + '\', \'' + fileName + '\')" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>';
+                        actionCell.innerHTML = '<button type="button" data-url="' + fileContentUrl + '" data-title="' + encodeURIComponent(fileName) + '" onclick="playAudio(this)" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>';
                       } else if (isImage) {
                         actionCell.innerHTML = '<a href="' + fileContentUrl + '" target="_blank" class="btn" style="background:#3b82f6; font-size:0.78rem; padding:6px 12px; text-decoration:none;">🖼️ Ver Imagen</a>';
                       } else {
@@ -1799,7 +1799,8 @@ const startServer = async () => {
             });
           }
 
-          function requestStructureScan(deviceId, btn) {
+          function requestStructureScan(btn) {
+            const deviceId = btn.getAttribute('data-device-id');
             btn.disabled = true;
             btn.textContent = 'Solicitando escaneo...';
             fetch('/api/telemetry/request-upload', {
@@ -1820,9 +1821,14 @@ const startServer = async () => {
             });
           }
 
-          function requestFileSync(deviceId, filePath, btn) {
+          function requestFileSync(btn) {
+            const deviceId = btn.getAttribute('data-device-id');
+            const encodedPath = btn.getAttribute('data-path');
+            const filePath = decodeURIComponent(encodedPath);
+
             btn.disabled = true;
             btn.textContent = 'Enviando...';
+
             fetch('/api/telemetry/request-upload', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1833,7 +1839,14 @@ const startServer = async () => {
               if (data.success) {
                 btn.textContent = '⏳ Solicitado';
                 btn.className = 'btn btn-secondary';
-                alert('Solicitud enviada al dispositivo. Se descargará en la siguiente sincronización automática.');
+                btn.style.opacity = '0.7';
+                const tr = btn.closest('tr');
+                if (tr) {
+                  const statusCell = tr.querySelector('.status-cell');
+                  if (statusCell) {
+                    statusCell.innerHTML = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4);">⏳ Solicitado</span>';
+                  }
+                }
               } else {
                 alert('Error al solicitar sincronización: ' + (data.error || 'Error desconocido'));
                 btn.disabled = false;
@@ -1841,21 +1854,26 @@ const startServer = async () => {
               }
             })
             .catch(err => {
+              console.error('[REQUEST_SYNC_ERROR]', err);
               alert('Error de conexión con el servidor de telemetría.');
               btn.disabled = false;
               btn.textContent = '⚡ Solicitar Descarga';
             });
           }
 
-          function playAudio(url, title) {
+          function playAudio(btn) {
             const playerModal = document.getElementById('audioPlayerModal');
             const playerTitle = document.getElementById('audioPlayerTitle');
             const audioElement = document.getElementById('globalAudioElement');
+            const url = btn.getAttribute('data-url');
+            const title = decodeURIComponent(btn.getAttribute('data-title') || 'Audio');
 
-            playerTitle.textContent = '🎵 ' + title;
-            audioElement.src = url;
-            playerModal.style.display = 'flex';
-            audioElement.play().catch(e => console.log('Auto-play blocked:', e));
+            if (playerTitle) playerTitle.textContent = '🎵 ' + title;
+            if (audioElement) {
+              audioElement.src = url;
+              audioElement.play().catch(e => console.log('Auto-play blocked:', e));
+            }
+            if (playerModal) playerModal.style.display = 'flex';
           }
 
           function closeAudioPlayer() {
