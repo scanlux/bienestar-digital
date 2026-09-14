@@ -2068,8 +2068,11 @@ const startServer = async () => {
         status: 'PENDING',
         requestedAt: new Date().toISOString()
       });
-      fs.writeFileSync(rulesPath, JSON.stringify(rules, null, 2), 'utf8');
+    } else {
+      existing.status = 'PENDING';
+      existing.requestedAt = new Date().toISOString();
     }
+    fs.writeFileSync(rulesPath, JSON.stringify(rules, null, 2), 'utf8');
 
     return res.json({ success: true, message: 'Solicitud de descarga registrada.', path: pathToUpload });
   });
