@@ -1400,6 +1400,20 @@ const startServer = async () => {
       .desktop-table-view { display: none !important; }
       .mobile-cards-view { display: flex !important; flex-direction: column; gap: 10px; }
       .folder-grid { grid-template-columns: 1fr !important; gap: 10px; }
+
+      /* Mobile Level 5 - Bottom Sheet Modals */
+      .modal-overlay { align-items: flex-end; padding: 0; }
+      .modal-card {
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: 85vh !important;
+        border-radius: 24px 24px 0 0 !important;
+        border-bottom: none !important;
+        animation: bottomSheetSlideUp 0.25s ease-out !important;
+      }
+      .modal-header { padding: 14px 18px 12px 18px; flex-direction: column; align-items: stretch; gap: 8px; }
+      .bottom-sheet-handle { display: block; }
+      .modal-body { padding: 16px; max-height: calc(85vh - 65px); }
     }
 
     .desktop-table-view { display: block; }
@@ -1456,11 +1470,13 @@ const startServer = async () => {
     .copy-btn { background: #1f2937; color: #9ca3af; border: 1px solid #374151; padding: 4px 10px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
     .copy-btn:hover { background: #374151; color: #f3f4f6; }
 
-    /* Modal Overlay Styles */
+    /* Modal Overlay Styles & Bottom Sheets */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
     .modal-overlay.active { display: flex; }
     .modal-card { background: #111827; border: 1px solid #374151; border-radius: 16px; width: 100%; max-width: 580px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.6); overflow: hidden; animation: modalFadeIn 0.2s ease-out; }
     @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    @keyframes bottomSheetSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .bottom-sheet-handle { width: 38px; height: 4px; background: #374151; border-radius: 2px; margin: 0 auto 6px auto; display: none; }
     .modal-header { padding: 18px 22px; border-bottom: 1px solid #1f2937; display: flex; justify-content: space-between; align-items: center; background: #151d30; }
     .modal-title { font-size: 1.05rem; font-weight: 700; color: #f9fafb; display: flex; align-items: center; gap: 8px; }
     .modal-close { background: #1f2937; border: 1px solid #374151; color: #9ca3af; font-size: 1.2rem; cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: all 0.2s; }
@@ -2209,8 +2225,11 @@ const startServer = async () => {
   <div id="mediaPreviewModal" class="modal-overlay" onclick="if(event.target === this) closeMediaPreview()">
     <div class="modal-card" style="max-width:720px; width:92%;">
       <div class="modal-header">
-        <div class="modal-title" id="mediaPreviewTitle">👁️ Vista Previa de Archivo</div>
-        <button type="button" class="modal-close" onclick="closeMediaPreview()">✕</button>
+        <div class="bottom-sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+          <div class="modal-title" id="mediaPreviewTitle">👁️ Vista Previa de Archivo</div>
+          <button type="button" class="modal-close" onclick="closeMediaPreview()">✕</button>
+        </div>
       </div>
       <div class="modal-body" id="mediaPreviewBody" style="display:flex; justify-content:center; align-items:center; min-height:180px; background:#0b0f19;">
       </div>
@@ -2220,8 +2239,11 @@ const startServer = async () => {
   <div class="modal-overlay" id="sysModal" onclick="if(event.target === this) closeSystemModal()">
     <div class="modal-card">
       <div class="modal-header">
-        <div class="modal-title" id="modalTitle">🚀 Inicios de App Registrados</div>
-        <button type="button" class="modal-close" onclick="closeSystemModal()">✕</button>
+        <div class="bottom-sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+          <div class="modal-title" id="modalTitle">🚀 Inicios de App Registrados</div>
+          <button type="button" class="modal-close" onclick="closeSystemModal()">✕</button>
+        </div>
       </div>
       <div class="modal-body" id="modalBody"></div>
     </div>
@@ -2371,9 +2393,9 @@ const startServer = async () => {
         if (type === 'audio') {
           modalBody.innerHTML = '<div style="width:100%; padding:20px; display:flex; flex-direction:column; gap:16px; align-items:center;"><div style="font-size:3.5rem;">🎵</div><audio controls autoplay style="width:100%; border-radius:8px;" src="' + url + '"></audio></div>';
         } else if (type === 'image') {
-          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><img src="' + url + '" style="max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" alt="' + title + '" /></div>';
+          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><img src="' + url + '" style="max-width:100%; max-height:60vh; object-fit:contain; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" alt="' + title + '" /></div>';
         } else if (type === 'video') {
-          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><video controls autoplay style="max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" src="' + url + '">Tu navegador no soporta reproducción de video HTML5.</video></div>';
+          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><video controls autoplay style="max-width:100%; max-height:60vh; object-fit:contain; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" src="' + url + '">Tu navegador no soporta reproducción de video HTML5.</video></div>';
         } else {
           modalBody.innerHTML = '<div style="padding:30px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:16px;"><div style="font-size:3.5rem;">📄</div><p style="color:#9ca3af;">Este archivo está disponible para descargar directamente a tu equipo.</p><a href="' + url + '" download="' + title + '" class="btn" style="background:#059669;">⬇ Descargar Archivo a PC</a></div>';
         }
