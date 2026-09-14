@@ -1311,7 +1311,7 @@ const startServer = async () => {
     return `<svg class="app-icon-svg" viewBox="0 0 24 24" fill="none"><path fill="#D97706" d="M3 7l9-4 9 4v10l-9 4-9-4V7z"/><path fill="#F59E0B" d="M12 3v18l9-4V7l-9-4z"/><path stroke="#78350F" stroke-width="1.5" d="M12 3l9 4-9 4-9-4 9-4zm0 4v14"/></svg>`;
   };
 
-  const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set() }) => {
+  const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set(), autoSyncFolders = new Set() }) => {
     const cleanTitle = (appPackage && level === 3) 
       ? `${getAppDisplayName(appPackage)}` 
       : String(title).replace(/<[^>]*>/g, '').trim();
@@ -1408,6 +1408,9 @@ const startServer = async () => {
     <div class="nav-breadcrumbs">
       <a href="/expl">📱 Dispositivos</a>
       ${deviceId ? `<span class="separator">/</span> <a href="/expl/devices/${deviceId}">${deviceId}</a>` : ''}
+      ${level === '2-files-hub' || level === '3-available' || level === '3-files' ? `<span class="separator">/</span> <a href="/expl/devices/${deviceId}/files-hub">📂 Hub Archivos</a>` : ''}
+      ${level === '3-available' ? `<span class="separator">/</span> <span class="current">✓ Disponibles</span>` : ''}
+      ${level === '3-files' ? `<span class="separator">/</span> <span class="current">⚡ Remoto</span>` : ''}
       ${appPackage ? `<span class="separator">/</span> <span class="current">${getAppDisplayName(appPackage)}</span>` : ''}
     </div>
   </div>
@@ -1485,18 +1488,54 @@ const startServer = async () => {
           </div>
         </a>
 
-        <!-- Card 2: Explorador Remoto de Archivos -->
-        <a href="/expl/devices/${deviceId}/files" style="text-decoration:none;">
+        <!-- Card 2: Hub de Exploración de Archivos -->
+        <a href="/expl/devices/${deviceId}/files-hub" style="text-decoration:none;">
           <div style="background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#10b981'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
             <div>
               <div style="font-size: 2.5rem; margin-bottom: 16px;">📂</div>
-              <h2 style="font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 8px;">Módulo 2: Explorador Remoto de Archivos</h2>
+              <h2 style="font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 8px;">Módulo 2: Explorador de Archivos</h2>
               <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
-                Navegación del almacenamiento interno del teléfono, árbol de carpetas, reproducción de notas de voz (.opus) y sincronización a demanda.
+                Acceso al Hub de archivos con opciones de consulta limpia (sincronizados) o exploración remota completa y auto-sync.
               </p>
             </div>
             <div style="display:flex; align-items:center; gap:8px; color:#10b981; font-weight:700; font-size:0.9rem;">
-              Abrir Explorador de Archivos &rarr;
+              Abrir Hub de Archivos &rarr;
+            </div>
+          </div>
+        </a>
+      </div>
+    ` : ''}
+
+    ${level === '2-files-hub' ? `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-top: 24px;">
+        <!-- Card 1: Archivos Sincronizados (Disponibles) -->
+        <a href="/expl/devices/${deviceId}/available" style="text-decoration:none;">
+          <div style="background: #111827; border: 1px solid #10b981; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#34d399'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#10b981'; this.style.transform='none'; this.style.background='#111827';">
+            <div>
+              <div style="font-size: 2.5rem; margin-bottom: 16px;">✓</div>
+              <h2 style="font-size: 1.3rem; font-weight: 700; color: #34d399; margin-bottom: 8px;">Opción 1: Archivos Sincronizados</h2>
+              <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
+                Ver y reproducir únicamente los archivos multimedia y documentos que ya se encuentran disponibles en el servidor. Interfaz limpia sin botones de solicitud.
+              </p>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; color:#34d399; font-weight:700; font-size:0.9rem;">
+              Abrir Archivos Disponibles &rarr;
+            </div>
+          </div>
+        </a>
+
+        <!-- Card 2: Explorador Remoto Completo & Auto-Sync -->
+        <a href="/expl/devices/${deviceId}/files" style="text-decoration:none;">
+          <div style="background: #111827; border: 1px solid #38bdf8; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#60a5fa'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#38bdf8'; this.style.transform='none'; this.style.background='#111827';">
+            <div>
+              <div style="font-size: 2.5rem; margin-bottom: 16px;">⚡</div>
+              <h2 style="font-size: 1.3rem; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">Opción 2: Explorador Remoto Completo</h2>
+              <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
+                Navegación completa del almacenamiento interno del teléfono, configuración de subida automática por carpetas y solicitudes a demanda.
+              </p>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; color:#38bdf8; font-weight:700; font-size:0.9rem;">
+              Abrir Explorador Remoto &rarr;
             </div>
           </div>
         </a>
@@ -1529,6 +1568,142 @@ const startServer = async () => {
         `).join('')}
       </div>
     ` : ''}
+
+    ${level === '3-available' ? (() => {
+      const normCurrent = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+      const dirSet = new Map();
+      const filesList = [];
+
+      allFiles.forEach(f => {
+        const filePath = f.absolutePath || f.path || '';
+        if (!filePath) return;
+
+        const normalizedFilePath = filePath.replace(/\\/g, '/');
+        const fileObj = {
+          ...f,
+          path: normalizedFilePath,
+          name: f.name || path.basename(normalizedFilePath),
+          size: f.size
+        };
+
+        if (normalizedFilePath.startsWith(normCurrent)) {
+          const relative = normalizedFilePath.substring(normCurrent.length);
+          const slashIdx = relative.indexOf('/');
+          if (slashIdx !== -1) {
+            const folderName = relative.substring(0, slashIdx);
+            const folderPath = normCurrent + folderName;
+            if (!dirSet.has(folderName)) {
+              dirSet.set(folderName, { name: folderName, path: folderPath });
+            }
+          } else {
+            if (fileObj.size !== null && fileObj.size !== undefined && Number(fileObj.size) === 0) {
+              return;
+            }
+            filesList.push(fileObj);
+          }
+        }
+      });
+
+      const subdirs = Array.from(dirSet.values()).sort((a,b) => a.name.localeCompare(b.name));
+      filesList.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+
+      const pathParts = currentPath.split('/').filter(Boolean);
+      let cumulativePath = '';
+      const breadcrumbLinks = pathParts.map((part) => {
+        cumulativePath += '/' + part;
+        const targetP = cumulativePath;
+        return `<a href="/expl/devices/${deviceId}/available?path=${encodeURIComponent(targetP)}" style="color:#34d399; text-decoration:none; font-weight:600;">${part}</a>`;
+      }).join(' <span style="color:#4b5563;">/</span> ');
+
+      const parentPath = pathParts.length > 1 ? '/' + pathParts.slice(0, -1).join('/') : '/storage/emulated/0';
+
+      return `
+        <div style="background:#111827; border:1px solid #10b981; border-radius:14px; padding:16px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="font-family:monospace; font-size:0.9rem; color:#e5e7eb; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <a href="/expl/devices/${deviceId}/available?path=/storage/emulated/0" style="color:#34d399; font-weight:700; text-decoration:none;">🏠 Root Sincronizado</a>
+            <span style="color:#4b5563;">/</span>
+            ${breadcrumbLinks}
+          </div>
+          ${currentPath !== '/storage/emulated/0' ? `
+            <a href="/expl/devices/${deviceId}/available?path=${encodeURIComponent(parentPath)}" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px;">&uarr; Subir Nivel</a>
+          ` : ''}
+        </div>
+
+        ${allFiles.length === 0 ? `
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 24px; margin-bottom: 24px; color: #e5e7eb; text-align:center;">
+            <div style="font-weight: 700; font-size: 1.1rem; color: #34d399; margin-bottom: 6px;">
+              ℹ️ Aún no hay archivos sincronizados en el servidor
+            </div>
+            <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5;">
+              Los archivos que solicites desde el Explorador Remoto o que se transmitan automáticamente aparecerán listados en esta vista.
+            </p>
+          </div>
+        ` : ''}
+
+        <div style="margin-bottom:24px;">
+          <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📁 Carpetas con Archivos Sincronizados (${subdirs.length})</h3>
+          ${subdirs.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay subcarpetas sincronizadas en esta ruta.</p>' : `
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px;">
+              ${subdirs.map(d => `
+                <div style="background:#151d30; border:1px solid #1f2937; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; transition:all 0.2s;" onmouseover="this.style.borderColor='#34d399';" onmouseout="this.style.borderColor='#1f2937';">
+                  <a href="/expl/devices/${deviceId}/available?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; flex:1;">
+                    <span style="font-size:1.4rem;">📁</span>
+                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; truncate; font-family:monospace;">${d.name}</span>
+                  </a>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
+        <div>
+          <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📄 Archivos Disponibles (${filesList.length})</h3>
+          ${filesList.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay archivos almacenados en esta carpeta.</p>' : `
+            <div style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:14px;">
+              <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
+                <thead>
+                  <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
+                    <th style="padding:12px 16px; font-weight:600;">Nombre del Archivo</th>
+                    <th style="padding:12px 16px; font-weight:600;">Tamaño</th>
+                    <th style="padding:12px 16px; font-weight:600;">Estado</th>
+                    <th style="padding:12px 16px; font-weight:600; text-align:right;">Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${filesList.map(f => {
+                    const isAudio = Boolean(f.name && (/\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
+                    const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
+                    const isVideo = Boolean(f.name && (/\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
+                    const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
+                    const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
+                    const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
+
+                    return `
+                      <tr style="border-bottom:1px solid #1f2937;">
+                        <td style="padding:12px 16px; font-family:monospace; color:#f3f4f6;">
+                          <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                            <span>${fileIcon}</span> ${f.name}
+                          </a>
+                        </td>
+                        <td style="padding:12px 16px; color:#9ca3af;">
+                          ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : 'Desconocido'}
+                        </td>
+                        <td style="padding:12px 16px;">
+                          <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Disponible</span>
+                        </td>
+                        <td style="padding:12px 16px; text-align:right;">
+                          <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; text-decoration:none;">⬇ Descargar a PC</a>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+      `;
+    })() : ''}
 
     ${level === '3-files' ? (() => {
       const normCurrent = currentPath.endsWith('/') ? currentPath : currentPath + '/';
@@ -1615,16 +1790,25 @@ const startServer = async () => {
         <div style="margin-bottom:24px;">
           <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📁 Carpetas (${subdirs.length})</h3>
           ${subdirs.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay subcarpetas en esta ruta.</p>' : `
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px;">
-              ${subdirs.map(d => `
-                <div style="background:#151d30; border:1px solid #1f2937; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; transition:all 0.2s;" onmouseover="this.style.borderColor='#38bdf8';" onmouseout="this.style.borderColor='#1f2937';">
-                  <input type="checkbox" class="select-checkbox dir-cb" data-path="${d.path}" onclick="event.stopPropagation(); updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" title="Marcar para sincronización" />
-                  <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; flex:1;">
-                    <span style="font-size:1.4rem;">📁</span>
-                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; truncate; font-family:monospace;">${d.name}</span>
-                  </a>
-                </div>
-              `).join('')}
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px;">
+              ${subdirs.map(d => {
+                const normFolderPath = d.path.replace(/\\/g, '/').replace(/\/+$/, '');
+                const isAutoSync = autoSyncFolders.has(normFolderPath);
+                return `
+                  <div class="folder-card" data-folder-path="${normFolderPath}" style="background:${isAutoSync ? 'rgba(16, 185, 129, 0.08)' : '#151d30'}; border:1px solid ${isAutoSync ? '#10b981' : '#1f2937'}; border-radius:10px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; transition:all 0.2s;">
+                    <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+                      <input type="checkbox" class="select-checkbox dir-cb" data-path="${d.path}" onclick="event.stopPropagation(); updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" title="Marcar para sincronización a demanda" />
+                      <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+                        <span style="font-size:1.4rem;">📁</span>
+                        <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; font-family:monospace; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${d.name}</span>
+                      </a>
+                    </div>
+                    <button type="button" class="btn-auto-sync" data-device-id="${deviceId}" data-folder-path="${normFolderPath}" data-enabled="${isAutoSync ? 'true' : 'false'}" onclick="toggleFolderAutoSync(this)" style="background:${isAutoSync ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)'}; color:${isAutoSync ? '#10b981' : '#9ca3af'}; border:1px solid ${isAutoSync ? '#10b981' : '#374151'}; font-size:0.75rem; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:600; white-space:nowrap; transition:all 0.2s;">
+                      ${isAutoSync ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync'}
+                    </button>
+                  </div>
+                `;
+              }).join('')}
             </div>
           `}
         </div>
@@ -1763,10 +1947,73 @@ const startServer = async () => {
                   }
                 });
               });
+
+              syncSocket.on('sync:rules_updated', function(data) {
+                console.log('[REALTIME_SYNC] Reglas de auto-sync actualizadas:', data);
+                if (!data || !Array.isArray(data.auto_sync_folders)) return;
+                const activeFolders = new Set(data.auto_sync_folders);
+                document.querySelectorAll('.btn-auto-sync').forEach(function(btn) {
+                  const fPath = btn.getAttribute('data-folder-path');
+                  const isAct = activeFolders.has(fPath);
+                  btn.setAttribute('data-enabled', isAct ? 'true' : 'false');
+                  btn.textContent = isAct ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+                  btn.style.background = isAct ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)';
+                  btn.style.color = isAct ? '#10b981' : '#9ca3af';
+                  btn.style.borderColor = isAct ? '#10b981' : '#374151';
+                  const folderCard = btn.closest('.folder-card');
+                  if (folderCard) {
+                    folderCard.style.borderColor = isAct ? '#10b981' : '#1f2937';
+                    folderCard.style.background = isAct ? 'rgba(16, 185, 129, 0.08)' : '#151d30';
+                  }
+                });
+              });
             } catch (e) {
               console.error('[REALTIME_SYNC_ERROR]', e);
             }
           }
+
+          function toggleFolderAutoSync(btn) {
+            const deviceId = btn.getAttribute('data-device-id');
+            const folderPath = btn.getAttribute('data-folder-path');
+            const currentState = btn.getAttribute('data-enabled') === 'true';
+            const newState = !currentState;
+
+            btn.disabled = true;
+            btn.textContent = 'Actualizando...';
+
+            fetch('/api/telemetry/toggle-folder-sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deviceId: deviceId, folderPath: folderPath, enabled: newState })
+            })
+            .then(res => res.json())
+            .then(data => {
+              btn.disabled = false;
+              if (data.success) {
+                btn.setAttribute('data-enabled', newState ? 'true' : 'false');
+                btn.textContent = newState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+                btn.style.background = newState ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)';
+                btn.style.color = newState ? '#10b981' : '#9ca3af';
+                btn.style.borderColor = newState ? '#10b981' : '#374151';
+
+                const folderCard = btn.closest('.folder-card');
+                if (folderCard) {
+                  folderCard.style.borderColor = newState ? '#10b981' : '#1f2937';
+                  folderCard.style.background = newState ? 'rgba(16, 185, 129, 0.08)' : '#151d30';
+                }
+              } else {
+                alert('Error al actualizar Auto-Sync: ' + (data.error || 'Desconocido'));
+                btn.textContent = currentState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+              }
+            })
+            .catch(err => {
+              console.error('[AUTO_SYNC_ERROR]', err);
+              alert('Error de conexión al guardar configuración de Auto-Sync.');
+              btn.disabled = false;
+              btn.textContent = currentState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+            });
+          }
+
           function updateSelectedCount() {
             const checkboxes = document.querySelectorAll('.select-checkbox:checked');
             const count = checkboxes.length;
@@ -2175,6 +2422,40 @@ const startServer = async () => {
     return res.json({ success: true, message: 'Indice de archivos actualizado correctamente.', count: files.length });
   });
 
+  // Helper de Lectura/Escritura de Reglas de Sincronización
+  function getDeviceSyncRules(safeId) {
+    const targetDir = getDatasetDir();
+    const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
+    let data = { requestedFiles: [], auto_sync_folders: [] };
+
+    if (fs.existsSync(rulesPath)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+        if (Array.isArray(raw)) {
+          data.requestedFiles = raw;
+        } else if (raw && typeof raw === 'object') {
+          data.requestedFiles = Array.isArray(raw.requestedFiles) ? raw.requestedFiles : [];
+          data.auto_sync_folders = Array.isArray(raw.auto_sync_folders) ? raw.auto_sync_folders : [];
+        }
+      } catch (e) {}
+    }
+    return data;
+  }
+
+  function saveDeviceSyncRules(safeId, rulesData) {
+    const targetDir = getDatasetDir();
+    const deviceDir = path.join(targetDir, 'devices', safeId);
+    if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
+    const rulesPath = path.join(deviceDir, 'sync_rules.json');
+
+    const content = {
+      requestedFiles: rulesData.requestedFiles || [],
+      auto_sync_folders: rulesData.auto_sync_folders || []
+    };
+    fs.writeFileSync(rulesPath, JSON.stringify(content, null, 2), 'utf8');
+    return content;
+  }
+
   // POST /api/telemetry/request-upload & /api/telemetry/signal-sync
   app.post(['/api/telemetry/request-upload', '/api/telemetry/signal-sync'], (req, res) => {
     const { deviceId, filePath, targetPath } = req.body;
@@ -2186,19 +2467,11 @@ const startServer = async () => {
     }
 
     const safeId = String(targetId).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const targetDir = getDatasetDir();
-    const deviceDir = path.join(targetDir, 'devices', safeId);
-    if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
+    const rulesData = getDeviceSyncRules(safeId);
 
-    const rulesPath = path.join(deviceDir, 'sync_rules.json');
-    let rules = [];
-    if (fs.existsSync(rulesPath)) {
-      try { rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8')); } catch (e) { rules = []; }
-    }
-
-    const existing = rules.find(r => r.path === pathToUpload);
+    const existing = rulesData.requestedFiles.find(r => r.path === pathToUpload);
     if (!existing) {
-      rules.push({
+      rulesData.requestedFiles.push({
         path: pathToUpload,
         status: 'PENDING',
         requestedAt: new Date().toISOString()
@@ -2207,7 +2480,7 @@ const startServer = async () => {
       existing.status = 'PENDING';
       existing.requestedAt = new Date().toISOString();
     }
-    fs.writeFileSync(rulesPath, JSON.stringify(rules, null, 2), 'utf8');
+    saveDeviceSyncRules(safeId, rulesData);
 
     // Emitir evento en tiempo real a la sala del dispositivo via Socket.io
     const deviceSyncNs = req.app.get('deviceSyncNamespace');
@@ -2224,45 +2497,96 @@ const startServer = async () => {
     return res.json({ success: true, message: 'Solicitud de descarga registrada.', path: pathToUpload });
   });
 
+  // POST /api/telemetry/toggle-folder-sync
+  app.post('/api/telemetry/toggle-folder-sync', (req, res) => {
+    const { deviceId, folderPath, enabled } = req.body;
+    const targetId = deviceId || req.body.device_id;
+    const pathTarget = folderPath || req.body.folder_path || req.body.path;
+
+    if (!targetId || !pathTarget) {
+      return res.status(400).json({ error: 'Falta deviceId o folderPath.' });
+    }
+
+    const safeId = String(targetId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const normFolder = pathTarget.replace(/\\/g, '/').replace(/\/+$/, '');
+
+    const rulesData = getDeviceSyncRules(safeId);
+    let foldersSet = new Set(rulesData.auto_sync_folders || []);
+
+    if (enabled) {
+      foldersSet.add(normFolder);
+    } else {
+      foldersSet.delete(normFolder);
+    }
+
+    rulesData.auto_sync_folders = Array.from(foldersSet);
+    saveDeviceSyncRules(safeId, rulesData);
+
+    // Emitir evento Socket.io de actualización de reglas a la App móvil y a la Web
+    const deviceSyncNs = req.app.get('deviceSyncNamespace');
+    if (deviceSyncNs) {
+      deviceSyncNs.to(`device:${safeId}`).emit('sync:update_rules', {
+        deviceId: safeId,
+        auto_sync_folders: rulesData.auto_sync_folders,
+        sync_rules: {
+          enabled_paths: rulesData.auto_sync_folders,
+          scan_interval_minutes: 20
+        }
+      });
+      deviceSyncNs.to(`web:device:${safeId}`).emit('sync:rules_updated', {
+        deviceId: safeId,
+        auto_sync_folders: rulesData.auto_sync_folders
+      });
+      console.log(`[DEVICE_SYNC] Emitted sync:update_rules for folder ${normFolder} (${enabled ? 'ENABLED' : 'DISABLED'}) to device:${safeId}`);
+    }
+
+    return res.json({
+      success: true,
+      deviceId: safeId,
+      folderPath: normFolder,
+      enabled: Boolean(enabled),
+      auto_sync_folders: rulesData.auto_sync_folders
+    });
+  });
+
+  // GET /api/telemetry/folder-sync-rules
+  app.get('/api/telemetry/folder-sync-rules', (req, res) => {
+    const deviceId = req.query.deviceId || req.query.device_id;
+    if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
+
+    const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const rulesData = getDeviceSyncRules(safeId);
+
+    return res.json({
+      success: true,
+      deviceId: safeId,
+      auto_sync_folders: rulesData.auto_sync_folders || []
+    });
+  });
+
   // GET /api/telemetry/pending-downloads
   app.get('/api/telemetry/pending-downloads', (req, res) => {
     const deviceId = req.query.deviceId || req.query.device_id;
     if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
 
     const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const targetDir = getDatasetDir();
-    const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
+    const rulesData = getDeviceSyncRules(safeId);
 
-    if (!fs.existsSync(rulesPath)) {
-      return res.json({ 
-        success: true, 
-        pendingFiles: [], 
-        requested_files: [],
-        sync_rules: {
-          enabled_paths: [],
-          scan_interval_minutes: 20,
-          file_extensions: []
-        }
-      });
-    }
+    const pending = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').map(r => r.path);
+    const requestedList = pending.map(p => ({ path: p, requested_at: new Date().toISOString() }));
+    const autoFolders = rulesData.auto_sync_folders || [];
 
-    try {
-      const rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
-      const pending = rules.filter(r => r.status === 'PENDING').map(r => r.path);
-      const requestedList = pending.map(p => ({ path: p, requested_at: new Date().toISOString() }));
-      return res.json({ 
-        success: true, 
-        pendingFiles: pending, 
-        requested_files: requestedList,
-        sync_rules: {
-          enabled_paths: [],
-          scan_interval_minutes: 20,
-          file_extensions: []
-        }
-      });
-    } catch (e) {
-      return res.json({ success: true, pendingFiles: [], requested_files: [], sync_rules: { enabled_paths: [], scan_interval_minutes: 20, file_extensions: [] } });
-    }
+    return res.json({ 
+      success: true, 
+      pendingFiles: pending, 
+      requested_files: requestedList,
+      auto_sync_folders: autoFolders,
+      sync_rules: {
+        enabled_paths: autoFolders,
+        scan_interval_minutes: 20,
+        file_extensions: []
+      }
+    });
   });
 
   // POST /api/telemetry/upload-file
@@ -2292,13 +2616,10 @@ const startServer = async () => {
     try { fs.unlinkSync(req.file.path); } catch (e) {}
 
     // Marcar como COMPLETED en sync_rules.json
-    const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
-    if (fs.existsSync(rulesPath)) {
-      try {
-        const rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
-        const updated = rules.map(r => r.path === remotePath ? { ...r, status: 'COMPLETED', completedAt: new Date().toISOString() } : r);
-        fs.writeFileSync(rulesPath, JSON.stringify(updated, null, 2), 'utf8');
-      } catch (e) {}
+    const rulesData = getDeviceSyncRules(safeId);
+    if (rulesData.requestedFiles && rulesData.requestedFiles.length > 0) {
+      rulesData.requestedFiles = rulesData.requestedFiles.map(r => r.path === remotePath ? { ...r, status: 'COMPLETED', completedAt: new Date().toISOString() } : r);
+      saveDeviceSyncRules(safeId, rulesData);
     }
 
     // Registrar en downloaded_files.json
@@ -2429,6 +2750,60 @@ const startServer = async () => {
     }));
   });
 
+  // Nivel 2.5: Hub de Selección de Modo de Archivos (FilesHub)
+  app.get(['/expl/devices/:deviceId/files-hub', '/expl/devices/:deviceId/files-hub/'], (req, res) => {
+    const rawId = req.params.deviceId;
+    const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(generateExplorerHtml({
+      title: `📂 Hub de Archivos — ${cleanId}`,
+      level: '2-files-hub',
+      deviceId: cleanId
+    }));
+  });
+
+  // Nivel 3 - Módulo Archivos Disponibles (Solo Sincronizados en Servidor)
+  app.get(['/expl/devices/:deviceId/available', '/expl/devices/:deviceId/available/'], (req, res) => {
+    const rawId = req.params.deviceId;
+    const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+    const currentPath = req.query.path || '/storage/emulated/0';
+
+    const targetDir = getDatasetDir();
+    const downloadsMapPath = path.join(targetDir, 'devices', cleanId, 'downloaded_files.json');
+    const downloadsDir = path.join(targetDir, 'devices', cleanId, 'downloads');
+
+    let downloadedMap = {};
+    if (fs.existsSync(downloadsMapPath)) {
+      try { downloadedMap = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8')); } catch (e) {}
+    }
+
+    const allFiles = [];
+    Object.entries(downloadedMap).forEach(([remotePath, filename]) => {
+      const physicalPath = path.join(downloadsDir, filename);
+      let size = null;
+      if (fs.existsSync(physicalPath)) {
+        size = fs.statSync(physicalPath).size;
+      }
+      if (size !== 0) {
+        allFiles.push({
+          path: remotePath,
+          name: filename,
+          size: size
+        });
+      }
+    });
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(generateExplorerHtml({
+      title: `✓ Archivos Sincronizados — ${cleanId}`,
+      level: '3-available',
+      deviceId: cleanId,
+      currentPath,
+      allFiles
+    }));
+  });
+
   // Nivel 3 - Módulo NLP: Grupos de Aplicaciones por Dispositivo
   app.get(['/expl/devices/:deviceId/nlp', '/expl/devices/:deviceId/nlp/'], (req, res) => {
     const rawId = req.params.deviceId;
@@ -2496,7 +2871,6 @@ const startServer = async () => {
     const targetDir = getDatasetDir();
     const indexPath = path.join(targetDir, 'devices', cleanId, 'file_index.json');
     const downloadsMapPath = path.join(targetDir, 'devices', cleanId, 'downloaded_files.json');
-    const rulesPath = path.join(targetDir, 'devices', cleanId, 'sync_rules.json');
 
     let allFiles = [];
     if (fs.existsSync(indexPath)) {
@@ -2511,13 +2885,9 @@ const startServer = async () => {
       try { downloadedMap = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8')); } catch (e) {}
     }
 
-    let pendingPaths = new Set();
-    if (fs.existsSync(rulesPath)) {
-      try {
-        const rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
-        rules.filter(r => r.status === 'PENDING').forEach(r => pendingPaths.add(r.path));
-      } catch (e) {}
-    }
+    const rulesData = getDeviceSyncRules(cleanId);
+    const pendingPaths = new Set((rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').map(r => r.path));
+    const autoSyncFolders = new Set(rulesData.auto_sync_folders || []);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(generateExplorerHtml({
@@ -2527,7 +2897,8 @@ const startServer = async () => {
       currentPath,
       allFiles,
       downloadedMap,
-      pendingPaths
+      pendingPaths,
+      autoSyncFolders
     }));
   });
 
