@@ -1385,7 +1385,9 @@ const startServer = async () => {
       <div>
         ${downloadUrl ? `<a href="${downloadUrl}" download class="btn">⬇ Exportar JSON</a>` : ''}
         ${level === '3-files' ? `
-          <button type="button" onclick="requestFileSync('${deviceId}', '/storage/emulated/0', this)" class="btn" style="background:#10b981;">⚡ Solicitar Sincronización Total</button>
+          <button type="button" id="syncSelectedBtn" onclick="requestSelectedSync('${deviceId}')" class="btn" style="background:#10b981; font-weight:700; opacity:0.5;" disabled>
+            ⚡ Sincronizar Seleccionados (<span id="selectedCount">0</span>)
+          </button>
         ` : ''}
       </div>
     </div>
@@ -1550,10 +1552,10 @@ const startServer = async () => {
               ℹ️ El teléfono aún no ha enviado el manifiesto de archivos (file_index.json)
             </div>
             <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 14px;">
-              La aplicación móvil en el teléfono envía la lista de archivos en su ciclo de sincronización de fondo. Puedes presionar el botón a continuación para enviar una directiva de sincronización inmediata:
+              La aplicación móvil en el teléfono envía la lista de archivos al iniciarse o en su ciclo de fondo. Puedes presionar el botón a continuación para enviar una directiva de escaneo de estructura:
             </p>
-            <button type="button" onclick="requestFileSync('${deviceId}', '/storage/emulated/0', this)" class="btn" style="background:#10b981; font-size:0.85rem; padding:8px 16px;">
-              ⚡ Solicitar Escaneo / Sincronización Total al Dispositivo
+            <button type="button" onclick="requestStructureScan('${deviceId}', this)" class="btn" style="background:#3b82f6; font-size:0.85rem; padding:8px 16px;">
+              ⚡ Solicitar Escaneo de Estructura
             </button>
           </div>
         ` : ''}
@@ -1561,14 +1563,15 @@ const startServer = async () => {
         <div style="margin-bottom:24px;">
           <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📁 Carpetas (${subdirs.length})</h3>
           ${subdirs.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay subcarpetas en esta ruta.</p>' : `
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px;">
               ${subdirs.map(d => `
-                <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit;">
-                  <div style="background:#151d30; border:1px solid #1f2937; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:10px; transition:all 0.2s;" onmouseover="this.style.borderColor='#38bdf8';" onmouseout="this.style.borderColor='#1f2937';">
+                <div style="background:#151d30; border:1px solid #1f2937; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; transition:all 0.2s;" onmouseover="this.style.borderColor='#38bdf8';" onmouseout="this.style.borderColor='#1f2937';">
+                  <input type="checkbox" class="select-checkbox dir-cb" data-path="${d.path}" onclick="event.stopPropagation(); updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" title="Marcar para sincronización" />
+                  <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; flex:1;">
                     <span style="font-size:1.4rem;">📁</span>
                     <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; truncate; font-family:monospace;">${d.name}</span>
-                  </div>
-                </a>
+                  </a>
+                </div>
               `).join('')}
             </div>
           `}
@@ -1581,6 +1584,9 @@ const startServer = async () => {
               <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
                 <thead>
                   <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
+                    <th style="padding:12px 16px; width:40px; text-align:center;">
+                      <input type="checkbox" id="selectAllCb" onclick="toggleSelectAll(this)" style="width:18px; height:18px; cursor:pointer;" title="Seleccionar todos" />
+                    </th>
                     <th style="padding:12px 16px; font-weight:600;">Nombre del Archivo</th>
                     <th style="padding:12px 16px; font-weight:600;">Tamaño</th>
                     <th style="padding:12px 16px; font-weight:600;">Estado</th>
@@ -1597,6 +1603,9 @@ const startServer = async () => {
 
                     return `
                       <tr style="border-bottom:1px solid #1f2937;">
+                        <td style="padding:12px 16px; text-align:center;">
+                          <input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />
+                        </td>
                         <td style="padding:12px 16px; font-family:monospace; color:#f3f4f6;">
                           <span style="margin-right:8px;">${fileIcon}</span> ${f.name}
                         </td>
@@ -1643,6 +1652,71 @@ const startServer = async () => {
         </div>
 
         <script>
+          function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('.select-checkbox:checked');
+            const count = checkboxes.length;
+            const countSpan = document.getElementById('selectedCount');
+            const syncBtn = document.getElementById('syncSelectedBtn');
+            if (countSpan) countSpan.textContent = count;
+            if (syncBtn) {
+              syncBtn.disabled = count === 0;
+              syncBtn.style.opacity = count > 0 ? '1' : '0.5';
+            }
+          }
+
+          function toggleSelectAll(masterCb) {
+            const checkboxes = document.querySelectorAll('.select-checkbox');
+            checkboxes.forEach(cb => { cb.checked = masterCb.checked; });
+            updateSelectedCount();
+          }
+
+          function requestSelectedSync(deviceId) {
+            const checkboxes = document.querySelectorAll('.select-checkbox:checked');
+            const paths = Array.from(checkboxes).map(cb => cb.getAttribute('data-path')).filter(Boolean);
+            if (paths.length === 0) return;
+
+            const btn = document.getElementById('syncSelectedBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Enviando directivas...'; }
+
+            let sent = 0;
+            let errors = 0;
+
+            Promise.all(paths.map(path => {
+              return fetch('/api/telemetry/request-upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId: deviceId, filePath: path })
+              })
+              .then(res => res.json())
+              .then(data => { if (data.success) sent++; else errors++; })
+              .catch(() => errors++);
+            })).then(() => {
+              alert('Se registraron ' + sent + ' solicitudes de sincronización para los elementos seleccionados.');
+              window.location.reload();
+            });
+          }
+
+          function requestStructureScan(deviceId, btn) {
+            btn.disabled = true;
+            btn.textContent = 'Solicitando escaneo...';
+            fetch('/api/telemetry/request-upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deviceId: deviceId, filePath: '__SCAN_STRUCTURE__' })
+            })
+            .then(res => res.json())
+            .then(data => {
+              alert('Orden de escaneo de estructura enviada al dispositivo. El manifiesto file_index.json se actualizará en la siguiente conexión.');
+              btn.textContent = '⏳ Escaneo Solicitado';
+              btn.className = 'btn btn-secondary';
+            })
+            .catch(err => {
+              alert('Error al solicitar escaneo de estructura.');
+              btn.disabled = false;
+              btn.textContent = '⚡ Solicitar Escaneo de Estructura';
+            });
+          }
+
           function requestFileSync(deviceId, filePath, btn) {
             btn.disabled = true;
             btn.textContent = 'Enviando...';
