@@ -1384,6 +1384,9 @@ const startServer = async () => {
       </div>
       <div>
         ${downloadUrl ? `<a href="${downloadUrl}" download class="btn">⬇ Exportar JSON</a>` : ''}
+        ${level === '3-files' ? `
+          <button type="button" onclick="requestFileSync('${deviceId}', '/storage/emulated/0', this)" class="btn" style="background:#10b981;">⚡ Solicitar Sincronización Total</button>
+        ` : ''}
       </div>
     </div>
 
@@ -1540,6 +1543,20 @@ const startServer = async () => {
             <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(parentPath)}" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px;">&uarr; Subir Nivel</a>
           ` : ''}
         </div>
+
+        ${allFiles.length === 0 ? `
+          <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 24px; color: #e5e7eb;">
+            <div style="font-weight: 700; font-size: 1rem; color: #38bdf8; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+              ℹ️ El teléfono aún no ha enviado el manifiesto de archivos (file_index.json)
+            </div>
+            <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 14px;">
+              La aplicación móvil en el teléfono envía la lista de archivos en su ciclo de sincronización de fondo. Puedes presionar el botón a continuación para enviar una directiva de sincronización inmediata:
+            </p>
+            <button type="button" onclick="requestFileSync('${deviceId}', '/storage/emulated/0', this)" class="btn" style="background:#10b981; font-size:0.85rem; padding:8px 16px;">
+              ⚡ Solicitar Escaneo / Sincronización Total al Dispositivo
+            </button>
+          </div>
+        ` : ''}
 
         <div style="margin-bottom:24px;">
           <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📁 Carpetas (${subdirs.length})</h3>
