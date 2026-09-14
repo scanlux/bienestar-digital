@@ -99,6 +99,13 @@ jobs:
               "${TOKEN_FILE}" \
               "${{ secrets.SSH_USER }}@${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}:/tmp/.ghcr_token"
 
+          # Copiar el archivo server.js actualizado a la ruta montada del host
+          scp -o BatchMode=yes \
+              -o ConnectTimeout=30 \
+              -i ~/.ssh/id_rsa \
+              telemetry/src/server.js \
+              "${{ secrets.SSH_USER }}@${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}:/opt/bienestar/server.js"
+
           # Ejecutar deploy remoto
           ssh -o BatchMode=yes \
               -o ConnectTimeout=30 \
