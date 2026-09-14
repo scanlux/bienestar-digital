@@ -1275,7 +1275,7 @@ const startServer = async () => {
     return `<svg class="app-icon-svg" viewBox="0 0 24 24" fill="none"><path fill="#D97706" d="M3 7l9-4 9 4v10l-9 4-9-4V7z"/><path fill="#F59E0B" d="M12 3v18l9-4V7l-9-4z"/><path stroke="#78350F" stroke-width="1.5" d="M12 3l9 4-9 4-9-4 9-4zm0 4v14"/></svg>`;
   };
 
-  const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl }) => {
+  const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set() }) => {
     const cleanTitle = (appPackage && level === 3) 
       ? `${getAppDisplayName(appPackage)}` 
       : String(title).replace(/<[^>]*>/g, '').trim();
