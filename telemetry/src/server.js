@@ -1645,18 +1645,26 @@ const startServer = async () => {
                   ${filesList.map(f => {
                     const isDownloaded = Boolean(downloadedMap[f.path]);
                     const isPending = pendingPaths.has(f.path);
-                    const isAudio = Boolean(f.name && (f.name.endsWith('.opus') || f.name.endsWith('.ogg') || f.name.endsWith('.mp3') || f.name.endsWith('.wav')));
-                    const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif)$/i).test(f.name));
-                    const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : '📄';
+                    const isAudio = Boolean(f.name && (/\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
+                    const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
+                    const isVideo = Boolean(f.name && (/\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
+                    const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
+                    const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
                     const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
 
                     return `
                       <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${f.name}">
-                        <td style="padding:12px 16px; text-align:center;">
-                          <input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />
+                        <td style="padding:12px 16px; text-align:center;" class="cb-cell">
+                          ${isDownloaded ? '' : `<input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />`}
                         </td>
-                        <td style="padding:12px 16px; font-family:monospace; color:#f3f4f6;">
-                          <span style="margin-right:8px;">${fileIcon}</span> ${f.name}
+                        <td style="padding:12px 16px; font-family:monospace; color:#f3f4f6;" class="name-cell">
+                          ${isDownloaded ? `
+                            <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                              <span>${fileIcon}</span> ${f.name}
+                            </a>
+                          ` : `
+                            <span style="display:inline-flex; align-items:center; gap:8px;"><span style="margin-right:0;">${fileIcon}</span> ${f.name}</span>
+                          `}
                         </td>
                         <td style="padding:12px 16px; color:#9ca3af;">
                           ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : 'Desconocido'}
@@ -1668,21 +1676,13 @@ const startServer = async () => {
                           }
                         </td>
                         <td style="padding:12px 16px; text-align:right;" class="action-cell">
-                          ${isDownloaded ? (
-                            isAudio ? `
-                              <button type="button" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" onclick="playAudio(this)" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>
-                            ` : isImage ? `
-                              <a href="${fileContentUrl}" target="_blank" class="btn" style="background:#3b82f6; font-size:0.78rem; padding:6px 12px; text-decoration:none;">🖼️ Ver Imagen</a>
-                            ` : `
-                              <a href="${fileContentUrl}" target="_blank" download class="btn" style="font-size:0.78rem; padding:6px 12px;">⬇ Descargar</a>
-                            `
-                          ) : (
-                            isPending ? `
-                              <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 12px; opacity:0.6;">⏳ Solicitado</button>
-                            ` : `
-                              <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="requestFileSync(this)" class="btn" style="font-size:0.78rem; padding:6px 12px;">⚡ Solicitar Descarga</button>
-                            `
-                          )}
+                          ${isDownloaded ? `
+                            <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; text-decoration:none;">⬇ Descargar a PC</a>
+                          ` : isPending ? `
+                            <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 12px; opacity:0.6;">⏳ Solicitado</button>
+                          ` : `
+                            <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="requestFileSync(this)" class="btn" style="font-size:0.78rem; padding:6px 12px;">⚡ Solicitar Descarga</button>
+                          `}
                         </td>
                       </tr>
                     `;
@@ -1693,13 +1693,16 @@ const startServer = async () => {
           `}
         </div>
 
-        <!-- Audio Player Floating Footer Modal -->
-        <div id="audioPlayerModal" style="position:fixed; bottom:20px; right:20px; background:#151d30; border:1px solid #10b981; border-radius:16px; padding:16px 20px; box-shadow:0 10px 30px rgba(0,0,0,0.8); display:none; flex-direction:column; gap:10px; z-index:9999; max-width:380px; width:100%;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-weight:700; font-size:0.85rem; color:#10b981;" id="audioPlayerTitle">🎵 Reproduciendo Audio...</span>
-            <button type="button" onclick="closeAudioPlayer()" style="background:none; border:none; color:#9ca3af; cursor:pointer; font-size:1.1rem;">✕</button>
+        <!-- Media Preview Unified Modal -->
+        <div id="mediaPreviewModal" class="modal-overlay" onclick="if(event.target === this) closeMediaPreview()">
+          <div class="modal-card" style="max-width:720px; width:92%;">
+            <div class="modal-header">
+              <div class="modal-title" id="mediaPreviewTitle">👁️ Vista Previa de Archivo</div>
+              <button type="button" class="modal-close" onclick="closeMediaPreview()">✕</button>
+            </div>
+            <div class="modal-body" id="mediaPreviewBody" style="display:flex; justify-content:center; align-items:center; min-height:180px; background:#0b0f19;">
+            </div>
           </div>
-          <audio id="globalAudioElement" controls style="width:100%; border-radius:8px;"></audio>
         </div>
 
         <script>
@@ -1727,26 +1730,31 @@ const startServer = async () => {
                   const rowName = tr.getAttribute('data-file-name');
 
                   if (rowPath === normPath || rowPath === data.path || rowName === data.filename) {
+                    const cbCell = tr.querySelector('.cb-cell');
+                    const nameCell = tr.querySelector('.name-cell');
                     const statusCell = tr.querySelector('.status-cell');
                     const actionCell = tr.querySelector('.action-cell');
                     const fileContentUrl = '/api/telemetry/file-content?deviceId=' + encodeURIComponent('${deviceId}') + '&path=' + encodeURIComponent(rowPath || data.path);
                     const fileName = rowName || data.filename || '';
+
+                    if (cbCell) cbCell.innerHTML = '';
+
+                    const isAudio = Boolean(fileName && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(fileName));
+                    const isImage = Boolean(fileName && (/\\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(fileName));
+                    const isVideo = Boolean(fileName && (/\\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(fileName));
+                    const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
+                    const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
+
+                    if (nameCell) {
+                      nameCell.innerHTML = '<a href="#" onclick="openMediaPreview(this); return false;" data-url="' + fileContentUrl + '" data-title="' + encodeURIComponent(fileName) + '" data-type="' + fileType + '" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px;"><span>' + fileIcon + '</span> ' + fileName + '</a>';
+                    }
 
                     if (statusCell) {
                       statusCell.innerHTML = '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Sincronizado</span>';
                     }
 
                     if (actionCell) {
-                      const isAudio = Boolean(fileName && (/\\.(opus|ogg|mp3|wav)$/i).test(fileName));
-                      const isImage = Boolean(fileName && (/\\.(jpg|jpeg|png|webp|gif)$/i).test(fileName));
-
-                      if (isAudio) {
-                        actionCell.innerHTML = '<button type="button" data-url="' + fileContentUrl + '" data-title="' + encodeURIComponent(fileName) + '" onclick="playAudio(this)" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>';
-                      } else if (isImage) {
-                        actionCell.innerHTML = '<a href="' + fileContentUrl + '" target="_blank" class="btn" style="background:#3b82f6; font-size:0.78rem; padding:6px 12px; text-decoration:none;">🖼️ Ver Imagen</a>';
-                      } else {
-                        actionCell.innerHTML = '<a href="' + fileContentUrl + '" target="_blank" download class="btn" style="font-size:0.78rem; padding:6px 12px;">⬇ Descargar</a>';
-                      }
+                      actionCell.innerHTML = '<a href="' + fileContentUrl + '" download="' + fileName + '" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; text-decoration:none;">⬇ Descargar a PC</a>';
                     }
                   }
                 });
@@ -1861,26 +1869,42 @@ const startServer = async () => {
             });
           }
 
-          function playAudio(btn) {
-            const playerModal = document.getElementById('audioPlayerModal');
-            const playerTitle = document.getElementById('audioPlayerTitle');
-            const audioElement = document.getElementById('globalAudioElement');
+          function openMediaPreview(btn) {
+            const modal = document.getElementById('mediaPreviewModal');
+            const modalTitle = document.getElementById('mediaPreviewTitle');
+            const modalBody = document.getElementById('mediaPreviewBody');
             const url = btn.getAttribute('data-url');
-            const title = decodeURIComponent(btn.getAttribute('data-title') || 'Audio');
+            const title = decodeURIComponent(btn.getAttribute('data-title') || 'Archivo');
+            const type = btn.getAttribute('data-type');
 
-            if (playerTitle) playerTitle.textContent = '🎵 ' + title;
-            if (audioElement) {
-              audioElement.src = url;
-              audioElement.play().catch(e => console.log('Auto-play blocked:', e));
+            if (modalTitle) modalTitle.textContent = (type === 'audio' ? '🎵 Audio: ' : type === 'image' ? '🖼️ Imagen: ' : type === 'video' ? '🎬 Video: ' : '📄 Archivo: ') + title;
+
+            if (modalBody) {
+              if (type === 'audio') {
+                modalBody.innerHTML = '<div style="width:100%; padding:20px; display:flex; flex-direction:column; gap:16px; align-items:center;"><div style="font-size:3.5rem;">🎵</div><audio controls autoplay style="width:100%; border-radius:8px;" src="' + url + '"></audio></div>';
+              } else if (type === 'image') {
+                modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><img src="' + url + '" style="max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" alt="' + title + '" /></div>';
+              } else if (type === 'video') {
+                modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><video controls autoplay style="max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" src="' + url + '">Tu navegador no soporta reproducción de video HTML5.</video></div>';
+              } else {
+                modalBody.innerHTML = '<div style="padding:30px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:16px;"><div style="font-size:3.5rem;">📄</div><p style="color:#9ca3af;">Este archivo está disponible para descargar directamente a tu equipo.</p><a href="' + url + '" download="' + title + '" class="btn" style="background:#059669;">⬇ Descargar Archivo a PC</a></div>';
+              }
             }
-            if (playerModal) playerModal.style.display = 'flex';
+
+            if (modal) modal.classList.add('active');
           }
 
-          function closeAudioPlayer() {
-            const playerModal = document.getElementById('audioPlayerModal');
-            const audioElement = document.getElementById('globalAudioElement');
-            if (audioElement) audioElement.pause();
-            if (playerModal) playerModal.style.display = 'none';
+          function closeMediaPreview() {
+            const modal = document.getElementById('mediaPreviewModal');
+            const modalBody = document.getElementById('mediaPreviewBody');
+            if (modalBody) {
+              const audio = modalBody.querySelector('audio');
+              const video = modalBody.querySelector('video');
+              if (audio) audio.pause();
+              if (video) video.pause();
+              modalBody.innerHTML = '';
+            }
+            if (modal) modal.classList.remove('active');
           }
         </script>
       `;
