@@ -1316,6 +1316,18 @@ const startServer = async () => {
       ? `${getAppDisplayName(appPackage)}` 
       : String(title).replace(/<[^>]*>/g, '').trim();
 
+    const formatCompactDate = (ts) => {
+      if (!ts) return '—';
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return '—';
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    };
+
     return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1666,11 +1678,11 @@ const startServer = async () => {
               <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
                 <thead>
                   <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
-                    <th style="padding:12px 16px; font-weight:600; min-width:260px;">Nombre del Archivo</th>
-                    <th style="padding:12px 16px; font-weight:600; white-space:nowrap; width:1%;">Tamaño</th>
-                    <th style="padding:12px 16px; font-weight:600; white-space:nowrap; width:1%;">Fecha</th>
-                    <th style="padding:12px 16px; font-weight:600; white-space:nowrap; width:1%;">Estado</th>
-                    <th style="padding:12px 16px; font-weight:600; text-align:right; white-space:nowrap; width:1%;">Acción</th>
+                    <th style="padding:12px 14px; font-weight:600; max-width:280px;">Nombre del Archivo</th>
+                    <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:90px; text-align:right;">Tamaño</th>
+                    <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:135px; text-align:center;">Fecha</th>
+                    <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:125px; text-align:center;">Estado</th>
+                    <th style="padding:12px 14px; font-weight:600; text-align:right; white-space:nowrap; width:175px;">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1684,22 +1696,22 @@ const startServer = async () => {
 
                     return `
                       <tr style="border-bottom:1px solid #1f2937;">
-                        <td style="padding:12px 16px; font-family:monospace; color:#f3f4f6; word-break:break-word;" class="name-cell">
-                          <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                            <span>${fileIcon}</span> ${f.name}
+                        <td style="padding:12px 14px; font-family:monospace; color:#f3f4f6; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" class="name-cell" title="${f.name}">
+                          <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                            <span style="flex-shrink:0;">${fileIcon}</span> <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
                           </a>
                         </td>
-                        <td style="padding:12px 16px; color:#9ca3af; white-space:nowrap;">
-                          ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : 'Desconocido'}
+                        <td style="padding:12px 14px; color:#9ca3af; white-space:nowrap; text-align:right;">
+                          ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—'}
                         </td>
-                        <td style="padding:12px 16px; color:#9ca3af; font-size:0.82rem; white-space:nowrap;">
-                          ${f.lastModified ? new Date(f.lastModified).toLocaleString('es-CO') : '—'}
+                        <td style="padding:12px 14px; color:#9ca3af; font-size:0.82rem; white-space:nowrap; text-align:center; font-family:monospace;">
+                          ${formatCompactDate(f.lastModified)}
                         </td>
-                        <td style="padding:12px 16px; white-space:nowrap;" class="status-cell">
+                        <td style="padding:12px 14px; white-space:nowrap; text-align:center;" class="status-cell">
                           <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Disponible</span>
                         </td>
-                        <td style="padding:12px 16px; text-align:right; white-space:nowrap;" class="action-cell">
-                          <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 14px; min-width:155px; white-space:nowrap; text-decoration:none;">⬇ Descargar a PC</a>
+                        <td style="padding:12px 14px; text-align:right; white-space:nowrap;" class="action-cell">
+                          <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;">⬇ Descargar a PC</a>
                         </td>
                       </tr>
                     `;
@@ -1832,14 +1844,14 @@ const startServer = async () => {
               <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
                 <thead>
                   <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
-                    <th style="padding:12px 16px; width:40px; text-align:center; white-space:nowrap;">
+                    <th style="padding:12px 10px; width:38px; text-align:center; white-space:nowrap;">
                       <input type="checkbox" id="selectAllCb" onclick="toggleSelectAll(this)" style="width:18px; height:18px; cursor:pointer;" title="Seleccionar todos" />
                     </th>
-                    <th style="padding:12px 16px; font-weight:600; min-width:260px;">Nombre del Archivo</th>
-                    <th style="padding:12px 16px; font-weight:600; white-space:nowrap; width:1%;">Tamaño</th>
-                    <th style="padding:12px 16px; font-weight:600; white-space:nowrap; width:1%;">Fecha</th>
-                    <th style="padding:12px 16px; font-weight:600; white-space:nowrap; width:1%;">Estado</th>
-                    <th style="padding:12px 16px; font-weight:600; text-align:right; white-space:nowrap; width:1%;">Acción</th>
+                    <th style="padding:12px 14px; font-weight:600; max-width:280px;">Nombre del Archivo</th>
+                    <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:90px; text-align:right;">Tamaño</th>
+                    <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:135px; text-align:center;">Fecha</th>
+                    <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:125px; text-align:center;">Estado</th>
+                    <th style="padding:12px 14px; font-weight:600; text-align:right; white-space:nowrap; width:175px;">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1855,37 +1867,37 @@ const startServer = async () => {
 
                     return `
                       <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${f.name}">
-                        <td style="padding:12px 16px; text-align:center; white-space:nowrap;" class="cb-cell">
+                        <td style="padding:12px 10px; text-align:center; white-space:nowrap;" class="cb-cell">
                           ${isDownloaded ? '' : `<input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />`}
                         </td>
-                        <td style="padding:12px 16px; font-family:monospace; color:#f3f4f6; word-break:break-word;" class="name-cell">
+                        <td style="padding:12px 14px; font-family:monospace; color:#f3f4f6; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" class="name-cell" title="${f.name}">
                           ${isDownloaded ? `
-                            <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                              <span>${fileIcon}</span> ${f.name}
+                            <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                              <span style="flex-shrink:0;">${fileIcon}</span> <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
                             </a>
                           ` : `
-                            <span style="display:inline-flex; align-items:center; gap:8px;"><span style="margin-right:0;">${fileIcon}</span> ${f.name}</span>
+                            <span style="display:inline-flex; align-items:center; gap:8px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span style="flex-shrink:0;">${fileIcon}</span> <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span></span>
                           `}
                         </td>
-                        <td style="padding:12px 16px; color:#9ca3af; white-space:nowrap;">
-                          ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : 'Desconocido'}
+                        <td style="padding:12px 14px; color:#9ca3af; white-space:nowrap; text-align:right;">
+                          ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—'}
                         </td>
-                        <td style="padding:12px 16px; color:#9ca3af; font-size:0.82rem; white-space:nowrap;">
-                          ${f.lastModified ? new Date(f.lastModified).toLocaleString('es-CO') : '—'}
+                        <td style="padding:12px 14px; color:#9ca3af; font-size:0.82rem; white-space:nowrap; text-align:center; font-family:monospace;">
+                          ${formatCompactDate(f.lastModified)}
                         </td>
-                        <td style="padding:12px 16px; white-space:nowrap;" class="status-cell">
+                        <td style="padding:12px 14px; white-space:nowrap; text-align:center;" class="status-cell">
                           ${isDownloaded ? '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4);">✓ Sincronizado</span>' : 
                             isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4);">⏳ Solicitado</span>' :
                             '<span class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.4);">En Dispositivo</span>'
                           }
                         </td>
-                        <td style="padding:12px 16px; text-align:right; white-space:nowrap;" class="action-cell">
+                        <td style="padding:12px 14px; text-align:right; white-space:nowrap;" class="action-cell">
                           ${isDownloaded ? `
-                            <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 14px; min-width:155px; white-space:nowrap; text-decoration:none;">⬇ Descargar a PC</a>
+                            <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;">⬇ Descargar a PC</a>
                           ` : isPending ? `
-                            <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 14px; min-width:155px; white-space:nowrap; opacity:0.6;">⏳ Solicitado</button>
+                            <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; opacity:0.6; display:inline-flex; justify-content:center; align-items:center;">⏳ Solicitado</button>
                           ` : `
-                            <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="requestFileSync(this)" class="btn" style="font-size:0.78rem; padding:6px 14px; min-width:155px; white-space:nowrap;">⚡ Solicitar Descarga</button>
+                            <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="requestFileSync(this)" class="btn" style="font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; display:inline-flex; justify-content:center; align-items:center;">⚡ Solicitar Descarga</button>
                           `}
                         </td>
                       </tr>
@@ -2078,7 +2090,7 @@ const startServer = async () => {
                 const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
 
                 if (nameCell) {
-                  nameCell.innerHTML = '<a href="#" onclick="openMediaPreview(this); return false;" data-url="' + fileContentUrl + '" data-title="' + encodeURIComponent(fileName) + '" data-type="' + fileType + '" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px;"><span>' + fileIcon + '</span> ' + fileName + '</a>';
+                  nameCell.innerHTML = '<a href="#" onclick="openMediaPreview(this); return false;" data-url="' + fileContentUrl + '" data-title="' + encodeURIComponent(fileName) + '" data-type="' + fileType + '" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span style="flex-shrink:0;">' + fileIcon + '</span> <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + fileName + '</span></a>';
                 }
 
                 if (statusCell) {
@@ -2086,7 +2098,7 @@ const startServer = async () => {
                 }
 
                 if (actionCell) {
-                  actionCell.innerHTML = '<a href="' + fileContentUrl + '" download="' + fileName + '" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 14px; min-width:155px; white-space:nowrap; text-decoration:none;">⬇ Descargar a PC</a>';
+                  actionCell.innerHTML = '<a href="' + fileContentUrl + '" download="' + fileName + '" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;">⬇ Descargar a PC</a>';
                 }
               }
             });
