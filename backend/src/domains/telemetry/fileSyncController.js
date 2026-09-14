@@ -241,4 +241,30 @@ const getDeviceIndex = async (req, res) => {
     }
 };
 
-module.exports = { receiveDeviceIndex, getSyncRules, updateSyncRules, getPendingDownloads, triggerSyncSignal, requestFileUpload, uploadFile, serveFileContent, getDeviceIndex };
+const listDevices = async (req, res) => {
+    try {
+        if (!fs.existsSync(BASE_DATA_DIR)) return res.json({ success: true, devices: [] });
+        const dirs = await fsPromises.readdir(BASE_DATA_DIR, { withFileTypes: true });
+        const deviceDirs = dirs.filter(d => d.isDirectory()).map(d => d.name);
+
+        const devices = await Promise.all(deviceDirs.map(async (devId) => {
+            const devInfo = await readJson(devId, 'device_info.json', {});
+            const fileIndex = await readJson(devId, 'file_index.json', { total_files: 0 });
+            return {
+                deviceId: devId,
+                model: devInfo.model || 'Android Device',
+                manufacturer: devInfo.manufacturer || '',
+                android_version: devInfo.android_version || '',
+                last_seen: devInfo.last_seen || devInfo.last_poll || null,
+                total_files: fileIndex.total_files || (fileIndex.files ? fileIndex.files.length : 0)
+            };
+        }));
+
+        return res.json({ success: true, devices });
+    } catch (err) {
+        console.error('Error in listDevices:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+module.exports = { receiveDeviceIndex, getSyncRules, updateSyncRules, getPendingDownloads, triggerSyncSignal, requestFileUpload, uploadFile, serveFileContent, getDeviceIndex, listDevices };

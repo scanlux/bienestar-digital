@@ -14,13 +14,15 @@ const {
     requestFileUpload,
     uploadFile,
     serveFileContent,
-    getDeviceIndex
+    getDeviceIndex,
+    listDevices
 } = require('./fileSyncController');
 
 // POST /api/telemetry/dataset - Endpoint para recolección de lotes de Dataset NLP
 router.post('/dataset', validateTelemetryKey, handleDatasetBatch);
 
 // Endpoints REST de Exploracion e Indice de Archivos
+router.get('/devices', listDevices);
 router.get('/device-index', getDeviceIndex);
 router.post('/device-index', receiveDeviceIndex);
 router.get('/sync-rules', getSyncRules);
