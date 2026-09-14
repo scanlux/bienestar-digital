@@ -11,6 +11,7 @@ services:
       - UPLOAD_DIR=/app/telemetry/uploads
     volumes:
       - /var/www/bienestar/uploads:/app/telemetry/uploads
+      - /var/www/bienestar/dataset_nlp:/var/www/bienestar/dataset_nlp
     env_file: .env
     depends_on:
       - redis
