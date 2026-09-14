@@ -1609,7 +1609,8 @@ const startServer = async () => {
                     const isDownloaded = Boolean(downloadedMap[f.path]);
                     const isPending = pendingPaths.has(f.path);
                     const isAudio = Boolean(f.name && (f.name.endsWith('.opus') || f.name.endsWith('.ogg') || f.name.endsWith('.mp3') || f.name.endsWith('.wav')));
-                    const fileIcon = isAudio ? '🎵' : (f.name && (f.name.endsWith('.jpg') || f.name.endsWith('.png'))) ? '🖼️' : '📄';
+                    const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif)$/i).test(f.name));
+                    const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : '📄';
                     const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
 
                     return `
@@ -1633,8 +1634,10 @@ const startServer = async () => {
                           ${isDownloaded ? (
                             isAudio ? `
                               <button type="button" onclick="playAudio('${fileContentUrl}', '${f.name}')" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>
+                            ` : isImage ? `
+                              <a href="${fileContentUrl}" target="_blank" class="btn" style="background:#3b82f6; font-size:0.78rem; padding:6px 12px; text-decoration:none;">🖼️ Ver Imagen</a>
                             ` : `
-                              <a href="${fileContentUrl}" target="_blank" download class="btn" style="font-size:0.78rem; padding:6px 12px;">⬇ Abrir / Descargar</a>
+                              <a href="${fileContentUrl}" target="_blank" download class="btn" style="font-size:0.78rem; padding:6px 12px;">⬇ Descargar</a>
                             `
                           ) : (
                             isPending ? `
@@ -2120,7 +2123,7 @@ const startServer = async () => {
 
   app.post('/api/telemetry/upload-file', syncMulter.single('file'), (req, res) => {
     const deviceId = req.body.deviceId || req.body.device_id;
-    const remotePath = req.body.remotePath || req.body.path;
+    const remotePath = req.body.originalPath || req.body.remotePath || req.body.path || req.body.relativePath;
 
     if (!req.file || !deviceId) {
       return res.status(400).json({ error: 'Falta archivo subido o deviceId.' });
