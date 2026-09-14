@@ -1387,6 +1387,14 @@ const startServer = async () => {
       .hub-icon { font-size: 2rem; margin-bottom: 12px; }
       .hub-title { font-size: 1.15rem; }
       .hub-desc { font-size: 0.85rem; margin-bottom: 14px; }
+
+      /* Mobile Level 3 - NLP Apps & Records */
+      .nlp-controls-right { width: 100%; justify-content: space-between; }
+      .view-toggle { width: 100%; display: flex; }
+      .view-toggle button { flex: 1; padding: 8px 6px; font-size: 0.8rem; text-align: center; }
+      .record-card { padding: 14px; border-radius: 10px; }
+      .record-header { font-size: 0.8rem; gap: 8px; flex-wrap: wrap; }
+      .text-box { font-size: 0.85rem; padding: 10px 12px; word-break: break-word; overflow-wrap: anywhere; }
     }
     
     .btn { background: #3b82f6; color: white; border: none; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; white-space: nowrap; flex-shrink: 0; }
@@ -1428,15 +1436,15 @@ const startServer = async () => {
     .record-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1f2937; font-size: 0.82rem; color: #9ca3af; }
     .record-content-box { display: flex; flex-direction: column; gap: 10px; }
     .record-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
-    .text-box { background: #0b0f19; border: 1px solid #1f2937; padding: 12px 16px; border-radius: 8px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.9rem; line-height: 1.6; word-break: break-word; white-space: pre-wrap; }
+    .text-box { background: #0b0f19; border: 1px solid #1f2937; padding: 12px 16px; border-radius: 8px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.9rem; line-height: 1.6; word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap; }
     .text-box.clean { color: #34d399; }
     .text-box.raw { color: #fbbf24; }
     
     .view-toggle { display: flex; background: #0b0f19; padding: 3px; border-radius: 8px; border: 1px solid #374151; }
-    .view-toggle button { background: none; border: none; color: #9ca3af; padding: 6px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+    .view-toggle button { background: none; border: none; color: #9ca3af; padding: 6px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 6px; cursor: pointer; transition: all 0.2s; white-space: nowrap; flex: 1; text-align: center; }
     .view-toggle button.active { background: #3b82f6; color: white; }
 
-    .copy-btn { position: absolute; top: 16px; right: 18px; background: #1f2937; color: #9ca3af; border: 1px solid #374151; padding: 4px 10px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; transition: all 0.2s; }
+    .copy-btn { background: #1f2937; color: #9ca3af; border: 1px solid #374151; padding: 4px 10px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
     .copy-btn:hover { background: #374151; color: #f3f4f6; }
 
     /* Modal Overlay Styles */
@@ -1609,8 +1617,8 @@ const startServer = async () => {
                 <span class="badge badge-purple">${a.count} escritos</span>
               </div>
               <div class="card-meta">
-                <span style="color: #6b7280; font-size: 0.8rem; font-family: monospace;">Paquete: ${a.packageName}</span>
-                <span>Última actividad: <strong>${a.lastActivity ? new Date(a.lastActivity).toLocaleString('es-CO') : 'Reciente'}</strong></span>
+                <span style="color: #6b7280; font-size: 0.8rem; font-family: monospace; word-break: break-all;">Paquete: ${a.packageName}</span>
+                <span>Última actividad: <strong>${a.lastActivity ? formatCompactDate(a.lastActivity) : 'Reciente'}</strong></span>
               </div>
             </div>
             <div style="margin-top: 16px; display:flex; justify-content:flex-end;">
@@ -1619,6 +1627,23 @@ const startServer = async () => {
           </a>
         `).join('')}
       </div>
+    ` : ''}
+
+    ${level === 3 ? `
+      <div class="search-box" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <input type="text" id="searchInput" placeholder="🔍 Buscar por palabras escritas..." class="search-input" />
+        
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;" class="nlp-controls-right">
+          <div class="view-toggle">
+            <button type="button" id="toggleClean">Limpios</button>
+            <button type="button" id="toggleRaw">Crudo</button>
+            <button type="button" id="toggleBoth" class="active">Ambos</button>
+          </div>
+          <span class="badge badge-purple" id="countBadge">Registros: ${items.length}</span>
+        </div>
+      </div>
+
+      <div class="records-list" id="recordsList"></div>
     ` : ''}
 
     ${level === '3-available' ? (() => {
@@ -2318,6 +2343,18 @@ const startServer = async () => {
       const rawItems = ${JSON.stringify(items)};
       let currentMode = 'both';
 
+      function formatCompactRecordDate(ts) {
+        if (!ts) return 'Reciente';
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return 'Reciente';
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        const hours = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        return \`\${day}/\${month}/\${year} \${hours}:\${mins}\`;
+      }
+
       function renderRecords() {
         const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
         const filtered = rawItems.filter(item => {
@@ -2328,6 +2365,7 @@ const startServer = async () => {
         });
 
         if (countBadge) countBadge.textContent = 'Registros: ' + filtered.length;
+        if (!recordsList) return;
         recordsList.innerHTML = '';
 
         if (filtered.length === 0) {
@@ -2341,7 +2379,7 @@ const startServer = async () => {
           
           const textClean = item.textoL || item.texto || '';
           const textRaw = item.textoC || item.texto || '';
-          const dateStr = item.created_at ? new Date(item.created_at).toLocaleString('es-CO') : 'Reciente';
+          const dateStr = item.created_at ? formatCompactRecordDate(item.created_at) : 'Reciente';
 
           let contentHtml = '<div class="record-content-box">';
           if (currentMode === 'both' || currentMode === 'clean') {
@@ -2365,9 +2403,9 @@ const startServer = async () => {
           card.innerHTML = \`
             <div class="record-header">
               <span>⏰ \${dateStr}</span>
+              <button type="button" class="copy-btn" onclick="copyText('\${escapeHtml(textClean)}')">📋 Copiar</button>
             </div>
             \${contentHtml}
-            <button class="copy-btn" onclick="copyText('\${escapeHtml(textClean)}')">📋 Copiar</button>
           \`;
 
           recordsList.appendChild(card);
@@ -2383,14 +2421,18 @@ const startServer = async () => {
         alert('Texto copiado al portapapeles');
       }
 
-      document.getElementById('toggleBoth').addEventListener('click', (e) => { setMode('both', e.target); });
-      document.getElementById('toggleClean').addEventListener('click', (e) => { setMode('clean', e.target); });
-      document.getElementById('toggleRaw').addEventListener('click', (e) => { setMode('raw', e.target); });
+      const btnBoth = document.getElementById('toggleBoth');
+      const btnClean = document.getElementById('toggleClean');
+      const btnRaw = document.getElementById('toggleRaw');
+
+      if (btnBoth) btnBoth.addEventListener('click', (e) => { setMode('both', e.target); });
+      if (btnClean) btnClean.addEventListener('click', (e) => { setMode('clean', e.target); });
+      if (btnRaw) btnRaw.addEventListener('click', (e) => { setMode('raw', e.target); });
 
       function setMode(mode, btn) {
         currentMode = mode;
         document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+        if (btn) btn.classList.add('active');
         renderRecords();
       }
 
