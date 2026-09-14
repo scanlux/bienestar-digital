@@ -1375,6 +1375,18 @@ const startServer = async () => {
       .header-subtitle { font-size: 0.82rem; }
       .search-box { padding: 10px 14px; margin-bottom: 16px; }
       .search-input { width: 100%; min-width: 100%; }
+
+      /* Mobile Level 1 & Hubs */
+      .grid-cards { grid-template-columns: 1fr; gap: 14px; }
+      .card-item { padding: 16px; }
+      .card-title { font-size: 1rem; }
+      .card-actions { margin-top: 14px; }
+
+      .hub-grid { grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
+      .hub-card { padding: 20px; border-radius: 14px; }
+      .hub-icon { font-size: 2rem; margin-bottom: 12px; }
+      .hub-title { font-size: 1.15rem; }
+      .hub-desc { font-size: 0.85rem; margin-bottom: 14px; }
     }
     
     .btn { background: #3b82f6; color: white; border: none; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; white-space: nowrap; flex-shrink: 0; }
@@ -1395,6 +1407,19 @@ const startServer = async () => {
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
     .card-title { font-weight: 700; color: #f9fafb; font-size: 1.05rem; word-break: break-all; display: flex; align-items: center; }
     .card-meta { color: #9ca3af; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+
+    /* Hubs Level 2 & 2.5 */
+    .hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-top: 24px; }
+    .hub-card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%; }
+    .hub-card:hover { border-color: #38bdf8; transform: translateY(-4px); background: #151d30; }
+    .hub-card-available { border-color: #10b981; }
+    .hub-card-available:hover { border-color: #34d399; }
+    .hub-card-remote { border-color: #38bdf8; }
+    .hub-card-remote:hover { border-color: #60a5fa; }
+    .hub-icon { font-size: 2.5rem; margin-bottom: 16px; }
+    .hub-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 8px; }
+    .hub-desc { font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px; }
+    .hub-link { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.9rem; }
 
     /* Level 3 Records */
     .records-list { display: flex; flex-direction: column; gap: 16px; }
@@ -1498,18 +1523,18 @@ const startServer = async () => {
     ` : ''}
 
     ${level === 2 ? `
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-top: 24px;">
+      <div class="hub-grid">
         <!-- Card 1: Módulo Dataset NLP -->
         <a href="/expl/devices/${deviceId}/nlp" style="text-decoration:none;">
-          <div style="background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#38bdf8'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
+          <div class="hub-card" onmouseover="this.style.borderColor='#38bdf8'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
             <div>
-              <div style="font-size: 2.5rem; margin-bottom: 16px;">💬</div>
-              <h2 style="font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 8px;">Módulo 1: Explorador Dataset NLP</h2>
-              <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
+              <div class="hub-icon">💬</div>
+              <h2 class="hub-title" style="color: #fff;">Módulo 1: Explorador Dataset NLP</h2>
+              <p class="hub-desc">
                 Buscador semántico en vivo de escrituras de teclado, aplicaciones activas y registros estructurados de texto.
               </p>
             </div>
-            <div style="display:flex; align-items:center; gap:8px; color:#38bdf8; font-weight:700; font-size:0.9rem;">
+            <div class="hub-link" style="color:#38bdf8;">
               Abrir Módulo NLP &rarr;
             </div>
           </div>
@@ -1517,15 +1542,15 @@ const startServer = async () => {
 
         <!-- Card 2: Hub de Exploración de Archivos -->
         <a href="/expl/devices/${deviceId}/files-hub" style="text-decoration:none;">
-          <div style="background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#10b981'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
+          <div class="hub-card" onmouseover="this.style.borderColor='#10b981'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
             <div>
-              <div style="font-size: 2.5rem; margin-bottom: 16px;">📂</div>
-              <h2 style="font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 8px;">Módulo 2: Explorador de Archivos</h2>
-              <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
+              <div class="hub-icon">📂</div>
+              <h2 class="hub-title" style="color: #fff;">Módulo 2: Explorador de Archivos</h2>
+              <p class="hub-desc">
                 Acceso al Hub de archivos con opciones de consulta limpia (sincronizados) o exploración remota completa y auto-sync.
               </p>
             </div>
-            <div style="display:flex; align-items:center; gap:8px; color:#10b981; font-weight:700; font-size:0.9rem;">
+            <div class="hub-link" style="color:#10b981;">
               Abrir Hub de Archivos &rarr;
             </div>
           </div>
@@ -1534,18 +1559,18 @@ const startServer = async () => {
     ` : ''}
 
     ${level === '2-files-hub' ? `
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-top: 24px;">
+      <div class="hub-grid">
         <!-- Card 1: Archivos Sincronizados (Disponibles) -->
         <a href="/expl/devices/${deviceId}/available" style="text-decoration:none;">
-          <div style="background: #111827; border: 1px solid #10b981; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#34d399'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#10b981'; this.style.transform='none'; this.style.background='#111827';">
+          <div class="hub-card hub-card-available" onmouseover="this.style.borderColor='#34d399'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#10b981'; this.style.transform='none'; this.style.background='#111827';">
             <div>
-              <div style="font-size: 2.5rem; margin-bottom: 16px;">✓</div>
-              <h2 style="font-size: 1.3rem; font-weight: 700; color: #34d399; margin-bottom: 8px;">Opción 1: Archivos Sincronizados</h2>
-              <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
+              <div class="hub-icon">✓</div>
+              <h2 class="hub-title" style="color: #34d399;">Opción 1: Archivos Sincronizados</h2>
+              <p class="hub-desc">
                 Ver y reproducir únicamente los archivos multimedia y documentos que ya se encuentran disponibles en el servidor. Interfaz limpia sin botones de solicitud.
               </p>
             </div>
-            <div style="display:flex; align-items:center; gap:8px; color:#34d399; font-weight:700; font-size:0.9rem;">
+            <div class="hub-link" style="color:#34d399;">
               Abrir Archivos Disponibles &rarr;
             </div>
           </div>
@@ -1553,15 +1578,15 @@ const startServer = async () => {
 
         <!-- Card 2: Explorador Remoto Completo & Auto-Sync -->
         <a href="/expl/devices/${deviceId}/files" style="text-decoration:none;">
-          <div style="background: #111827; border: 1px solid #38bdf8; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#60a5fa'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#38bdf8'; this.style.transform='none'; this.style.background='#111827';">
+          <div class="hub-card hub-card-remote" onmouseover="this.style.borderColor='#60a5fa'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#38bdf8'; this.style.transform='none'; this.style.background='#111827';">
             <div>
-              <div style="font-size: 2.5rem; margin-bottom: 16px;">⚡</div>
-              <h2 style="font-size: 1.3rem; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">Opción 2: Explorador Remoto Completo</h2>
-              <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
+              <div class="hub-icon">⚡</div>
+              <h2 class="hub-title" style="color: #38bdf8;">Opción 2: Explorador Remoto Completo</h2>
+              <p class="hub-desc">
                 Navegación completa del almacenamiento interno del teléfono, configuración de subida automática por carpetas y solicitudes a demanda.
               </p>
             </div>
-            <div style="display:flex; align-items:center; gap:8px; color:#38bdf8; font-weight:700; font-size:0.9rem;">
+            <div class="hub-link" style="color:#38bdf8;">
               Abrir Explorador Remoto &rarr;
             </div>
           </div>
