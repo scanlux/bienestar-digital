@@ -1346,11 +1346,12 @@ const startServer = async () => {
     .footer-quote span { font-style: normal; font-weight: 600; color: #9ca3af; margin-left: 6px; }
     
     .navbar-fixed { position: fixed; top: 0; left: 0; width: 100vw; height: 56px; background: rgba(17, 24, 39, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid #1f2937; display: flex; align-items: center; padding: 0 24px; z-index: 999; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-    .nav-breadcrumbs { display: flex; align-items: center; gap: 10px; font-size: 0.88rem; color: #9ca3af; flex-wrap: nowrap; overflow-x: auto; width: 100%; }
-    .nav-breadcrumbs a { color: #38bdf8; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+    .nav-breadcrumbs { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: #9ca3af; flex-wrap: nowrap; overflow-x: auto; width: 100%; scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; }
+    .nav-breadcrumbs::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    .nav-breadcrumbs a { color: #38bdf8; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
     .nav-breadcrumbs a:hover { text-decoration: underline; }
-    .nav-breadcrumbs .separator { color: #4b5563; }
-    .nav-breadcrumbs .current { color: #f3f4f6; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+    .nav-breadcrumbs .separator { color: #4b5563; flex-shrink: 0; }
+    .nav-breadcrumbs .current { color: #f3f4f6; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
     .btn-logout { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 5px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; text-decoration: none; transition: all 0.2s; flex-shrink: 0; margin-right: 12px; display: inline-flex; align-items: center; gap: 4px; }
     .btn-logout:hover { background: rgba(239, 68, 68, 0.25); border-color: #ef4444; color: #fff; transform: translateY(-1px); }
     
@@ -1361,6 +1362,20 @@ const startServer = async () => {
     .search-box { display: flex; gap: 12px; background: #111827; padding: 14px 18px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #1f2937; flex-wrap: wrap; align-items: center; }
     .search-input { background: #0b0f19; border: 1px solid #374151; color: #f3f4f6; padding: 10px 16px; border-radius: 8px; font-size: 0.92rem; flex: 1; min-width: 240px; outline: none; transition: all 0.2s; }
     .search-input:focus { border-color: #38bdf8; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }
+
+    /* Media queries responsivas globales */
+    @media (max-width: 768px) {
+      body { padding-top: 66px; padding-left: 12px; padding-right: 12px; padding-bottom: 20px; }
+      .navbar-fixed { padding: 0 12px; }
+      .btn-logout { padding: 4px 8px; font-size: 0.75rem; margin-right: 8px; }
+      .nav-breadcrumbs { gap: 6px; font-size: 0.82rem; }
+      .nav-breadcrumbs a, .nav-breadcrumbs .current { max-width: 110px; }
+      .header { flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 16px; padding-bottom: 14px; }
+      .header-title { font-size: 1.2rem; }
+      .header-subtitle { font-size: 0.82rem; }
+      .search-box { padding: 10px 14px; margin-bottom: 16px; }
+      .search-input { width: 100%; min-width: 100%; }
+    }
     
     .btn { background: #3b82f6; color: white; border: none; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; white-space: nowrap; flex-shrink: 0; }
     .btn:hover { background: #2563eb; transform: translateY(-1px); }
