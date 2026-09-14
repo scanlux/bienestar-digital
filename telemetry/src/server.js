@@ -1499,9 +1499,19 @@ const startServer = async () => {
       const filesList = [];
 
       allFiles.forEach(f => {
-        const filePath = f.path || '';
-        if (filePath.startsWith(normCurrent)) {
-          const relative = filePath.substring(normCurrent.length);
+        const filePath = f.absolutePath || f.path || (f.relativePath ? ('/storage/emulated/0/' + f.relativePath.replace(/^\/+/, '')) : '');
+        if (!filePath) return;
+
+        const normalizedFilePath = filePath.replace(/\\/g, '/');
+        const fileObj = {
+          ...f,
+          path: normalizedFilePath,
+          name: f.name || path.basename(normalizedFilePath),
+          size: f.sizeBytes !== undefined ? f.sizeBytes : (f.size !== undefined ? f.size : null)
+        };
+
+        if (normalizedFilePath.startsWith(normCurrent)) {
+          const relative = normalizedFilePath.substring(normCurrent.length);
           const slashIdx = relative.indexOf('/');
           if (slashIdx !== -1) {
             const folderName = relative.substring(0, slashIdx);
@@ -1511,11 +1521,12 @@ const startServer = async () => {
             }
           } else {
             if (f.isDirectory) {
-              if (!dirSet.has(f.name || relative)) {
-                dirSet.set(f.name || relative, { name: f.name || relative, path: f.path });
+              const folderName = fileObj.name || relative;
+              if (!dirSet.has(folderName)) {
+                dirSet.set(folderName, { name: folderName, path: normalizedFilePath });
               }
             } else {
-              filesList.push(f);
+              filesList.push(fileObj);
             }
           }
         }
