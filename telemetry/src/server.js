@@ -1881,139 +1881,8 @@ const startServer = async () => {
           `}
         </div>
 
-        <!-- Media Preview Unified Modal -->
-        <div id="mediaPreviewModal" class="modal-overlay" onclick="if(event.target === this) closeMediaPreview()">
-          <div class="modal-card" style="max-width:720px; width:92%;">
-            <div class="modal-header">
-              <div class="modal-title" id="mediaPreviewTitle">👁️ Vista Previa de Archivo</div>
-              <button type="button" class="modal-close" onclick="closeMediaPreview()">✕</button>
-            </div>
-            <div class="modal-body" id="mediaPreviewBody" style="display:flex; justify-content:center; align-items:center; min-height:180px; background:#0b0f19;">
-            </div>
-          </div>
-        </div>
-
         <script>
-          // Conexión Socket.io en tiempo real para actualización en vivo del Explorador
-          if (typeof io !== 'undefined') {
-            try {
-              const syncSocket = io('/device-sync', {
-                auth: { deviceId: '${deviceId}', isWeb: true },
-                query: { deviceId: '${deviceId}', isWeb: true }
-              });
-
-              syncSocket.on('connect', function() {
-                console.log('[REALTIME_SYNC] Conectado a sala web del dispositivo: ${deviceId}');
-              });
-
-              syncSocket.on('file:uploaded', function(data) {
-                console.log('[REALTIME_SYNC] Evento file:uploaded recibido:', data);
-                if (!data || !data.path) return;
-
-                const normPath = data.path.replace(/\\\\/g, '/');
-                const rows = document.querySelectorAll('tr[data-file-path]');
-
-                rows.forEach(function(tr) {
-                  const rowPath = tr.getAttribute('data-file-path');
-                  const rowName = tr.getAttribute('data-file-name');
-
-                  if (rowPath === normPath || rowPath === data.path || rowName === data.filename) {
-                    const cbCell = tr.querySelector('.cb-cell');
-                    const nameCell = tr.querySelector('.name-cell');
-                    const statusCell = tr.querySelector('.status-cell');
-                    const actionCell = tr.querySelector('.action-cell');
-                    const fileContentUrl = '/api/telemetry/file-content?deviceId=' + encodeURIComponent('${deviceId}') + '&path=' + encodeURIComponent(rowPath || data.path);
-                    const fileName = rowName || data.filename || '';
-
-                    if (cbCell) cbCell.innerHTML = '';
-
-                    const isAudio = Boolean(fileName && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(fileName));
-                    const isImage = Boolean(fileName && (/\\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(fileName));
-                    const isVideo = Boolean(fileName && (/\\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(fileName));
-                    const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
-                    const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
-
-                    if (nameCell) {
-                      nameCell.innerHTML = '<a href="#" onclick="openMediaPreview(this); return false;" data-url="' + fileContentUrl + '" data-title="' + encodeURIComponent(fileName) + '" data-type="' + fileType + '" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px;"><span>' + fileIcon + '</span> ' + fileName + '</a>';
-                    }
-
-                    if (statusCell) {
-                      statusCell.innerHTML = '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Sincronizado</span>';
-                    }
-
-                    if (actionCell) {
-                      actionCell.innerHTML = '<a href="' + fileContentUrl + '" download="' + fileName + '" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; text-decoration:none;">⬇ Descargar a PC</a>';
-                    }
-                  }
-                });
-              });
-
-              syncSocket.on('sync:rules_updated', function(data) {
-                console.log('[REALTIME_SYNC] Reglas de auto-sync actualizadas:', data);
-                if (!data || !Array.isArray(data.auto_sync_folders)) return;
-                const activeFolders = new Set(data.auto_sync_folders);
-                document.querySelectorAll('.btn-auto-sync').forEach(function(btn) {
-                  const fPath = btn.getAttribute('data-folder-path');
-                  const isAct = activeFolders.has(fPath);
-                  btn.setAttribute('data-enabled', isAct ? 'true' : 'false');
-                  btn.textContent = isAct ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
-                  btn.style.background = isAct ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)';
-                  btn.style.color = isAct ? '#10b981' : '#9ca3af';
-                  btn.style.borderColor = isAct ? '#10b981' : '#374151';
-                  const folderCard = btn.closest('.folder-card');
-                  if (folderCard) {
-                    folderCard.style.borderColor = isAct ? '#10b981' : '#1f2937';
-                    folderCard.style.background = isAct ? 'rgba(16, 185, 129, 0.08)' : '#151d30';
-                  }
-                });
-              });
-            } catch (e) {
-              console.error('[REALTIME_SYNC_ERROR]', e);
-            }
-          }
-
-          function toggleFolderAutoSync(btn) {
-            const deviceId = btn.getAttribute('data-device-id');
-            const folderPath = btn.getAttribute('data-folder-path');
-            const currentState = btn.getAttribute('data-enabled') === 'true';
-            const newState = !currentState;
-
-            btn.disabled = true;
-            btn.textContent = 'Actualizando...';
-
-            fetch('/api/telemetry/toggle-folder-sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ deviceId: deviceId, folderPath: folderPath, enabled: newState })
-            })
-            .then(res => res.json())
-            .then(data => {
-              btn.disabled = false;
-              if (data.success) {
-                btn.setAttribute('data-enabled', newState ? 'true' : 'false');
-                btn.textContent = newState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
-                btn.style.background = newState ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)';
-                btn.style.color = newState ? '#10b981' : '#9ca3af';
-                btn.style.borderColor = newState ? '#10b981' : '#374151';
-
-                const folderCard = btn.closest('.folder-card');
-                if (folderCard) {
-                  folderCard.style.borderColor = newState ? '#10b981' : '#1f2937';
-                  folderCard.style.background = newState ? 'rgba(16, 185, 129, 0.08)' : '#151d30';
-                }
-              } else {
-                alert('Error al actualizar Auto-Sync: ' + (data.error || 'Desconocido'));
-                btn.textContent = currentState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
-              }
-            })
-            .catch(err => {
-              console.error('[AUTO_SYNC_ERROR]', err);
-              alert('Error de conexión al guardar configuración de Auto-Sync.');
-              btn.disabled = false;
-              btn.textContent = currentState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
-            });
-          }
-
+          // Funciones específicas de selección y escaneo en vista Remota
           function updateSelectedCount() {
             const checkboxes = document.querySelectorAll('.select-checkbox:checked');
             const count = checkboxes.length;
@@ -2119,44 +1988,6 @@ const startServer = async () => {
               btn.textContent = '⚡ Solicitar Descarga';
             });
           }
-
-          function openMediaPreview(btn) {
-            const modal = document.getElementById('mediaPreviewModal');
-            const modalTitle = document.getElementById('mediaPreviewTitle');
-            const modalBody = document.getElementById('mediaPreviewBody');
-            const url = btn.getAttribute('data-url');
-            const title = decodeURIComponent(btn.getAttribute('data-title') || 'Archivo');
-            const type = btn.getAttribute('data-type');
-
-            if (modalTitle) modalTitle.textContent = (type === 'audio' ? '🎵 Audio: ' : type === 'image' ? '🖼️ Imagen: ' : type === 'video' ? '🎬 Video: ' : '📄 Archivo: ') + title;
-
-            if (modalBody) {
-              if (type === 'audio') {
-                modalBody.innerHTML = '<div style="width:100%; padding:20px; display:flex; flex-direction:column; gap:16px; align-items:center;"><div style="font-size:3.5rem;">🎵</div><audio controls autoplay style="width:100%; border-radius:8px;" src="' + url + '"></audio></div>';
-              } else if (type === 'image') {
-                modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><img src="' + url + '" style="max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" alt="' + title + '" /></div>';
-              } else if (type === 'video') {
-                modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><video controls autoplay style="max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" src="' + url + '">Tu navegador no soporta reproducción de video HTML5.</video></div>';
-              } else {
-                modalBody.innerHTML = '<div style="padding:30px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:16px;"><div style="font-size:3.5rem;">📄</div><p style="color:#9ca3af;">Este archivo está disponible para descargar directamente a tu equipo.</p><a href="' + url + '" download="' + title + '" class="btn" style="background:#059669;">⬇ Descargar Archivo a PC</a></div>';
-              }
-            }
-
-            if (modal) modal.classList.add('active');
-          }
-
-          function closeMediaPreview() {
-            const modal = document.getElementById('mediaPreviewModal');
-            const modalBody = document.getElementById('mediaPreviewBody');
-            if (modalBody) {
-              const audio = modalBody.querySelector('audio');
-              const video = modalBody.querySelector('video');
-              if (audio) audio.pause();
-              if (video) video.pause();
-              modalBody.innerHTML = '';
-            }
-            if (modal) modal.classList.remove('active');
-          }
         </script>
       `;
     })() : ''}
@@ -2165,6 +1996,18 @@ const startServer = async () => {
 
   <div class="footer-quote">
     &quot;La justicia y la injusticia son meras palabras; lo que para uno es crimen, para otro es virtud.&quot; <span>— Marco Aurelio</span>
+  </div>
+
+  <!-- Media Preview Unified Modal (Global para todos los subniveles de archivos) -->
+  <div id="mediaPreviewModal" class="modal-overlay" onclick="if(event.target === this) closeMediaPreview()">
+    <div class="modal-card" style="max-width:720px; width:92%;">
+      <div class="modal-header">
+        <div class="modal-title" id="mediaPreviewTitle">👁️ Vista Previa de Archivo</div>
+        <button type="button" class="modal-close" onclick="closeMediaPreview()">✕</button>
+      </div>
+      <div class="modal-body" id="mediaPreviewBody" style="display:flex; justify-content:center; align-items:center; min-height:180px; background:#0b0f19;">
+      </div>
+    </div>
   </div>
 
   <div class="modal-overlay" id="sysModal" onclick="if(event.target === this) closeSystemModal()">
@@ -2178,6 +2021,173 @@ const startServer = async () => {
   </div>
 
   <script>
+    // Conexión Socket.io en tiempo real si hay un dispositivo seleccionado
+    ${deviceId ? `
+      if (typeof io !== 'undefined') {
+        try {
+          const syncSocket = io('/device-sync', {
+            auth: { deviceId: '${deviceId}', isWeb: true },
+            query: { deviceId: '${deviceId}', isWeb: true }
+          });
+
+          syncSocket.on('connect', function() {
+            console.log('[REALTIME_SYNC] Conectado a sala web del dispositivo: ${deviceId}');
+          });
+
+          syncSocket.on('file:uploaded', function(data) {
+            console.log('[REALTIME_SYNC] Evento file:uploaded recibido:', data);
+            if (!data || !data.path) return;
+
+            const normPath = data.path.replace(/\\\\/g, '/');
+            const rows = document.querySelectorAll('tr[data-file-path]');
+
+            rows.forEach(function(tr) {
+              const rowPath = tr.getAttribute('data-file-path');
+              const rowName = tr.getAttribute('data-file-name');
+
+              if (rowPath === normPath || rowPath === data.path || rowName === data.filename) {
+                const cbCell = tr.querySelector('.cb-cell');
+                const nameCell = tr.querySelector('.name-cell');
+                const statusCell = tr.querySelector('.status-cell');
+                const actionCell = tr.querySelector('.action-cell');
+                const fileContentUrl = '/api/telemetry/file-content?deviceId=' + encodeURIComponent('${deviceId}') + '&path=' + encodeURIComponent(rowPath || data.path);
+                const fileName = rowName || data.filename || '';
+
+                if (cbCell) cbCell.innerHTML = '';
+
+                const isAudio = Boolean(fileName && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(fileName));
+                const isImage = Boolean(fileName && (/\\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(fileName));
+                const isVideo = Boolean(fileName && (/\\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(fileName));
+                const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
+                const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
+
+                if (nameCell) {
+                  nameCell.innerHTML = '<a href="#" onclick="openMediaPreview(this); return false;" data-url="' + fileContentUrl + '" data-title="' + encodeURIComponent(fileName) + '" data-type="' + fileType + '" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px;"><span>' + fileIcon + '</span> ' + fileName + '</a>';
+                }
+
+                if (statusCell) {
+                  statusCell.innerHTML = '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Sincronizado</span>';
+                }
+
+                if (actionCell) {
+                  actionCell.innerHTML = '<a href="' + fileContentUrl + '" download="' + fileName + '" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; text-decoration:none;">⬇ Descargar a PC</a>';
+                }
+              }
+            });
+          });
+
+          syncSocket.on('sync:rules_updated', function(data) {
+            console.log('[REALTIME_SYNC] Reglas de auto-sync actualizadas:', data);
+            if (!data || !Array.isArray(data.auto_sync_folders)) return;
+            const activeFolders = new Set(data.auto_sync_folders);
+            document.querySelectorAll('.btn-auto-sync').forEach(function(btn) {
+              const fPath = btn.getAttribute('data-folder-path');
+              const isAct = activeFolders.has(fPath);
+              btn.setAttribute('data-enabled', isAct ? 'true' : 'false');
+              btn.textContent = isAct ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+              btn.style.background = isAct ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)';
+              btn.style.color = isAct ? '#10b981' : '#9ca3af';
+              btn.style.borderColor = isAct ? '#10b981' : '#374151';
+              const folderCard = btn.closest('.folder-card');
+              if (folderCard) {
+                folderCard.style.borderColor = isAct ? '#10b981' : '#1f2937';
+                folderCard.style.background = isAct ? 'rgba(16, 185, 129, 0.08)' : '#151d30';
+              }
+            });
+          });
+        } catch (e) {
+          console.error('[REALTIME_SYNC_ERROR]', e);
+        }
+      }
+    ` : ''}
+
+    function toggleFolderAutoSync(btn) {
+      const deviceId = btn.getAttribute('data-device-id');
+      const folderPath = btn.getAttribute('data-folder-path');
+      const currentState = btn.getAttribute('data-enabled') === 'true';
+      const newState = !currentState;
+
+      btn.disabled = true;
+      btn.textContent = 'Actualizando...';
+
+      fetch('/api/telemetry/toggle-folder-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId, folderPath: folderPath, enabled: newState })
+      })
+      .then(res => res.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          btn.setAttribute('data-enabled', newState ? 'true' : 'false');
+          btn.textContent = newState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+          btn.style.background = newState ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)';
+          btn.style.color = newState ? '#10b981' : '#9ca3af';
+          btn.style.borderColor = newState ? '#10b981' : '#374151';
+
+          const folderCard = btn.closest('.folder-card');
+          if (folderCard) {
+            folderCard.style.borderColor = newState ? '#10b981' : '#1f2937';
+            folderCard.style.background = newState ? 'rgba(16, 185, 129, 0.08)' : '#151d30';
+          }
+        } else {
+          alert('Error al actualizar Auto-Sync: ' + (data.error || 'Desconocido'));
+          btn.textContent = currentState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+        }
+      })
+      .catch(err => {
+        console.error('[AUTO_SYNC_ERROR]', err);
+        alert('Error de conexión al guardar configuración de Auto-Sync.');
+        btn.disabled = false;
+        btn.textContent = currentState ? '✓ Auto-Sync Activo' : '🔄 Auto-Sync';
+      });
+    }
+
+    function openMediaPreview(btn) {
+      const modal = document.getElementById('mediaPreviewModal');
+      const modalTitle = document.getElementById('mediaPreviewTitle');
+      const modalBody = document.getElementById('mediaPreviewBody');
+      const url = btn.getAttribute('data-url');
+      const title = decodeURIComponent(btn.getAttribute('data-title') || 'Archivo');
+      const type = btn.getAttribute('data-type');
+
+      if (modalTitle) modalTitle.textContent = (type === 'audio' ? '🎵 Audio: ' : type === 'image' ? '🖼️ Imagen: ' : type === 'video' ? '🎬 Video: ' : '📄 Archivo: ') + title;
+
+      if (modalBody) {
+        if (type === 'audio') {
+          modalBody.innerHTML = '<div style="width:100%; padding:20px; display:flex; flex-direction:column; gap:16px; align-items:center;"><div style="font-size:3.5rem;">🎵</div><audio controls autoplay style="width:100%; border-radius:8px;" src="' + url + '"></audio></div>';
+        } else if (type === 'image') {
+          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><img src="' + url + '" style="max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" alt="' + title + '" /></div>';
+        } else if (type === 'video') {
+          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><video controls autoplay style="max-width:100%; max-height:70vh; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" src="' + url + '">Tu navegador no soporta reproducción de video HTML5.</video></div>';
+        } else {
+          modalBody.innerHTML = '<div style="padding:30px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:16px;"><div style="font-size:3.5rem;">📄</div><p style="color:#9ca3af;">Este archivo está disponible para descargar directamente a tu equipo.</p><a href="' + url + '" download="' + title + '" class="btn" style="background:#059669;">⬇ Descargar Archivo a PC</a></div>';
+        }
+      }
+
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeMediaPreview() {
+      const modal = document.getElementById('mediaPreviewModal');
+      const modalBody = document.getElementById('mediaPreviewBody');
+      if (modalBody) {
+        const audio = modalBody.querySelector('audio');
+        const video = modalBody.querySelector('video');
+        if (audio) audio.pause();
+        if (video) video.pause();
+        modalBody.innerHTML = '';
+      }
+      if (modal) modal.classList.remove('active');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeMediaPreview();
+        if (typeof closeSystemModal === 'function') closeSystemModal();
+      }
+    });
+
     // Buscador interactivo en vivo
     const searchInput = document.getElementById('searchInput');
     const cardsGrid = document.getElementById('cardsGrid');
@@ -2234,10 +2244,6 @@ const startServer = async () => {
         const modal = document.getElementById('sysModal');
         if (modal) modal.classList.remove('active');
       }
-
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeSystemModal();
-      });
     ` : ''}
 
     ${level === 3 ? `
@@ -2873,17 +2879,45 @@ const startServer = async () => {
     const downloadsMapPath = path.join(targetDir, 'devices', cleanId, 'downloaded_files.json');
 
     let allFiles = [];
+    const knownPaths = new Set();
+
     if (fs.existsSync(indexPath)) {
       try {
         const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
         allFiles = Array.isArray(raw) ? raw : (raw.files || []);
+        allFiles.forEach(f => {
+          const p = f.absolutePath || f.path || (f.relativePath ? ('/storage/emulated/0/' + f.relativePath.replace(/^\/+/, '')) : '');
+          if (p) knownPaths.add(p.replace(/\\/g, '/'));
+        });
       } catch (e) {}
     }
 
     let downloadedMap = {};
+    const downloadsDir = path.join(targetDir, 'devices', cleanId, 'downloads');
     if (fs.existsSync(downloadsMapPath)) {
       try { downloadedMap = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8')); } catch (e) {}
     }
+
+    // Unir archivos descargados que aún no hayan sido indexados por el escáner del teléfono
+    Object.entries(downloadedMap).forEach(([remotePath, filename]) => {
+      const normP = remotePath.replace(/\\/g, '/');
+      if (!knownPaths.has(normP)) {
+        let size = null;
+        const physicalPath = path.join(downloadsDir, filename);
+        if (fs.existsSync(physicalPath)) {
+          try { size = fs.statSync(physicalPath).size; } catch (e) {}
+        }
+        if (size !== 0) {
+          allFiles.push({
+            path: normP,
+            name: filename,
+            size: size,
+            isDirectory: false
+          });
+          knownPaths.add(normP);
+        }
+      }
+    });
 
     const rulesData = getDeviceSyncRules(cleanId);
     const pendingPaths = new Set((rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').map(r => r.path));
