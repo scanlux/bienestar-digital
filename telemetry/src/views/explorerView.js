@@ -665,7 +665,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
               <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
                 <thead>
                   <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
-                    <th style="padding:12px 10px; width:38px; text-align:center; white-space:nowrap;">
+                    <th style="padding:12px 10px 12px 20px; width:48px; text-align:center; white-space:nowrap;">
                       <input type="checkbox" id="selectAllCb" onclick="toggleSelectAll(this)" style="width:18px; height:18px; cursor:pointer;" title="Seleccionar todos" />
                     </th>
                     <th style="padding:12px 14px; font-weight:600; max-width:280px;">Nombre del Archivo</th>
@@ -688,7 +688,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
 
                     return `
                       <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${f.name}">
-                        <td style="padding:12px 10px; text-align:center; white-space:nowrap;" class="cb-cell">
+                        <td style="padding:12px 10px 12px 20px; text-align:center; white-space:nowrap;" class="cb-cell">
                           ${isDownloaded ? '' : `<input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />`}
                         </td>
                         <td style="padding:12px 14px; font-family:monospace; color:#f3f4f6; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" class="name-cell" title="${f.name}">
