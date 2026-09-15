@@ -511,20 +511,25 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
                 const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
                 const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
+                const formattedSize = f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—';
 
                 return `
                   <div class="mobile-file-card" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
-                    <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-                      <span style="flex-shrink:0; font-size:1.2rem;">${fileIcon}</span>
-                      <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; font-weight:600; font-size:0.9rem; font-family:monospace; text-decoration:none; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; flex:1;" title="${f.name}">
-                        ${f.name}
-                      </a>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                      <div class="name-cell" style="display:flex; align-items:center; gap:8px; min-width:0; flex:1; overflow:hidden;">
+                        <span style="flex-shrink:0; font-size:1.2rem;">${fileIcon}</span>
+                        <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; font-weight:600; font-size:0.9rem; font-family:monospace; text-decoration:none; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; flex:1;" title="${f.name}">
+                          ${f.name}
+                        </a>
+                      </div>
+                      <div class="status-cell" style="flex-shrink:0;">
+                        <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Disponible</span>
+                      </div>
                     </div>
 
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; font-size:0.78rem; color:#9ca3af; background:#0b0f19; padding:8px 10px; border-radius:8px; border:1px solid #1f2937;">
-                      <span>📦 <strong>${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—'}</strong></span>
-                      <span>⏰ <strong>${formatCompactDate(f.lastModified)}</strong></span>
-                      <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Disponible</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:#9ca3af; background:#0b0f19; padding:8px 12px; border-radius:8px; border:1px solid #1f2937;">
+                      <span>Tamaño: <span style="margin-left:2px;">📦</span> <strong style="color:#e5e7eb; margin-left:4px;">${formattedSize}</strong></span>
+                      <span>Fecha: <strong style="color:#e5e7eb; margin-left:4px; font-family:monospace;">${formatCompactDate(f.lastModified)}</strong></span>
                     </div>
 
                     <div style="margin-top:2px;">
@@ -734,32 +739,37 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
                 const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
                 const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
+                const formattedSize = f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—';
 
                 return `
                   <div class="mobile-file-card" data-file-path="${f.path}" data-file-name="${f.name}" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
-                    <div style="display:flex; align-items:center; gap:10px; min-width:0;" class="cb-cell">
-                      ${isDownloaded ? '' : `<input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:20px; height:20px; cursor:pointer; flex-shrink:0;" />`}
-                      <span style="flex-shrink:0; font-size:1.2rem;">${fileIcon}</span>
-                      <div class="name-cell" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                      <div class="name-cell" style="display:flex; align-items:center; gap:8px; min-width:0; flex:1; overflow:hidden;">
+                        <span style="flex-shrink:0; font-size:1.2rem;">${fileIcon}</span>
                         ${isDownloaded ? `
-                          <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; font-weight:600; font-size:0.9rem; font-family:monospace; text-decoration:none; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; display:block;" title="${f.name}">
+                          <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; font-weight:600; font-size:0.9rem; font-family:monospace; text-decoration:none; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; flex:1;" title="${f.name}">
                             ${f.name}
                           </a>
                         ` : `
-                          <span style="font-weight:600; font-size:0.9rem; font-family:monospace; color:#f3f4f6; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; display:block;" title="${f.name}">${f.name}</span>
+                          <span style="font-weight:600; font-size:0.9rem; font-family:monospace; color:#f3f4f6; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; flex:1;" title="${f.name}">${f.name}</span>
                         `}
                       </div>
-                    </div>
-
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; font-size:0.78rem; color:#9ca3af; background:#0b0f19; padding:8px 10px; border-radius:8px; border:1px solid #1f2937;">
-                      <span>📦 <strong>${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—'}</strong></span>
-                      <span>⏰ <strong>${formatCompactDate(f.lastModified)}</strong></span>
-                      <span class="status-cell">
+                      <div class="status-cell" style="flex-shrink:0;">
                         ${isDownloaded ? '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Sincronizado</span>' : 
                           isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4); font-weight:700;">⏳ Solicitado</span>' :
                           '<span class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.4);">En Dispositivo</span>'
                         }
-                      </span>
+                      </div>
+                    </div>
+
+                    <div style="display:flex; align-items:center;">
+                      <div class="cb-cell" style="display:${isDownloaded ? 'none' : 'flex'}; align-items:center; margin-right:10px;">
+                        <input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:20px; height:20px; cursor:pointer; flex-shrink:0;" />
+                      </div>
+                      <div style="display:flex; justify-content:space-between; align-items:center; flex:1; font-size:0.8rem; color:#9ca3af; background:#0b0f19; padding:8px 12px; border-radius:8px; border:1px solid #1f2937;">
+                        <span>Tamaño: <span style="margin-left:2px;">📦</span> <strong style="color:#e5e7eb; margin-left:4px;">${formattedSize}</strong></span>
+                        <span>Fecha: <strong style="color:#e5e7eb; margin-left:4px; font-family:monospace;">${formatCompactDate(f.lastModified)}</strong></span>
+                      </div>
                     </div>
 
                     <div style="margin-top:2px;" class="action-cell">
@@ -976,6 +986,8 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 if (cbCell) {
                   const cbInput = cbCell.querySelector('input[type="checkbox"]');
                   if (cbInput) cbInput.remove();
+                  cbCell.style.display = 'none';
+                  cbCell.style.marginRight = '0';
                 }
 
                 const isAudio = Boolean(fileName && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(fileName));
