@@ -205,7 +205,8 @@ router.get(['/expl/devices/:deviceId/available', '/expl/devices/:deviceId/availa
         lastModified = stat.mtimeMs || stat.mtime.getTime();
       } catch (e) {}
     }
-    if (size !== 0) {
+    // Excluir archivos inexistentes o stubs de prueba/vacios (< 100 bytes)
+    if (size !== null && size > 100) {
       allFiles.push({
         path: remotePath,
         name: filename,
@@ -326,7 +327,8 @@ router.get(['/expl/devices/:deviceId/files', '/expl/devices/:deviceId/files/'], 
           lastModified = stat.mtimeMs || stat.mtime.getTime();
         } catch (e) {}
       }
-      if (size !== 0) {
+      // Excluir archivos inexistentes o stubs de prueba/vacios (< 100 bytes)
+      if (size !== null && size > 100) {
         allFiles.push({
           path: normP,
           name: filename,

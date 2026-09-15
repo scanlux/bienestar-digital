@@ -432,11 +432,12 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
             if (!dirSet.has(folderName)) {
               dirSet.set(folderName, { name: folderName, path: folderPath });
             }
-            if (!isNaN(numSize) && numSize > 0) {
+            if (!isNaN(numSize) && numSize >= 100) {
               folderCountMap.set(folderName, (folderCountMap.get(folderName) || 0) + 1);
             }
           } else {
-            if (isNaN(numSize) || numSize <= 0) {
+            // Excluir archivos vacíos / stubs de prueba (< 100 bytes) de la vista web
+            if (isNaN(numSize) || numSize < 100) {
               return;
             }
             filesList.push(fileObj);
@@ -621,7 +622,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
             if (!dirSet.has(folderName)) {
               dirSet.set(folderName, { name: folderName, path: folderPath });
             }
-            if (!f.isDirectory && !isNaN(numSize) && numSize > 0) {
+            if (!f.isDirectory && !isNaN(numSize) && numSize >= 100) {
               folderCountMap.set(folderName, (folderCountMap.get(folderName) || 0) + 1);
             }
           } else {
@@ -631,8 +632,8 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 dirSet.set(folderName, { name: folderName, path: normalizedFilePath });
               }
             } else {
-              // Excluir archivos vacíos / dañados de 0 bytes de la vista web
-              if (isNaN(numSize) || numSize <= 0) {
+              // Excluir archivos vacíos / stubs de prueba (< 100 bytes) de la vista web
+              if (isNaN(numSize) || numSize < 100) {
                 return;
               }
               filesList.push(fileObj);
