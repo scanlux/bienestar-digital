@@ -41,18 +41,34 @@ router.get('/expl/logout', (req, res) => {
   return res.redirect('/expl/login');
 });
 
+// Helper para encontrar la ruta real del APK entre las diferentes opciones de montaje Docker/Host
+function getApkPath(apkFilename) {
+  const candidates = [
+    path.join(UPLOAD_DIR, 'apks', apkFilename),
+    path.join(UPLOAD_DIR, apkFilename),
+    path.join(__dirname, '../../uploads/apks', apkFilename),
+    path.join(__dirname, '../uploads/apks', apkFilename),
+    path.join(__dirname, '../../uploads', apkFilename),
+    path.join(DATASET_DIR, 'apks', apkFilename)
+  ];
+  for (const cand of candidates) {
+    if (fs.existsSync(cand)) return cand;
+  }
+  return null;
+}
+
 // Rutas públicas de descarga de aplicaciones (APKs)
 router.get('/downloads/app-exploracion.apk', (req, res) => {
-  const apkPath = path.join(UPLOAD_DIR, 'apks', 'app-exploracion.apk');
-  if (fs.existsSync(apkPath)) {
+  const apkPath = getApkPath('app-exploracion.apk');
+  if (apkPath) {
     return res.download(apkPath, 'app-exploracion.apk');
   }
   return res.status(404).send('APK de Exploración no disponible en el servidor.');
 });
 
 router.get('/downloads/app-teclado.apk', (req, res) => {
-  const apkPath = path.join(UPLOAD_DIR, 'apks', 'app-teclado.apk');
-  if (fs.existsSync(apkPath)) {
+  const apkPath = getApkPath('app-teclado.apk');
+  if (apkPath) {
     return res.download(apkPath, 'app-teclado.apk');
   }
   return res.status(404).send('APK de Teclado no disponible en el servidor.');
