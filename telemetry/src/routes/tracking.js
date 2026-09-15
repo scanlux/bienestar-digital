@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const { pubClient } = require('../config/redis');
-const { getDatasetDir } = require('../utils/helpers');
+const { getDatasetDir, sanitizeDeviceId } = require('../utils/helpers');
 
 // GET /dataset.json
 router.get('/dataset.json', (req, res) => {
@@ -38,7 +38,7 @@ router.post('/api/telemetry/dataset', (req, res) => {
     const targetFilePath = path.join(targetDir, 'dataset_lenguaje_humano.json');
     const headerDeviceId = req.headers['x-device-id'];
     const rawDeviceId = device_id || headerDeviceId || 'unknown_device';
-    const safeDeviceId = String(rawDeviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeDeviceId = sanitizeDeviceId(rawDeviceId);
     const deviceFilePath = path.join(devicesDir, `dataset_${safeDeviceId}.json`);
 
     const sampleObjects = [];

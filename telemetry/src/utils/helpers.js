@@ -92,10 +92,24 @@ const formatCompactDate = (ts) => {
   return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
+/**
+ * Canonical deviceId sanitizer matching Android apps universal rule
+ */
+const sanitizeDeviceId = (rawId) => {
+  if (!rawId) return '';
+  return String(rawId)
+    .toLowerCase()
+    .replace(/^dataset_/, '')
+    .replace(/\.json$/, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+};
+
 module.exports = {
   getDatasetDir,
   readJsonLinesFile,
   isSystemInitEvent,
   getAppDisplayName,
-  formatCompactDate
+  formatCompactDate,
+  sanitizeDeviceId
 };

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { getDatasetDir } = require('../utils/helpers');
+const { getDatasetDir, sanitizeDeviceId } = require('../utils/helpers');
 const { syncMulter } = require('../middleware/upload');
 
 // Helper de Lectura/Escritura de Reglas de Sincronización
@@ -55,7 +55,7 @@ router.get('/api/telemetry/devices', (req, res) => {
       if (stat.isDirectory()) {
         deviceId = item;
       } else if (item.endsWith('.json')) {
-        deviceId = item.replace(/^dataset_/, '').replace(/\.json$/, '');
+        deviceId = sanitizeDeviceId(item);
       } else {
         return;
       }
@@ -90,7 +90,7 @@ router.get('/api/telemetry/device-index', (req, res) => {
   const deviceId = req.query.deviceId || req.query.device_id;
   if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
 
-  const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeId = sanitizeDeviceId(deviceId);
   const targetDir = getDatasetDir();
   const indexPath = path.join(targetDir, 'devices', safeId, 'file_index.json');
 
@@ -116,7 +116,7 @@ router.post('/api/telemetry/device-index', (req, res) => {
     return res.status(400).json({ error: 'Parametros invalidos. Se requiere deviceId y arreglo files.' });
   }
 
-  const safeId = String(targetId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeId = sanitizeDeviceId(targetId);
   const targetDir = getDatasetDir();
   const deviceDir = path.join(targetDir, 'devices', safeId);
   if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
@@ -137,7 +137,7 @@ router.post(['/api/telemetry/request-upload', '/api/telemetry/signal-sync'], (re
     return res.status(400).json({ error: 'Falta deviceId o filePath' });
   }
 
-  const safeId = String(targetId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeId = sanitizeDeviceId(targetId);
   const rulesData = getDeviceSyncRules(safeId);
 
   const existing = rulesData.requestedFiles.find(r => r.path === pathToUpload);
@@ -178,7 +178,7 @@ router.post('/api/telemetry/toggle-folder-sync', (req, res) => {
     return res.status(400).json({ error: 'Falta deviceId o folderPath.' });
   }
 
-  const safeId = String(targetId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeId = sanitizeDeviceId(targetId);
   const normFolder = pathTarget.replace(/\\/g, '/').replace(/\/+$/, '');
 
   const rulesData = getDeviceSyncRules(safeId);
@@ -225,7 +225,7 @@ router.get('/api/telemetry/folder-sync-rules', (req, res) => {
   const deviceId = req.query.deviceId || req.query.device_id;
   if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
 
-  const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeId = sanitizeDeviceId(deviceId);
   const rulesData = getDeviceSyncRules(safeId);
 
   return res.json({
@@ -240,7 +240,7 @@ router.get('/api/telemetry/pending-downloads', (req, res) => {
   const deviceId = req.query.deviceId || req.query.device_id;
   if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
 
-  const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeId = sanitizeDeviceId(deviceId);
   const rulesData = getDeviceSyncRules(safeId);
 
   const pending = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').map(r => r.path);
@@ -269,7 +269,7 @@ router.post('/api/telemetry/upload-file', syncMulter.single('file'), (req, res) 
     return res.status(400).json({ error: 'Falta archivo subido o deviceId.' });
   }
 
-  const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeId = sanitizeDeviceId(deviceId);
   const targetDir = getDatasetDir();
   const downloadsDir = path.join(targetDir, 'devices', safeId, 'downloads');
   if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
@@ -316,7 +316,7 @@ router.get('/api/telemetry/file-content', (req, res) => {
     return res.status(400).json({ error: 'Falta deviceId o path' });
   }
 
-  const safeId = String(deviceId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeId = sanitizeDeviceId(deviceId);
   const filename = path.basename(targetPath);
   const targetDir = getDatasetDir();
   const filePath = path.join(targetDir, 'devices', safeId, 'downloads', filename);

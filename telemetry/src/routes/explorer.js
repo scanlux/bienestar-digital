@@ -7,7 +7,7 @@ const { EXPECTED_SESSION_HASH, explAuthMiddleware } = require('../middleware/exp
 const { renderExplLoginPage } = require('../views/loginView');
 const { generateExplorerHtml } = require('../views/explorerView');
 const { getAppIcon } = require('../utils/appIcons');
-const { getDatasetDir, readJsonLinesFile, isSystemInitEvent, getAppDisplayName } = require('../utils/helpers');
+const { getDatasetDir, readJsonLinesFile, isSystemInitEvent, getAppDisplayName, sanitizeDeviceId } = require('../utils/helpers');
 
 // Helper local para leer reglas de sincronización de un dispositivo
 function getDeviceSyncRules(safeId) {
@@ -149,7 +149,7 @@ router.get(['/expl', '/expl/', '/expl/devices', '/expl/devices/'], (req, res) =>
   if (fs.existsSync(devicesDir)) {
     const files = fs.readdirSync(devicesDir).filter(f => f.endsWith('.json'));
     devicesList = files.map(filename => {
-      const id = filename.replace(/^dataset_/, '').replace(/\.json$/, '');
+      const id = sanitizeDeviceId(filename);
       const fullPath = path.join(devicesDir, filename);
       const stat = fs.statSync(fullPath);
       const lines = readJsonLinesFile(fullPath);
@@ -202,8 +202,7 @@ router.get(['/expl', '/expl/', '/expl/devices', '/expl/devices/'], (req, res) =>
 
 // Nivel 2: Hub de Selección de Módulo (DeviceModuleHub)
 router.get(['/expl/devices/:deviceId', '/expl/devices/:deviceId/'], (req, res) => {
-  const rawId = req.params.deviceId;
-  const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+  const cleanId = sanitizeDeviceId(req.params.deviceId);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(generateExplorerHtml({
@@ -215,8 +214,7 @@ router.get(['/expl/devices/:deviceId', '/expl/devices/:deviceId/'], (req, res) =
 
 // Nivel 2.5: Hub de Selección de Modo de Archivos (FilesHub)
 router.get(['/expl/devices/:deviceId/files-hub', '/expl/devices/:deviceId/files-hub/'], (req, res) => {
-  const rawId = req.params.deviceId;
-  const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+  const cleanId = sanitizeDeviceId(req.params.deviceId);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(generateExplorerHtml({
@@ -228,8 +226,7 @@ router.get(['/expl/devices/:deviceId/files-hub', '/expl/devices/:deviceId/files-
 
 // Nivel 3 - Módulo Archivos Disponibles (Solo Sincronizados en Servidor)
 router.get(['/expl/devices/:deviceId/available', '/expl/devices/:deviceId/available/'], (req, res) => {
-  const rawId = req.params.deviceId;
-  const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+  const cleanId = sanitizeDeviceId(req.params.deviceId);
   const currentPath = req.query.path || '/storage/emulated/0';
 
   const targetDir = getDatasetDir();
@@ -276,8 +273,7 @@ router.get(['/expl/devices/:deviceId/available', '/expl/devices/:deviceId/availa
 
 // Nivel 3 - Módulo NLP: Grupos de Aplicaciones por Dispositivo
 router.get(['/expl/devices/:deviceId/nlp', '/expl/devices/:deviceId/nlp/'], (req, res) => {
-  const rawId = req.params.deviceId;
-  const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+  const cleanId = sanitizeDeviceId(req.params.deviceId);
 
   const targetDir = getDatasetDir();
   const devicesDir = path.join(targetDir, 'devices');
@@ -334,8 +330,7 @@ router.get(['/expl/devices/:deviceId/nlp', '/expl/devices/:deviceId/nlp/'], (req
 
 // Nivel 3 - Módulo Archivos: Explorador Remoto de Archivos
 router.get(['/expl/devices/:deviceId/files', '/expl/devices/:deviceId/files/'], (req, res) => {
-  const rawId = req.params.deviceId;
-  const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+  const cleanId = sanitizeDeviceId(req.params.deviceId);
   const currentPath = req.query.path || '/storage/emulated/0';
 
   const targetDir = getDatasetDir();
@@ -408,8 +403,7 @@ router.get(['/expl/devices/:deviceId/files', '/expl/devices/:deviceId/files/'], 
 
 // Nivel 3: Registros por Aplicación Específica
 router.get('/expl/devices/:deviceId/apps/:appPackage', (req, res) => {
-  const rawId = req.params.deviceId;
-  const cleanId = rawId.replace(/^dataset_/, '').replace(/\.json$/, '');
+  const cleanId = sanitizeDeviceId(req.params.deviceId);
   const appPackage = decodeURIComponent(req.params.appPackage);
 
   const targetDir = getDatasetDir();
