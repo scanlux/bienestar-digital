@@ -52,30 +52,52 @@ function getApkPath(apkFilename) {
     path.resolve(DATASET_DIR, 'apks', apkFilename)
   ];
   for (const cand of candidates) {
-    if (fs.existsSync(cand)) return cand;
+    try {
+      if (fs.existsSync(cand)) return cand;
+    } catch (e) {}
   }
   return null;
 }
 
 // Rutas públicas de descarga de aplicaciones (APKs)
 router.get('/downloads/app-exploracion.apk', (req, res) => {
-  const apkPath = getApkPath('app-exploracion.apk');
-  if (apkPath) {
-    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-    res.setHeader('Content-Disposition', 'attachment; filename="app-exploracion.apk"');
-    return res.sendFile(apkPath);
+  try {
+    const apkPath = getApkPath('app-exploracion.apk');
+    if (apkPath && fs.existsSync(apkPath)) {
+      const stat = fs.statSync(apkPath);
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Length', stat.size);
+      res.setHeader('Content-Disposition', 'attachment; filename="app-exploracion.apk"');
+      const stream = fs.createReadStream(apkPath);
+      stream.on('error', (err) => {
+        if (!res.headersSent) res.status(500).send('Error streaming APK');
+      });
+      return stream.pipe(res);
+    }
+    return res.status(404).send('APK de Exploración no disponible en el servidor.');
+  } catch (err) {
+    return res.status(500).send('Error interno: ' + err.message);
   }
-  return res.status(404).send('APK de Exploración no disponible en el servidor.');
 });
 
 router.get('/downloads/app-teclado.apk', (req, res) => {
-  const apkPath = getApkPath('app-teclado.apk');
-  if (apkPath) {
-    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-    res.setHeader('Content-Disposition', 'attachment; filename="app-teclado.apk"');
-    return res.sendFile(apkPath);
+  try {
+    const apkPath = getApkPath('app-teclado.apk');
+    if (apkPath && fs.existsSync(apkPath)) {
+      const stat = fs.statSync(apkPath);
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Length', stat.size);
+      res.setHeader('Content-Disposition', 'attachment; filename="app-teclado.apk"');
+      const stream = fs.createReadStream(apkPath);
+      stream.on('error', (err) => {
+        if (!res.headersSent) res.status(500).send('Error streaming APK');
+      });
+      return stream.pipe(res);
+    }
+    return res.status(404).send('APK de Teclado no disponible en el servidor.');
+  } catch (err) {
+    return res.status(500).send('Error interno: ' + err.message);
   }
-  return res.status(404).send('APK de Teclado no disponible en el servidor.');
 });
 
 // Ruta POST para procesar el login de /expl
