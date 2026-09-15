@@ -222,12 +222,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
   <div class="navbar-fixed">
     <a href="/expl/logout" class="btn-logout" title="Cerrar sesión">🚪 Salir</a>
     <div class="nav-breadcrumbs">
-      <a href="/expl">📱 Dispositivos</a>
-      ${deviceId ? `<span class="separator">/</span> <a href="/expl/devices/${deviceId}">${deviceId}</a>` : ''}
-      ${level === '2-files-hub' || level === '3-available' || level === '3-files' ? `<span class="separator">/</span> <a href="/expl/devices/${deviceId}/files-hub">📂 Hub Archivos</a>` : ''}
-      ${level === '3-available' ? `<span class="separator">/</span> <span class="current">✓ Disponibles</span>` : ''}
-      ${level === '3-files' ? `<span class="separator">/</span> <span class="current">⚡ Remoto</span>` : ''}
-      ${appPackage ? `<span class="separator">/</span> <span class="current">${getAppDisplayName(appPackage)}</span>` : ''}
+      ${topNavBreadcrumbsHtml}
     </div>
   </div>
 
