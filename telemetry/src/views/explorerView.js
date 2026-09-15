@@ -19,6 +19,14 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
     return `${day}/${month}/${year} ${hours}:${minutes}`;
   };
 
+  const formatFileSize = (bytes) => {
+    const n = Number(bytes);
+    if (isNaN(n) || n <= 0) return '—';
+    if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(2) + ' MB';
+    if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+    return n + ' B';
+  };
+
   // Construir breadcrumbs del navbar superior limitados a los últimos 3 pasos/links
   const allNavSteps = [
     { label: '📱 Dispositivos', href: '/expl' }
@@ -523,7 +531,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                           </a>
                         </td>
                         <td style="padding:12px 14px; color:#9ca3af; white-space:nowrap; text-align:right;">
-                          ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—'}
+                          ${formatFileSize(f.size)}
                         </td>
                         <td style="padding:12px 14px; color:#9ca3af; font-size:0.82rem; white-space:nowrap; text-align:center; font-family:monospace;">
                           ${formatCompactDate(f.lastModified)}
@@ -550,7 +558,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
                 const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
                 const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
-                const formattedSize = f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—';
+                const formattedSize = formatFileSize(f.size);
 
                 return `
                   <div class="mobile-file-card" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
@@ -745,7 +753,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                           `}
                         </td>
                         <td style="padding:12px 14px; color:#9ca3af; white-space:nowrap; text-align:right;">
-                          ${f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—'}
+                          ${formatFileSize(f.size)}
                         </td>
                         <td style="padding:12px 14px; color:#9ca3af; font-size:0.82rem; white-space:nowrap; text-align:center; font-family:monospace;">
                           ${formatCompactDate(f.lastModified)}
@@ -783,7 +791,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
                 const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
                 const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
-                const formattedSize = f.size ? (f.size > 1024 * 1024 ? (f.size / (1024*1024)).toFixed(2) + ' MB' : (f.size / 1024).toFixed(1) + ' KB') : '—';
+                const formattedSize = formatFileSize(f.size);
 
                 return `
                   <div class="mobile-file-card" data-file-path="${f.path}" data-file-name="${f.name}" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
