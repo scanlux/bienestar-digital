@@ -35,6 +35,17 @@ router.get('/expl/login', (req, res) => {
   return res.send(renderExplLoginPage(req.query.error ? 'Usuario o contraseña incorrectos.' : ''));
 });
 
+// Ruta POST para procesar el login de /expl
+router.post('/expl/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'Olmedo' && password === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
+    res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
+    return res.redirect(303, '/expl');
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.status(401).send(renderExplLoginPage('Usuario o contraseña incorrectos.'));
+});
+
 // Ruta GET /expl/logout para cerrar sesión
 router.get('/expl/logout', (req, res) => {
   res.setHeader('Set-Cookie', 'expl_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
@@ -96,17 +107,6 @@ router.get('/downloads/app-teclado.apk', (req, res) => {
   } catch (err) {
     return res.status(500).send('Error interno: ' + err.message);
   }
-});
-
-// Ruta POST para procesar el login de /expl
-router.post('/expl/login', (req, res) => {
-  const { username, password } = req.body;
-  if (username === 'Olmedo' && password === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
-    res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
-    return res.redirect(303, '/expl');
-  }
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  return res.status(401).send(renderExplLoginPage('Usuario o contraseña incorrectos.'));
 });
 
 // Aplicar protección de autenticación a /expl y todas sus subrutas
