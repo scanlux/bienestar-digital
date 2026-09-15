@@ -99,13 +99,6 @@ jobs:
               "${TOKEN_FILE}" \
               "${{ secrets.SSH_USER }}@${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}:/tmp/.ghcr_token"
 
-          # Copiar docker-compose.yml al servidor de forma segura
-          scp -o BatchMode=yes \
-              -o ConnectTimeout=30 \
-              -i ~/.ssh/id_rsa \
-              infra/arm-bogota/docker-compose.yml \
-              "${{ secrets.SSH_USER }}@${{ secrets.ARM_BOGOTA_TAILSCALE_IP }}:/opt/bienestar/docker-compose.yml"
-
           # Ejecutar deploy remoto
           ssh -o BatchMode=yes \
               -o ConnectTimeout=30 \
@@ -116,7 +109,6 @@ jobs:
                rm -f /tmp/.ghcr_token && \
                cd /opt/bienestar && \
                if [ -f docker-compose.yml ]; then \
-                 sudo mkdir -p /var/www/bienestar/uploads/apks && \
                  sudo docker compose pull telemetry && \
                  sudo docker compose up -d --no-deps telemetry && \
                  sudo docker image prune -f && \
