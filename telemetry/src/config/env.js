@@ -24,7 +24,7 @@ const EXPECTED_SESSION_HASH = crypto.createHash('sha256').update('Olmedo:Fghju/6
 
 // Ensure uploads directory structure exists
 const ensureUploadDirs = () => {
-  const types = ['stores', 'commerces', 'products', 'videos', 'requests'];
+  const types = ['stores', 'commerces', 'products', 'videos', 'requests', 'apks'];
   types.forEach(t => {
     const dir = path.join(UPLOAD_DIR, t);
     if (!fs.existsSync(dir)) {

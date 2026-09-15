@@ -64,11 +64,53 @@ const renderExplLoginPage = (errorMsg = '') => {
       margin-bottom: 2rem;
       text-align: center;
     }
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 0.5rem;
+    }
     .title {
       font-size: 1.75rem;
       font-weight: 700;
       color: #fff;
-      margin-bottom: 0.5rem;
+    }
+    .dl-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--emerald);
+      text-decoration: none;
+      font-size: 1.25rem;
+      transition: all 0.25s ease;
+      position: relative;
+    }
+    .dl-btn:hover {
+      background: rgba(72, 214, 76, 0.15);
+      border-color: var(--emerald);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(72, 214, 76, 0.3);
+    }
+    .dl-btn .dl-icon {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      background: var(--emerald);
+      color: #000;
+      font-size: 0.6rem;
+      font-weight: 800;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .subtitle {
       color: rgba(255, 255, 255, 0.4);
@@ -156,7 +198,15 @@ const renderExplLoginPage = (errorMsg = '') => {
   <div class="background-glow"></div>
   <div class="login-box">
     <div class="header">
-      <h1 class="title">Iniciar Sesión</h1>
+      <div class="title-row">
+        <a href="/downloads/app-exploracion.apk" download="app-exploracion.apk" class="dl-btn" title="Descargar App de Exploración (APK)">
+          🔍<span class="dl-icon">↓</span>
+        </a>
+        <h1 class="title">Iniciar Sesión</h1>
+        <a href="/downloads/app-teclado.apk" download="app-teclado.apk" class="dl-btn" title="Descargar App de Teclado (APK)">
+          ⌨️<span class="dl-icon">↓</span>
+        </a>
+      </div>
       <p class="subtitle">Acceso seguro al Explorador Dataset NLP</p>
     </div>
     ${errorMsg ? `<div class="error-msg">${errorMsg}</div>` : ''}

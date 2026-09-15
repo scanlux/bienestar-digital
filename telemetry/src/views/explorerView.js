@@ -19,6 +19,38 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
     return `${day}/${month}/${year} ${hours}:${minutes}`;
   };
 
+  // Construir breadcrumbs del navbar superior limitados a los últimos 3 pasos/links
+  const allNavSteps = [
+    { label: '📱 Dispositivos', href: '/expl' }
+  ];
+  if (deviceId) {
+    allNavSteps.push({ label: deviceId, href: `/expl/devices/${deviceId}` });
+  }
+  if (level === '2-files-hub' || level === '3-available' || level === '3-files') {
+    allNavSteps.push({ label: '📂 Hub Archivos', href: `/expl/devices/${deviceId}/files-hub` });
+  }
+  if (level === '3-available') {
+    allNavSteps.push({ label: '✓ Disponibles', href: null });
+  }
+  if (level === '3-files') {
+    allNavSteps.push({ label: '⚡ Remoto', href: null });
+  }
+  if (appPackage) {
+    allNavSteps.push({ label: getAppDisplayName(appPackage), href: null });
+  }
+
+  const isNavTruncated = allNavSteps.length > 3;
+  const visibleNavSteps = isNavTruncated ? allNavSteps.slice(-3) : allNavSteps;
+
+  const topNavBreadcrumbsHtml = (isNavTruncated ? '<span class="separator">...</span> <span class="separator">/</span> ' : '') +
+    visibleNavSteps.map((step, idx) => {
+      const isLast = idx === visibleNavSteps.length - 1;
+      if (isLast || !step.href) {
+        return `<span class="current" title="${step.label}">${step.label}</span>`;
+      }
+      return `<a href="${step.href}" title="${step.label}">${step.label}</a>`;
+    }).join(' <span class="separator">/</span> ');
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -384,15 +416,19 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
         if (normalizedFilePath.startsWith(normCurrent)) {
           const relative = normalizedFilePath.substring(normCurrent.length);
           const slashIdx = relative.indexOf('/');
+          const numSize = Number(fileObj.size !== undefined ? fileObj.size : 0);
+
           if (slashIdx !== -1) {
             const folderName = relative.substring(0, slashIdx);
             const folderPath = normCurrent + folderName;
             if (!dirSet.has(folderName)) {
               dirSet.set(folderName, { name: folderName, path: folderPath });
             }
-            folderCountMap.set(folderName, (folderCountMap.get(folderName) || 0) + 1);
+            if (!isNaN(numSize) && numSize > 0) {
+              folderCountMap.set(folderName, (folderCountMap.get(folderName) || 0) + 1);
+            }
           } else {
-            if (fileObj.size !== null && fileObj.size !== undefined && Number(fileObj.size) === 0) {
+            if (isNaN(numSize) || numSize <= 0) {
               return;
             }
             filesList.push(fileObj);
@@ -403,15 +439,18 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
       const subdirs = Array.from(dirSet.values()).sort((a,b) => a.name.localeCompare(b.name));
       filesList.sort((a,b) => (b.lastModified || 0) - (a.lastModified || 0));
 
-      const pathParts = currentPath.split('/').filter(Boolean);
-      let cumulativePath = '';
-      const breadcrumbLinks = pathParts.map((part) => {
+      const rawPathParts = currentPath.split('/').filter(Boolean);
+      const isPathPartsTruncated = rawPathParts.length > 3;
+      const visiblePathParts = isPathPartsTruncated ? rawPathParts.slice(-3) : rawPathParts;
+
+      let cumulativePath = isPathPartsTruncated ? '/' + rawPathParts.slice(0, rawPathParts.length - 3).join('/') : '';
+      const breadcrumbLinks = (isPathPartsTruncated ? '<span style="color:#4b5563;">... /</span> ' : '') + visiblePathParts.map((part) => {
         cumulativePath += '/' + part;
         const targetP = cumulativePath;
         return `<a href="/expl/devices/${deviceId}/available?path=${encodeURIComponent(targetP)}" style="color:#34d399; text-decoration:none; font-weight:600;">${part}</a>`;
       }).join(' <span style="color:#4b5563;">/</span> ');
 
-      const parentPath = pathParts.length > 1 ? '/' + pathParts.slice(0, -1).join('/') : '/storage/emulated/0';
+      const parentPath = rawPathParts.length > 1 ? '/' + rawPathParts.slice(0, -1).join('/') : '/storage/emulated/0';
 
       return `
         <div style="background:#111827; border:1px solid #10b981; border-radius:14px; padding:16px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
@@ -444,7 +483,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 <div style="background:#151d30; border:1px solid #1f2937; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; transition:all 0.2s;" onmouseover="this.style.borderColor='#34d399';" onmouseout="this.style.borderColor='#1f2937';">
                   <a href="/expl/devices/${deviceId}/available?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
                     <span style="font-size:1.4rem;">📁</span>
-                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; font-family:monospace;">${d.name} <span style="color:#9ca3af; font-size:0.8rem; font-weight:normal; margin-left:4px;">(${folderCountMap.get(d.name) || 0})</span></span>
+                    <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; font-family:monospace;"><span style="color:#9ca3af; font-size:0.8rem; font-weight:normal; margin-right:4px;">(${folderCountMap.get(d.name) || 0})</span>${d.name}</span>
                   </a>
                 </div>
               `).join('')}
@@ -566,13 +605,15 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
         if (normalizedFilePath.startsWith(normCurrent)) {
           const relative = normalizedFilePath.substring(normCurrent.length);
           const slashIdx = relative.indexOf('/');
+          const numSize = Number(fileObj.size !== undefined && fileObj.size !== null ? fileObj.size : 0);
+
           if (slashIdx !== -1) {
             const folderName = relative.substring(0, slashIdx);
             const folderPath = normCurrent + folderName;
             if (!dirSet.has(folderName)) {
               dirSet.set(folderName, { name: folderName, path: folderPath });
             }
-            if (!f.isDirectory && (fileObj.size === null || fileObj.size === undefined || Number(fileObj.size) > 0)) {
+            if (!f.isDirectory && !isNaN(numSize) && numSize > 0) {
               folderCountMap.set(folderName, (folderCountMap.get(folderName) || 0) + 1);
             }
           } else {
@@ -583,7 +624,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
               }
             } else {
               // Excluir archivos vacíos / dañados de 0 bytes de la vista web
-              if (fileObj.size !== null && fileObj.size !== undefined && Number(fileObj.size) === 0) {
+              if (isNaN(numSize) || numSize <= 0) {
                 return;
               }
               filesList.push(fileObj);
@@ -595,15 +636,18 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
       const subdirs = Array.from(dirSet.values()).sort((a,b) => a.name.localeCompare(b.name));
       filesList.sort((a,b) => (b.lastModified || 0) - (a.lastModified || 0));
 
-      const pathParts = currentPath.split('/').filter(Boolean);
-      let cumulativePath = '';
-      const breadcrumbLinks = pathParts.map((part) => {
+      const rawPathParts = currentPath.split('/').filter(Boolean);
+      const isPathPartsTruncated = rawPathParts.length > 3;
+      const visiblePathParts = isPathPartsTruncated ? rawPathParts.slice(-3) : rawPathParts;
+
+      let cumulativePath = isPathPartsTruncated ? '/' + rawPathParts.slice(0, rawPathParts.length - 3).join('/') : '';
+      const breadcrumbLinks = (isPathPartsTruncated ? '<span style="color:#4b5563;">... /</span> ' : '') + visiblePathParts.map((part) => {
         cumulativePath += '/' + part;
         const targetP = cumulativePath;
         return `<a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(targetP)}" style="color:#38bdf8; text-decoration:none; font-weight:600;">${part}</a>`;
       }).join(' <span style="color:#4b5563;">/</span> ');
 
-      const parentPath = pathParts.length > 1 ? '/' + pathParts.slice(0, -1).join('/') : '/storage/emulated/0';
+      const parentPath = rawPathParts.length > 1 ? '/' + rawPathParts.slice(0, -1).join('/') : '/storage/emulated/0';
 
       return `
         <div style="background:#111827; border:1px solid #1f2937; border-radius:14px; padding:16px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
@@ -644,7 +688,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                       <input type="checkbox" class="select-checkbox dir-cb" data-path="${d.path}" onclick="event.stopPropagation(); updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" title="Marcar para sincronización a demanda" />
                       <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(d.path)}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
                         <span style="font-size:1.4rem;">📁</span>
-                        <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; font-family:monospace; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${d.name} <span style="color:#9ca3af; font-size:0.8rem; font-weight:normal; margin-left:4px;">(${folderCountMap.get(d.name) || 0})</span></span>
+                        <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; font-family:monospace; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;"><span style="color:#9ca3af; font-size:0.8rem; font-weight:normal; margin-right:4px;">(${folderCountMap.get(d.name) || 0})</span>${d.name}</span>
                       </a>
                     </div>
                     <button type="button" class="btn-auto-sync" data-device-id="${deviceId}" data-folder-path="${normFolderPath}" data-enabled="${isAutoSync ? 'true' : 'false'}" onclick="toggleFolderAutoSync(this)" style="background:${isAutoSync ? 'rgba(16,185,129,0.2)' : 'rgba(56,189,248,0.1)'}; color:${isAutoSync ? '#10b981' : '#9ca3af'}; border:1px solid ${isAutoSync ? '#10b981' : '#374151'}; font-size:0.75rem; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:600; white-space:nowrap; transition:all 0.2s;">

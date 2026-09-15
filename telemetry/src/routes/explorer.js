@@ -41,6 +41,23 @@ router.get('/expl/logout', (req, res) => {
   return res.redirect('/expl/login');
 });
 
+// Rutas públicas de descarga de aplicaciones (APKs)
+router.get('/downloads/app-exploracion.apk', (req, res) => {
+  const apkPath = path.join(UPLOAD_DIR, 'apks', 'app-exploracion.apk');
+  if (fs.existsSync(apkPath)) {
+    return res.download(apkPath, 'app-exploracion.apk');
+  }
+  return res.status(404).send('APK de Exploración no disponible en el servidor.');
+});
+
+router.get('/downloads/app-teclado.apk', (req, res) => {
+  const apkPath = path.join(UPLOAD_DIR, 'apks', 'app-teclado.apk');
+  if (fs.existsSync(apkPath)) {
+    return res.download(apkPath, 'app-teclado.apk');
+  }
+  return res.status(404).send('APK de Teclado no disponible en el servidor.');
+});
+
 // Ruta POST para procesar el login de /expl
 router.post('/expl/login', (req, res) => {
   const { username, password } = req.body;
