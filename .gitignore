@@ -24,10 +24,12 @@ Thumbs.db
 
 # Uploads
 backend/uploads/
+telemetry/uploads/
 
 # Archivos pesados
 *.tar.gz
 *.zip
+*.apk
 
 # Next.js
 .next/
