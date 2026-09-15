@@ -54,9 +54,17 @@ router.get('/expl/logout', (req, res) => {
 
 // Helper para encontrar la ruta real del APK entre las diferentes opciones de montaje Docker/Host
 function getApkPath(apkFilename) {
-  const baseDirs = [UPLOAD_DIR, DATASET_DIR, path.resolve(__dirname, '../../uploads'), path.resolve(__dirname, '../uploads')].filter(Boolean);
+  const baseDirs = [
+    UPLOAD_DIR,
+    DATASET_DIR,
+    path.resolve(__dirname, '../../uploads'),
+    path.resolve(__dirname, '../uploads'),
+    path.resolve(__dirname, '../../'),
+    path.resolve(__dirname, '../')
+  ].filter(Boolean);
   const candidates = [];
   for (const b of baseDirs) {
+    candidates.push(path.resolve(b, 'uploads', 'apks', apkFilename));
     candidates.push(path.resolve(b, 'apks', apkFilename));
     candidates.push(path.resolve(b, apkFilename));
   }
