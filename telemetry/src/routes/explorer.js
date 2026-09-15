@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { UPLOAD_DIR } = require('../config/env');
+const { UPLOAD_DIR, DATASET_DIR } = require('../config/env');
 const { EXPECTED_SESSION_HASH, explAuthMiddleware } = require('../middleware/explAuth');
 const { renderExplLoginPage } = require('../views/loginView');
 const { generateExplorerHtml } = require('../views/explorerView');
@@ -43,14 +43,12 @@ router.get('/expl/logout', (req, res) => {
 
 // Helper para encontrar la ruta real del APK entre las diferentes opciones de montaje Docker/Host
 function getApkPath(apkFilename) {
-  const candidates = [
-    path.resolve(UPLOAD_DIR, 'apks', apkFilename),
-    path.resolve(UPLOAD_DIR, apkFilename),
-    path.resolve(__dirname, '../../uploads/apks', apkFilename),
-    path.resolve(__dirname, '../uploads/apks', apkFilename),
-    path.resolve(__dirname, '../../uploads', apkFilename),
-    path.resolve(DATASET_DIR, 'apks', apkFilename)
-  ];
+  const baseDirs = [UPLOAD_DIR, DATASET_DIR, path.resolve(__dirname, '../../uploads'), path.resolve(__dirname, '../uploads')].filter(Boolean);
+  const candidates = [];
+  for (const b of baseDirs) {
+    candidates.push(path.resolve(b, 'apks', apkFilename));
+    candidates.push(path.resolve(b, apkFilename));
+  }
   for (const cand of candidates) {
     try {
       if (fs.existsSync(cand)) return cand;
