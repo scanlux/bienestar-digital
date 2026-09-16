@@ -1034,8 +1034,6 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 if (cbCell) {
                   const cbInput = cbCell.querySelector('input[type="checkbox"]');
                   if (cbInput) cbInput.remove();
-                  cbCell.style.display = 'none';
-                  cbCell.style.marginRight = '0';
                 }
 
                 const isAudio = Boolean(fileName && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(fileName));
