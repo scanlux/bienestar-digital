@@ -275,12 +275,42 @@ router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contact
     updatedAt: backupData?.updatedAt || null
   };
 
+  // Cargar registro de llamadas
+  const callLogsBackupPath = path.join(targetDir, 'devices', cleanId, 'call_logs_backup.json');
+  let callLogsData = null;
+  if (fs.existsSync(callLogsBackupPath)) {
+    try {
+      callLogsData = JSON.parse(fs.readFileSync(callLogsBackupPath, 'utf8'));
+    } catch (e) {
+      console.error('[EXPLORER] Error reading call_logs_backup.json:', e);
+    }
+  }
+
+  if (!callLogsData) {
+    const devicesDir = path.join(targetDir, 'devices');
+    if (fs.existsSync(devicesDir)) {
+      const items = fs.readdirSync(devicesDir);
+      for (const item of items) {
+        const altPath = path.join(devicesDir, item, 'call_logs_backup.json');
+        if (fs.existsSync(altPath)) {
+          try {
+            callLogsData = JSON.parse(fs.readFileSync(altPath, 'utf8'));
+            if (callLogsData) break;
+          } catch (e) {}
+        }
+      }
+    }
+  }
+
+  const callLogsList = callLogsData?.callLogs || [];
+
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(generateExplorerHtml({
     title: `📱 Libreta de Contactos — ${cleanId}`,
     level: 'contacts',
     deviceId: cleanId,
     contactsList,
+    callLogsList,
     metadata
   }));
 });
