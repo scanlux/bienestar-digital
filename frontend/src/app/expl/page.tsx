@@ -40,7 +40,7 @@ function ExplContent() {
     router.push(`/expl?device=${encodeURIComponent(id)}`);
   };
 
-  const handleSelectModule = (selectedView: 'nlp' | 'files') => {
+  const handleSelectModule = (selectedView: 'nlp' | 'files' | 'contacts') => {
     router.push(`/expl?device=${encodeURIComponent(deviceId || '')}&view=${selectedView}`);
   };
 
@@ -63,7 +63,7 @@ function ExplContent() {
     );
   }
 
-  // Nivel 3: Vista de NLP o Archivos
+  // Nivel 3: Vista de NLP, Archivos o Contactos
   if (deviceId && view === 'nlp') {
     return (
       <div className="w-full max-w-6xl mx-auto p-6">
@@ -80,6 +80,23 @@ function ExplContent() {
         deviceId={deviceId}
         onBack={handleBackToHub}
       />
+    );
+  }
+
+  if (deviceId && view === 'contacts') {
+    return (
+      <div className="w-full max-w-6xl mx-auto p-6">
+        <button onClick={handleBackToHub} className="text-sm font-medium text-purple-600 mb-4 hover:underline">&larr; Volver al Hub</button>
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+          <h1 className="text-2xl font-bold mb-2">Libreta de Contactos</h1>
+          <p className="text-gray-500 mb-4">Copia de respaldo diaria de contactos para el dispositivo <span className="font-mono font-semibold">{deviceId}</span>.</p>
+          <iframe 
+            src={`/contacts-viewer/index.html?device=${encodeURIComponent(deviceId)}`}
+            className="w-full h-[650px] border-0 rounded-xl"
+            title="Vista de Libreta de Contactos"
+          />
+        </div>
+      </div>
     );
   }
 

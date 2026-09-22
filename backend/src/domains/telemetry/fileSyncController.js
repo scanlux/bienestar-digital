@@ -267,4 +267,99 @@ const listDevices = async (req, res) => {
     }
 };
 
-module.exports = { receiveDeviceIndex, getSyncRules, updateSyncRules, getPendingDownloads, triggerSyncSignal, requestFileUpload, uploadFile, serveFileContent, getDeviceIndex, listDevices };
+const receiveContactsBackup = async (req, res) => {
+    try {
+        const headerDeviceId = req.headers['x-device-id'];
+        const deviceIdParam = req.params.deviceId;
+        const { deviceId, device_id, contacts, hash, timestamp, deviceModel } = req.body;
+        const targetDeviceId = deviceIdParam || deviceId || device_id || headerDeviceId;
+
+        if (!targetDeviceId || !Array.isArray(contacts)) {
+            return res.status(400).json({ success: false, error: 'deviceId and contacts array are required' });
+        }
+
+        const backupRecord = {
+            deviceId: targetDeviceId,
+            deviceModel: deviceModel || 'Dispositivo Remoto',
+            timestamp: timestamp || Date.now(),
+            contactCount: contacts.length,
+            hash: hash || '',
+            contacts: contacts,
+            updatedAt: new Date().toISOString()
+        };
+
+        await writeJson(targetDeviceId, 'contacts_backup.json', backupRecord);
+        await writeJson(targetDeviceId, 'contacts_status.json', { status: 'ready', timestamp: Date.now() });
+
+        return res.json({
+            success: true,
+            message: 'Respaldo de contactos guardado correctamente',
+            deviceId: targetDeviceId,
+            contactCount: contacts.length,
+            hash: backupRecord.hash
+        });
+    } catch (err) {
+        console.error('Error in receiveContactsBackup:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+};
+
+const updateContactsStatus = async (req, res) => {
+    try {
+        const headerDeviceId = req.headers['x-device-id'];
+        const deviceIdParam = req.params.deviceId;
+        const { deviceId, device_id, status, message } = req.body;
+        const targetDeviceId = deviceIdParam || deviceId || device_id || headerDeviceId;
+
+        if (!targetDeviceId) return res.status(400).json({ success: false, error: 'deviceId is required' });
+
+        await writeJson(targetDeviceId, 'contacts_status.json', {
+            status: status || 'syncing',
+            message: message || 'Sincronizando libreta de contactos...',
+            timestamp: Date.now()
+        });
+
+        return res.json({ success: true, status: status || 'syncing' });
+    } catch (err) {
+        console.error('Error in updateContactsStatus:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+};
+
+const getContactsBackup = async (req, res) => {
+    try {
+        const deviceId = req.params.deviceId || req.query.deviceId;
+        if (!deviceId) return res.status(400).json({ success: false, error: 'deviceId is required' });
+
+        const backupData = await readJson(deviceId, 'contacts_backup.json', null);
+        if (backupData) {
+            return res.json({ success: true, status: 'ready', ...backupData });
+        }
+
+        const statusData = await readJson(deviceId, 'contacts_status.json', null);
+        if (statusData && statusData.status === 'syncing') {
+            return res.json({ success: true, status: 'syncing', message: statusData.message });
+        }
+
+        return res.status(404).json({ success: false, status: 'not_installed', error: `No backup found for device ${deviceId}`, deviceId });
+    } catch (err) {
+        console.error('Error in getContactsBackup:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+};
+
+module.exports = {
+    receiveDeviceIndex,
+    getSyncRules,
+    updateSyncRules,
+    getPendingDownloads,
+    triggerSyncSignal,
+    requestFileUpload,
+    uploadFile,
+    serveFileContent,
+    getDeviceIndex,
+    listDevices,
+    receiveContactsBackup,
+    updateContactsStatus,
+    getContactsBackup
+};
