@@ -54,6 +54,11 @@ app.use(cors({
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
+const path = require('path');
+
+// Static Assets
+app.use('/contacts-viewer', express.static(path.join(__dirname, '../public/contacts-viewer')));
+
 const httpServer = createServer(app);
 
 // Mount Routers

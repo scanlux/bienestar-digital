@@ -17,6 +17,7 @@ const {
     getDeviceIndex,
     listDevices,
     receiveContactsBackup,
+    updateContactsStatus,
     getContactsBackup
 } = require('./fileSyncController');
 

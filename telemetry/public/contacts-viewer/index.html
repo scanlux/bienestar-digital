@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Respaldo de Libreta de Contactos - Dispositivo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Cabecera de Dispositivo -->
+  <div class="device-header">
+    <div class="device-title-row">
+      <div>
+        <div class="device-title" id="deviceModelText">Cargando dispositivo...</div>
+        <span class="device-path-badge" id="devicePathBadge">/expl/devices/huawei_jkm_lx3_8d9f84b14266ae35</span>
+      </div>
+      <div class="sync-status">
+        <div class="sync-dot"></div>
+        <span id="syncStatusText">Sincronizado una vez al día</span>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Total Contactos</div>
+        <div class="kpi-value" id="kpiContactCount">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Último Respaldo</div>
+        <div class="kpi-value" id="kpiLastBackup">--</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Hash SHA-256</div>
+        <div class="kpi-value" style="font-size: 13px; font-family: monospace;" id="kpiHash">--</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tarjeta de Libreta de Contactos -->
+  <div class="contacts-card">
+    <div class="toolbar-header">
+      <div class="toolbar-title">Libreta de Direcciones Respaldada</div>
+      <div class="search-container">
+        <input type="text" id="searchInput" class="search-input" placeholder="Buscar por nombre, teléfono, email o empresa...">
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="contacts-table">
+        <thead>
+          <tr>
+            <th>Contacto</th>
+            <th>Teléfono Principal</th>
+            <th>Correo Electrónico</th>
+            <th>Empresa / Cargo</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="contactsTableBody">
+          <tr>
+            <td colspan="5" class="empty-state">Cargando lista de contactos...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal / Popup de Detalle Completo -->
+  <div class="modal-overlay" id="contactModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="modalContactName">Detalle del Contacto</div>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div class="modal-body" id="modalContactBody">
+        <!-- Detalle inyectado dinámicamente -->
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
