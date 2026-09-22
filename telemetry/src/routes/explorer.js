@@ -267,13 +267,6 @@ router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contact
   }
 
   const contactsList = backupData?.contacts || [];
-  const metadata = {
-    contactCount: backupData?.contactCount || contactsList.length,
-    timestamp: backupData?.timestamp || null,
-    hash: backupData?.hash || '',
-    deviceModel: backupData?.deviceModel || 'Dispositivo Android',
-    updatedAt: backupData?.updatedAt || null
-  };
 
   // Cargar registro de llamadas
   const callLogsBackupPath = path.join(targetDir, 'devices', cleanId, 'call_logs_backup.json');
@@ -303,6 +296,55 @@ router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contact
   }
 
   const callLogsList = callLogsData?.callLogs || [];
+
+  // Detección Pasiva del Estado del Dispositivo (Sin enviar nada al teléfono)
+  const deviceSyncNs = req.app.get('deviceSyncNamespace');
+  const mobileRoom = deviceSyncNs?.adapter?.rooms?.get(`device:${cleanId}`);
+  const isMobileOnline = Boolean(mobileRoom && mobileRoom.size > 0);
+
+  const lastTs = backupData?.timestamp || callLogsData?.timestamp || null;
+  let statusText = 'Desconectado';
+  let statusColor = '#9ca3af';
+  let dotColor = '#6b7280';
+  let isOnline = isMobileOnline;
+
+  if (isMobileOnline) {
+    statusText = 'En línea (Socket Activo)';
+    statusColor = '#34d399';
+    dotColor = '#10b981';
+  } else if (lastTs) {
+    const diffMs = Date.now() - lastTs;
+    const diffMins = Math.floor(diffMs / (60 * 1000));
+    if (diffMins < 10) {
+      statusText = 'En línea (Sincronizado recientemente)';
+      statusColor = '#34d399';
+      dotColor = '#10b981';
+      isOnline = true;
+    } else if (diffMins < 60) {
+      statusText = `Inactivo (Hace ${diffMins} min)`;
+      statusColor = '#fbbf24';
+      dotColor = '#f59e0b';
+    } else {
+      const diffHours = Math.floor(diffMins / 60);
+      statusText = `Inactivo (Hace ${diffHours} h)`;
+      statusColor = '#9ca3af';
+      dotColor = '#6b7280';
+    }
+  }
+
+  const metadata = {
+    contactCount: backupData?.contactCount || contactsList.length,
+    timestamp: backupData?.timestamp || null,
+    hash: backupData?.hash || '',
+    deviceModel: backupData?.deviceModel || 'Dispositivo Android',
+    updatedAt: backupData?.updatedAt || null,
+    deviceStatus: {
+      isOnline,
+      text: statusText,
+      color: statusColor,
+      dotColor: dotColor
+    }
+  };
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(generateExplorerHtml({

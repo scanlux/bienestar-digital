@@ -512,8 +512,11 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
           <div style="font-size:1.6rem; font-weight:800; color:#34d399;">${callLogsList.length} registros</div>
         </div>
         <div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px 20px;">
-          <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Modelo Dispositivo</div>
-          <div style="font-size:1rem; font-weight:700; color:#38bdf8;">${metadata.deviceModel || 'Dispositivo Android'}</div>
+          <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Estado de la App en Dispositivo</div>
+          <div id="deviceStatusKpiValue" style="font-size:1rem; font-weight:700; color:${metadata.deviceStatus?.color || '#9ca3af'}; display:flex; align-items:center; gap:8px;">
+            <span style="width:10px; height:10px; border-radius:50%; background:${metadata.deviceStatus?.dotColor || '#6b7280'}; display:inline-block; ${metadata.deviceStatus?.isOnline ? 'box-shadow: 0 0 8px #10b981;' : ''}" id="deviceStatusDot"></span>
+            <span id="deviceStatusText">${metadata.deviceStatus?.text || 'Desconectado'}</span>
+          </div>
         </div>
         <div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px 20px;">
           <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Último Respaldo</div>
@@ -1515,6 +1518,10 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
             console.log('[REALTIME_SYNC] Evento device:presence recibido:', data);
             const btn = document.getElementById('presenceLogoutBtn');
             const txt = document.getElementById('presenceStatusText');
+            const kpiVal = document.getElementById('deviceStatusKpiValue');
+            const kpiText = document.getElementById('deviceStatusText');
+            const kpiDot = document.getElementById('deviceStatusDot');
+
             if (btn && txt) {
               if (data && data.online) {
                 btn.className = 'btn-status-logout online';
@@ -1522,6 +1529,20 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
               } else {
                 btn.className = 'btn-status-logout offline';
                 txt.textContent = 'Offline';
+              }
+            }
+
+            if (kpiVal && kpiText && kpiDot) {
+              if (data && data.online) {
+                kpiVal.style.color = '#34d399';
+                kpiText.textContent = 'En línea (Socket Activo)';
+                kpiDot.style.background = '#10b981';
+                kpiDot.style.boxShadow = '0 0 8px #10b981';
+              } else {
+                kpiVal.style.color = '#9ca3af';
+                kpiText.textContent = 'Desconectado';
+                kpiDot.style.background = '#6b7280';
+                kpiDot.style.boxShadow = 'none';
               }
             }
           });
