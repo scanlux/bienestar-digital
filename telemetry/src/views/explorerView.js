@@ -2,7 +2,7 @@ const path = require('path');
 const { getAppIcon } = require('../utils/appIcons');
 const { getAppDisplayName } = require('../utils/helpers');
 
-const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set(), autoSyncFolders = new Set(), contactsList = [], metadata = {} }) => {
+const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set(), autoSyncFolders = new Set(), contactsList = [], callLogsList = [], metadata = {} }) => {
   const cleanTitle = (appPackage && level === 3) 
     ? `${getAppDisplayName(appPackage)}` 
     : String(title).replace(/<[^>]*>/g, '').trim();
