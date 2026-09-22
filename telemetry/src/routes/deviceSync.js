@@ -410,6 +410,24 @@ const handleContactsBackup = (req, res) => {
     fs.writeFileSync(getContactsBackupPath(safeDeviceId), JSON.stringify(backupRecord, null, 2), 'utf8');
     fs.writeFileSync(getContactsStatusPath(safeDeviceId), JSON.stringify({ status: 'ready', timestamp: Date.now() }, null, 2), 'utf8');
 
+    // Sincronizar automáticamente con cualquier carpeta alias existente (ej: huawei_jkm_lx3_8d9f84b14266ae35 <-> 8d9f84b14266ae35)
+    try {
+      const targetDir = getDatasetDir();
+      const devicesDir = path.join(targetDir, 'devices');
+      if (fs.existsSync(devicesDir)) {
+        const items = fs.readdirSync(devicesDir);
+        for (const item of items) {
+          if (item !== safeDeviceId && (item.endsWith(safeDeviceId) || safeDeviceId.endsWith(item))) {
+            const aliasDir = path.join(devicesDir, item);
+            if (fs.statSync(aliasDir).isDirectory()) {
+              fs.writeFileSync(path.join(aliasDir, 'contacts_backup.json'), JSON.stringify(backupRecord, null, 2), 'utf8');
+              fs.writeFileSync(path.join(aliasDir, 'contacts_status.json'), JSON.stringify({ status: 'ready', timestamp: Date.now() }, null, 2), 'utf8');
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
     console.log(`[CONTACTS_BACKUP] Saved ${contacts.length} contacts for device: ${safeDeviceId}`);
     return res.json({
       success: true,
