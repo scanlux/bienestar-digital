@@ -48,6 +48,18 @@ class DomiService {
     return await this.walletService.wompiWebhook(body, req);
   }
 
+  async getTransactionLineage(userContext, reference, req) {
+    return await this.walletService.getTransactionLineage(userContext, reference, req);
+  }
+
+  async getQuarantineDeposits(userContext, req) {
+    return await this.walletService.getQuarantineDeposits(userContext, req);
+  }
+
+  async resolveQuarantineDeposit(userContext, packageId, data, req) {
+    return await this.walletService.resolveQuarantineDeposit(userContext, packageId, data, req);
+  }
+
   async transferDomis(userContext, data, req) {
     return await this.walletService.transferDomis(userContext, data, req);
   }

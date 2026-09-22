@@ -84,6 +84,18 @@ class OrderQueryService {
 
   async getCustomerUnreadCount(user, req) {
     const customerId = user.id;
+    const redisClient = require('../../../config/redis');
+    const unreadKey = `notification:unread:${customerId}`;
+
+    try {
+      const cached = await redisClient.get(unreadKey);
+      if (cached !== null) {
+        return { unreadCount: parseInt(cached, 10) };
+      }
+    } catch (redisErr) {
+      console.error('[REDIS_GET_ERROR] Error getting unread notifications count cache:', redisErr.message);
+    }
+
     const [rows] = await db.query(`
       SELECT COUNT(*) as unread_count
       FROM order_messages om
@@ -91,7 +103,15 @@ class OrderQueryService {
       WHERE o.customer_user_id = ? AND om.is_read = 0 AND om.sender_type = 'bot'
     `, [customerId]);
 
-    return { unreadCount: rows[0]?.unread_count || 0 };
+    const count = rows[0]?.unread_count || 0;
+
+    try {
+      await redisClient.set(unreadKey, count, { EX: 86400 });
+    } catch (redisErr) {
+      console.error('[REDIS_SET_ERROR] Error setting unread notifications count cache:', redisErr.message);
+    }
+
+    return { unreadCount: count };
   }
 }
 

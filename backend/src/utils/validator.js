@@ -26,6 +26,9 @@ const validateBody = (schema) => {
           if (rules.type === 'array' && !Array.isArray(value)) {
             throw new ValidationError(`El campo '${key}' debe ser una lista.`);
           }
+          if (rules.type === 'object' && (typeof value !== 'object' || Array.isArray(value) || value === null)) {
+            throw new ValidationError(`El campo '${key}' debe ser un objeto.`);
+          }
           if (rules.type === 'boolean' && typeof value !== 'boolean' && value !== 0 && value !== 1 && value !== '0' && value !== '1') {
             throw new ValidationError(`El campo '${key}' debe ser booleano.`);
           }

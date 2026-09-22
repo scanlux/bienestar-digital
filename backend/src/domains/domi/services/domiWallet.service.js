@@ -12,6 +12,8 @@ const TransferDomis = require('../use-cases/TransferDomis');
 const MintDomis = require('../use-cases/MintDomis');
 const BurnDomisManual = require('../use-cases/BurnDomisManual');
 const ManageWalletAlias = require('../use-cases/ManageWalletAlias');
+const GetTransactionLineage = require('../use-cases/GetTransactionLineage');
+const ManageQuarantineDeposit = require('../use-cases/ManageQuarantineDeposit');
 
 class DomiWalletService {
   constructor(domiService) {
@@ -242,6 +244,18 @@ class DomiWalletService {
   async getPackages(userContext, storeId, req) {
     await assertWalletAccess(userContext, 'store', storeId, 'ver historial de paquetes', req);
     return await domiRepository.findDomiPackagesByStoreId(storeId);
+  }
+
+  async getTransactionLineage(userContext, reference, req) {
+    return await GetTransactionLineage.execute(userContext, { reference }, req);
+  }
+
+  async getQuarantineDeposits(userContext, req) {
+    return await ManageQuarantineDeposit.list(userContext);
+  }
+
+  async resolveQuarantineDeposit(userContext, packageId, data, req) {
+    return await ManageQuarantineDeposit.resolve(userContext, packageId, data, req);
   }
 }
 

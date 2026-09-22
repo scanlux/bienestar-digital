@@ -28,6 +28,18 @@ router.post('/videos/:id/comments', auth, publicController.addVideoComment);
 // POST /api/public/internal/requests (internal endpoint for Bogotá forwarder)
 router.post('/internal/requests', verifyInternalKey, publicController.createRequest);
 
+// POST /api/public/internal/security-logs (internal security logger bridge)
+router.post('/internal/security-logs', verifyInternalKey, async (req, res) => {
+  const { userId, eventType, severity, details, resourceType, resourceId } = req.body;
+  const { logSecurityEvent } = require('../../utils/securityLogger');
+  try {
+    await logSecurityEvent(userId, eventType, severity, req, details, resourceType, resourceId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/public/maintenance-status
 router.get('/maintenance-status', publicController.getMaintenanceStatus);
 

@@ -83,8 +83,13 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
     .nav-breadcrumbs a:hover { text-decoration: underline; }
     .nav-breadcrumbs .separator { color: #4b5563; flex-shrink: 0; }
     .nav-breadcrumbs .current { color: #f3f4f6; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
-    .btn-logout { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 5px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; text-decoration: none; transition: all 0.2s; flex-shrink: 0; margin-right: 12px; display: inline-flex; align-items: center; gap: 4px; }
-    .btn-logout:hover { background: rgba(239, 68, 68, 0.25); border-color: #ef4444; color: #fff; transform: translateY(-1px); }
+    .btn-status-logout { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-decoration: none; transition: all 0.2s; flex-shrink: 0; margin-right: 12px; border: 1px solid transparent; cursor: pointer; }
+    .btn-status-logout.offline { background: rgba(107, 114, 128, 0.15); color: #9ca3af; border-color: rgba(107, 114, 128, 0.3); }
+    .btn-status-logout.offline .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; box-shadow: 0 0 4px #6b7280; }
+    .btn-status-logout.online { background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.3); }
+    .btn-status-logout.online .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; animation: pulseDot 2s infinite; }
+    @keyframes pulseDot { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+    .btn-status-logout:hover { opacity: 0.85; transform: translateY(-1px); }
     
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #1f2937; padding-bottom: 20px; flex-wrap: wrap; gap: 16px; margin-top: 10px; }
     .header-title { font-size: 1.5rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 12px; letter-spacing: -0.025em; }
@@ -220,7 +225,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
 </head>
 <body>
   <div class="navbar-fixed">
-    <a href="/expl/logout" class="btn-logout" title="Cerrar sesión">🚪 Salir</a>
+    <a href="/expl/logout" id="presenceLogoutBtn" class="btn-status-logout offline" title="Estado del Dispositivo (Clic para Salir)"><span class="status-dot"></span><span id="presenceStatusText">Offline</span></a>
     <div class="nav-breadcrumbs">
       ${topNavBreadcrumbsHtml}
     </div>
@@ -1034,6 +1039,21 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
 
           syncSocket.on('connect', function() {
             console.log('[REALTIME_SYNC] Conectado a sala web del dispositivo: ${deviceId}');
+          });
+
+          syncSocket.on('device:presence', function(data) {
+            console.log('[REALTIME_SYNC] Evento device:presence recibido:', data);
+            const btn = document.getElementById('presenceLogoutBtn');
+            const txt = document.getElementById('presenceStatusText');
+            if (btn && txt) {
+              if (data && data.online) {
+                btn.className = 'btn-status-logout online';
+                txt.textContent = 'Online';
+              } else {
+                btn.className = 'btn-status-logout offline';
+                txt.textContent = 'Offline';
+              }
+            }
           });
 
           syncSocket.on('file:uploaded', function(data) {

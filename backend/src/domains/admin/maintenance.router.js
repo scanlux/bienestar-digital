@@ -69,6 +69,7 @@ router.post('/enable', hasPermission('manage_maintenance'), async (req, res) => 
     // 1. Establecer en estado intermedio QUIESCING
     await redisClient.set('system:maintenance_mode', 'quiescing');
     await redisClient.set('system:maintenance_details', JSON.stringify(details));
+    await redisClient.del('public:commerces:full');
 
     // Desconectar a todos (actualizar epoch de revocacion global)
     const currentEpoch = Math.floor(Date.now() / 1000);
@@ -117,6 +118,7 @@ router.post('/disable', hasPermission('manage_maintenance'), async (req, res) =>
     await redisClient.set('system:maintenance_mode', 'false');
     await redisClient.del('system:maintenance_details');
     await redisClient.del('system:critical_revocation_epoch');
+    await redisClient.del('public:commerces:full');
 
     appLogger.info(`Mantenimiento FINALIZADO por el usuario de sistema ${req.user.id}. Conexion restablecida para el publico.`);
 

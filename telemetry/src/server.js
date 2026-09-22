@@ -27,6 +27,24 @@ ensureUploadDirs();
 
 const app = express();
 
+// Trust reverse proxy (Nginx) for accurate client IP detection and HTTPS cookies
+app.set('trust proxy', 1);
+
+// Disable Express identification header
+app.disable('x-powered-by');
+
+// Security Headers Middleware (Defense-in-Depth)
+app.use((req, res, next) => {
+  res.removeHeader('X-Powered-By');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' wss: https:; frame-ancestors 'none';");
+  next();
+});
+
 // Global Middlewares
 app.use(cors({
   origin: true,

@@ -329,6 +329,35 @@ class DomiController {
       handleControllerError(res, error);
     }
   }
+
+  async getTransactionLineage(req, res) {
+    try {
+      const { ref } = req.params;
+      const result = await domiService.getTransactionLineage(req.user, ref, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async getQuarantineDeposits(req, res) {
+    try {
+      const result = await domiService.getQuarantineDeposits(req.user, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async resolveQuarantineDeposit(req, res) {
+    try {
+      const { packageId } = req.params;
+      const result = await domiService.resolveQuarantineDeposit(req.user, parseInt(packageId, 10), req.body, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
 }
 
 module.exports = new DomiController();

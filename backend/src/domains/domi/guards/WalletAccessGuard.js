@@ -36,7 +36,7 @@ async function assertWalletAccess(userContext, ownerType, ownerId, actionLabel, 
         throw new ForbiddenError('Acceso denegado a la billetera de esta sede.');
       }
     } else if (ownerType === 'commerce') {
-      const userCommerceId = userContext.commerceId || userContext.commerce_id;
+      const userCommerceId = userContext.commerceId;
       const hasAccess = userCommerceId && String(userCommerceId) === String(ownerId);
       if (!hasAccess) {
         await logSecurityEvent(userContext.id, 'BOLA_ATTEMPT', 'HIGH', req, {
@@ -47,7 +47,7 @@ async function assertWalletAccess(userContext, ownerType, ownerId, actionLabel, 
         throw new ForbiddenError('Acceso denegado a la billetera de este comercio.');
       }
     } else if (ownerType === 'delivery_company') {
-      const userCompanyId = userContext.deliveryCompanyId || userContext.delivery_company_id;
+      const userCompanyId = userContext.deliveryCompanyId;
       const hasAccess = userCompanyId && String(userCompanyId) === String(ownerId);
       if (!hasAccess) {
         await logSecurityEvent(userContext.id, 'BOLA_ATTEMPT', 'HIGH', req, {

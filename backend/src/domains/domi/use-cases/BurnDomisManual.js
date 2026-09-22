@@ -3,6 +3,8 @@ const domiEngine = require('../../../services/domiEngine');
 const domiRedis = require('../../../services/domiRedis');
 const { BusinessError } = require('../../../utils/errors');
 const { logSecurityEvent } = require('../../../utils/securityLogger');
+const { OWNER_TYPES } = require('../../../services/domi-kernel/owner-type.constants');
+const { resolveWallet } = require('../../../services/domi-kernel/wallet-resolver');
 
 class BurnDomisManual {
   async execute(userContext, data, req) {
@@ -12,19 +14,15 @@ class BurnDomisManual {
       throw new BusinessError('ownerType, ownerId y amountDomis son requeridos y deben ser positivos.');
     }
 
-    if (!['store', 'user', 'commerce'].includes(ownerType)) {
-      throw new BusinessError('ownerType debe ser store, user o commerce.');
+    if (!Object.values(OWNER_TYPES).includes(ownerType)) {
+      throw new BusinessError(`ownerType no válido. Soportados: ${Object.values(OWNER_TYPES).join(', ')}`);
     }
 
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
 
-      const wallet = ownerType === 'store'
-        ? await domiEngine.getStoreWallet(conn, ownerId)
-        : ownerType === 'commerce'
-          ? await domiEngine.getCommerceWallet(conn, ownerId)
-          : await domiEngine.getUserWallet(conn, ownerId);
+      const wallet = await resolveWallet(conn, ownerType, ownerId);
 
       const result = await domiEngine.burnDomis(conn, wallet.id, parseFloat(amountDomis), userContext.id);
 

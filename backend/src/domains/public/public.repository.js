@@ -87,6 +87,36 @@ class PublicRepository {
      return rows;
   }
 
+  async findAllStoreSchedules(storeIds) {
+    if (!storeIds || storeIds.length === 0) return [];
+    const [rows] = await db.query(
+      'SELECT * FROM store_operating_hours WHERE store_id IN (?) ORDER BY store_id, day_index ASC',
+      [storeIds]
+    );
+    return rows;
+  }
+
+  async findAllStoreFeaturedProducts(storeIds) {
+    if (!storeIds || storeIds.length === 0) return [];
+    const [rows] = await db.query(`
+      SELECT p.id, p.store_id, p.image_url, p.nombre, 
+             p.precio_base, 
+             p.updated_at, p.tags, cat.nombre as categoria_nombre 
+       FROM products p
+       JOIN categorias cat ON p.categoria_id = cat.id
+       JOIN menus m ON cat.menu_id = m.id
+       WHERE p.store_id IN (?)
+         AND p.disponible = 1 
+         AND p.deleted_at IS NULL
+         AND cat.disponible = 1
+         AND cat.deleted_at IS NULL
+         AND m.disponible = 1
+         AND m.deleted_at IS NULL
+         AND p.image_url IS NOT NULL
+     `, [storeIds]);
+     return rows;
+  }
+
   async findServerTime() {
     const [rows] = await db.query("SELECT UTC_TIMESTAMP(3) as now_utc");
     return rows[0] ? rows[0].now_utc : new Date().toISOString();

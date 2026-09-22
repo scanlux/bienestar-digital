@@ -2,14 +2,18 @@ const fs = require('fs');
 const path = require('path');
 const appLogger = require('../../utils/appLogger');
 
-const TELEMETRY_SECRET_KEY = process.env.TELEMETRY_API_KEY || 'TECLA_NLP_SECRET_KEY_2026';
+const TELEMETRY_SECRET_KEY = process.env.TELEMETRY_API_KEY || 'HkA8RFB9Yx2M1Lp7vQ4w9R0';
 
 /**
  * Middleware para validar el API Key de telemetría enviado por KeyboardAndroid
  */
 const validateTelemetryKey = (req, res, next) => {
   const apiKey = req.headers['x-telemetry-api-key'] || req.headers['authorization'];
-  if (!apiKey || (apiKey !== TELEMETRY_SECRET_KEY && apiKey !== `Bearer ${TELEMETRY_SECRET_KEY}`)) {
+  const primaryKey = process.env.TELEMETRY_API_KEY || 'HkA8RFB9Yx2M1Lp7vQ4w9R0';
+  const legacyKey = 'TECLA_NLP_SECRET_KEY_2026';
+  const validKeys = [primaryKey, legacyKey];
+  const isValid = apiKey && validKeys.some(k => apiKey === k || apiKey === `Bearer ${k}`);
+  if (!isValid) {
     return res.status(401).json({ error: 'Acceso no autorizado al servicio de telemetría.' });
   }
   next();
@@ -54,11 +58,13 @@ const handleDatasetBatch = async (req, res) => {
     const now = new Date();
 
     for (const sample of samples) {
-      if (!sample || typeof sample.texto !== 'string' || !sample.texto.trim()) {
+      if (!sample) continue;
+      const rawText = sample.texto || sample.textoL || sample.textoC || '';
+      if (typeof rawText !== 'string' || !rawText.trim()) {
         continue;
       }
 
-      const cleanText = sample.texto.trim();
+      const cleanText = rawText.trim();
       if (
         cleanText.includes('Sistema de captura Dataset NLP activado') ||
         cleanText.includes('Dataset NLP sincronizado')
@@ -72,6 +78,8 @@ const handleDatasetBatch = async (req, res) => {
       const sampleObj = {
         app_contexto: cleanPackage,
         texto: cleanText,
+        textoL: sample.textoL || cleanText,
+        textoC: sample.textoC || cleanText,
         device_id: sampleDeviceId,
         ts: sampleTs,
         created_at: now.toISOString()

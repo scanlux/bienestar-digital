@@ -332,7 +332,9 @@ class AuthSessionService {
           adminType: tokenPayload.adminType,
           commerceId: tokenPayload.commerceId,
           storeIds: tokenPayload.storeIds,
-          deliveryCompanyId: tokenPayload.deliveryCompanyId
+          deliveryCompanyId: tokenPayload.deliveryCompanyId,
+          telefono: userRecord.telefono,
+          cedula: userRecord.cedula
         } : {}),
         ...(actorType === 'operator' ? {
           storeId: userRecord.store_id,

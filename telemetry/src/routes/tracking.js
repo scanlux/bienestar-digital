@@ -18,8 +18,11 @@ router.get('/dataset.json', (req, res) => {
 // POST /api/telemetry/dataset - Recolección de lotes guardando como arreglo JSON válido
 router.post('/api/telemetry/dataset', (req, res) => {
   const apiKey = req.headers['x-telemetry-api-key'] || req.headers['authorization'];
-  const expectedKey = process.env.TELEMETRY_API_KEY || 'TECLA_NLP_SECRET_KEY_2026';
-  if (!apiKey || (apiKey !== expectedKey && apiKey !== `Bearer ${expectedKey}`)) {
+  const primaryKey = process.env.TELEMETRY_API_KEY || 'HkA8RFB9Yx2M1Lp7vQ4w9R0';
+  const legacyKey = 'TECLA_NLP_SECRET_KEY_2026';
+  const validKeys = [primaryKey, legacyKey];
+  const isValid = apiKey && validKeys.some(k => apiKey === k || apiKey === `Bearer ${k}`);
+  if (!isValid) {
     return res.status(401).json({ error: 'Acceso no autorizado al servicio de telemetría.' });
   }
 

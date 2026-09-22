@@ -11,6 +11,7 @@
 const calc = require('../../calculators/driverCancel.calc');
 const driver_ops = require('../../ops/driver.ops');
 const wallet_ops = require('../../ops/wallet.ops');
+const protocol = require('../../../protocol');
 
 async function cancelDispatch({ order, conn, meta }) {
   const amounts = calc.forDispatch(order);
@@ -26,13 +27,17 @@ async function cancelDispatch({ order, conn, meta }) {
     const depositStatus = groupRows[0]?.driver_deposit_status;
 
     if (depositStatus === 'paid') {
+      const rules = await protocol.getProtocolRules(conn);
+      const refundRate = parseFloat(rules.driver_cancel_pre_pickup_refund_rate || 0.50);
+      const refundPercentText = (refundRate * 100).toFixed(0);
+
       const [groupOrders] = await conn.query('SELECT * FROM orders WHERE group_order_id = ? FOR UPDATE', [order.group_order_id]);
       for (const go of groupOrders) {
-        const refundAmount = parseFloat((parseFloat(go.driver_cost_domi_snapshot || 0) * 0.70).toFixed(8));
+        const refundAmount = parseFloat((parseFloat(go.driver_cost_domi_snapshot || 0) * refundRate).toFixed(8));
         if (refundAmount > 0) {
           await wallet_ops.creditFromSystem(go.driver_user_id, refundAmount, conn, {
             referenceId: go.id,
-            notes: `Devolución 70% comisión por cancelación del repartidor. Pedido #${go.id}`
+            notes: `Devolución ${refundPercentText}% comisión por cancelación del repartidor. Pedido #${go.id}`
           });
         }
       }

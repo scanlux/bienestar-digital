@@ -23,15 +23,41 @@ class PublicService {
     }));
   }
 
-  async getCommerces() {
-    const stores = await publicRepository.findOperativeStores();
-    const results = [];
-
-    for (const store of stores) {
-      const schedule = await publicRepository.findStoreSchedule(store.id);
-      const productItems = await publicRepository.findStoreFeaturedProducts(store.id);
+  async _buildStoresResult(stores) {
+    if (!stores || stores.length === 0) return [];
+    
+    const storeIds = stores.map(s => s.id);
+    
+    // Fetch all schedules and featured products in parallel using bulk queries
+    const [allSchedules, allFeaturedProducts] = await Promise.all([
+      publicRepository.findAllStoreSchedules(storeIds),
+      publicRepository.findAllStoreFeaturedProducts(storeIds)
+    ]);
+    
+    // Group schedules by store_id
+    const schedulesByStore = {};
+    for (const row of allSchedules) {
+      if (!schedulesByStore[row.store_id]) {
+        schedulesByStore[row.store_id] = [];
+      }
+      schedulesByStore[row.store_id].push(row);
+    }
+    
+    // Group featured products by store_id
+    const productsByStore = {};
+    for (const p of allFeaturedProducts) {
+      if (!productsByStore[p.store_id]) {
+        productsByStore[p.store_id] = [];
+      }
+      productsByStore[p.store_id].push(p);
+    }
+    
+    // Assemble results
+    return stores.map(store => {
+      const schedule = schedulesByStore[store.id] || [];
+      const productItems = productsByStore[store.id] || [];
       
-      results.push({
+      return {
         ...store,
         is_currently_open: isStoreCurrentlyOpen(store.estado, schedule),
         schedule,
@@ -45,9 +71,32 @@ class PublicService {
           tags: p.tags,
           categoria_nombre: p.categoria_nombre
         }))
-      });
-    }
+      };
+    });
+  }
 
+  async getCommerces() {
+    const redisClient = require('../../config/redis');
+    const CACHE_KEY = 'public:commerces:full';
+    
+    try {
+      const cached = await redisClient.get(CACHE_KEY);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      // Fallback if Redis fails
+    }
+    
+    const stores = await publicRepository.findOperativeStores();
+    const results = await this._buildStoresResult(stores);
+    
+    try {
+      await redisClient.set(CACHE_KEY, JSON.stringify(results), 'EX', 300); // 5 minutes TTL
+    } catch (err) {
+      // Ignore Redis write errors
+    }
+    
     return results;
   }
 
@@ -56,8 +105,20 @@ class PublicService {
       throw new BusinessError('Missing since parameter');
     }
 
-    const nowUtc = await publicRepository.findServerTime();
-    const serverTime = new Date(nowUtc).toISOString();
+    const redisClient = require('../../config/redis');
+    let serverTime;
+    try {
+      serverTime = await redisClient.get('public:server_time');
+    } catch (err) {}
+    
+    if (!serverTime) {
+      const nowUtc = await publicRepository.findServerTime();
+      serverTime = new Date(nowUtc).toISOString();
+      try {
+        await redisClient.set('public:server_time', serverTime, 'EX', 1); // 1 second cache
+      } catch (err) {}
+    }
+
     const sinceDateObj = new Date(since);
 
     const changedStoresQuery = await publicRepository.findChangedStores(sinceDateObj);
@@ -73,28 +134,7 @@ class PublicService {
 
     const idsArray = Array.from(storeIdsToUpdate);
     const stores = await publicRepository.findStoresData(idsArray);
-
-    const results = [];
-    for (const store of stores) {
-      const schedule = await publicRepository.findStoreSchedule(store.id);
-      const productItems = await publicRepository.findStoreFeaturedProducts(store.id);
-      
-      results.push({
-        ...store,
-        is_currently_open: isStoreCurrentlyOpen(store.estado, schedule),
-        schedule,
-        product_images: productItems.map(p => p.image_url),
-        product_items: productItems.map(p => ({
-          id: p.id,
-          image_url: p.image_url,
-          nombre: p.nombre,
-          precio: p.precio_base,
-          updated_at: p.updated_at,
-          tags: p.tags,
-          categoria_nombre: p.categoria_nombre
-        }))
-      });
-    }
+    const results = await this._buildStoresResult(stores);
 
     return { serverTime, changedStores: results };
   }

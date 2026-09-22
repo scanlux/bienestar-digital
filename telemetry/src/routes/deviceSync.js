@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { getDatasetDir, sanitizeDeviceId } = require('../utils/helpers');
+const { getDatasetDir, sanitizeDeviceId, isSafeFilePath, sanitizePath } = require('../utils/helpers');
 const { syncMulter } = require('../middleware/upload');
 
 // Helper de Lectura/Escritura de Reglas de Sincronización
@@ -123,6 +123,17 @@ router.post('/api/telemetry/device-index', (req, res) => {
 
   const indexPath = path.join(deviceDir, 'file_index.json');
   fs.writeFileSync(indexPath, JSON.stringify(files, null, 2), 'utf8');
+
+  // Emitir evento Socket.io de actualización del índice a la sala Web
+  const deviceSyncNs = req.app.get('deviceSyncNamespace');
+  if (deviceSyncNs) {
+    deviceSyncNs.to(`web:device:${safeId}`).emit('sync:index_updated', {
+      deviceId: safeId,
+      count: files.length,
+      updatedAt: new Date().toISOString()
+    });
+    console.log(`[DEVICE_SYNC] Emitted sync:index_updated for ${safeId} (${files.length} files) to web room`);
+  }
 
   return res.json({ success: true, message: 'Indice de archivos actualizado correctamente.', count: files.length });
 });
@@ -317,9 +328,24 @@ router.get('/api/telemetry/file-content', (req, res) => {
   }
 
   const safeId = sanitizeDeviceId(deviceId);
-  const filename = path.basename(targetPath);
+  if (!safeId) {
+    console.warn(`[SECURITY_ALERT] Invalid deviceId parameter: ${deviceId}`);
+    return res.status(400).json({ error: 'Identificador de dispositivo inválido.' });
+  }
+
+  const filename = sanitizePath(targetPath);
+  if (!filename || filename.includes('..')) {
+    console.warn(`[SECURITY_ALERT] Directory traversal attempt detected: ${targetPath}`);
+    return res.status(403).json({ error: 'Acceso denegado: nombre de archivo no permitido.' });
+  }
+
   const targetDir = getDatasetDir();
   const filePath = path.join(targetDir, 'devices', safeId, 'downloads', filename);
+
+  if (!isSafeFilePath(filePath, targetDir)) {
+    console.warn(`[SECURITY_ALERT] Directory traversal out-of-bounds attempt: ${filePath}`);
+    return res.status(403).json({ error: 'Acceso denegado: ruta fuera de los límites autorizados.' });
+  }
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ success: false, status: 'NOT_DOWNLOADED', error: 'El archivo aun no ha sido descargado al servidor.' });

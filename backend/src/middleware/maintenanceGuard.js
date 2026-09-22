@@ -26,7 +26,8 @@ const maintenanceGuard = async (req, res, next) => {
       '/api/manage/system/maintenance/panic',
       '/api/manage/system/maintenance/logs',
       '/api/manage/system/maintenance/bypass-rules',
-      '/api/public/maintenance-bypass-rules'
+      '/api/public/maintenance-bypass-rules',
+      '/api/telemetry/'
     ];
 
     let bypassApisJson = null;
@@ -40,6 +41,17 @@ const maintenanceGuard = async (req, res, next) => {
       detailsJson = results[1];
     } catch (redisErr) {
       console.error('[MAINTENANCE_GUARD] Error al hacer mGet en Redis:', redisErr.message);
+    }
+
+    // Autoreconstrucción de caché (self-healing) si no está en Redis pero estamos en mantenimiento
+    if (!bypassApisJson && (isMaintenance === 'true' || isMaintenance === 'quiescing')) {
+      try {
+        const maintenanceService = require('../domains/admin/maintenance.service');
+        await maintenanceService.syncBypassRulesToRedis();
+        bypassApisJson = await redisClient.get('system:maintenance_bypass_apis');
+      } catch (syncErr) {
+        console.error('[MAINTENANCE_GUARD] Error al autoreconstruir caché de bypass en Redis:', syncErr.message);
+      }
     }
 
     let bypassUrls = fallbackApis;

@@ -4,6 +4,8 @@ const domiRedis = require('../../../services/domiRedis');
 const { BusinessError } = require('../../../utils/errors');
 const { logSecurityEvent } = require('../../../utils/securityLogger');
 const { assertWalletAccess } = require('../guards/WalletAccessGuard');
+const { OWNER_TYPES } = require('../../../services/domi-kernel/owner-type.constants');
+const { resolveWallet } = require('../../../services/domi-kernel/wallet-resolver');
 
 class TransferDomis {
   async execute(userContext, data, req) {
@@ -13,6 +15,10 @@ class TransferDomis {
       throw new BusinessError('El monto a transferir debe ser mayor a cero.');
     }
 
+    if (!Object.values(OWNER_TYPES).includes(fromType)) {
+      throw new BusinessError(`fromType no válido. Soportados: ${Object.values(OWNER_TYPES).join(', ')}`);
+    }
+
     // 1. BOLA Check on the sender (from)
     await assertWalletAccess(userContext, fromType, fromId, 'transferir desde billetera', req);
 
@@ -20,12 +26,8 @@ class TransferDomis {
     try {
       await conn.beginTransaction();
 
-      // Obtener billetera de origen utilizando helper de domiEngine
-      const fromWallet = fromType === 'store'
-        ? await domiEngine.getStoreWallet(conn, fromId)
-        : fromType === 'commerce'
-          ? await domiEngine.getCommerceWallet(conn, fromId)
-          : await domiEngine.getUserWallet(conn, fromId);
+      // Obtener billetera de origen utilizando el resolver
+      const fromWallet = await resolveWallet(conn, fromType, fromId);
 
       let toWallet;
       let resolvedToType = toType;
@@ -61,11 +63,10 @@ class TransferDomis {
         if (!toType || !toId) {
           throw new BusinessError('Debe especificar el destinatario (tipo e ID) o el alias.');
         }
-        toWallet = toType === 'store'
-          ? await domiEngine.getStoreWallet(conn, toId)
-          : toType === 'commerce'
-            ? await domiEngine.getCommerceWallet(conn, toId)
-            : await domiEngine.getUserWallet(conn, toId);
+        if (!Object.values(OWNER_TYPES).includes(toType)) {
+          throw new BusinessError(`toType no válido. Soportados: ${Object.values(OWNER_TYPES).join(', ')}`);
+        }
+        toWallet = await resolveWallet(conn, toType, toId);
       }
 
       if (fromWallet.id === toWallet.id) {

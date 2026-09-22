@@ -4,6 +4,9 @@ const notificationService = require('../../../services/notificationService');
 const { ForbiddenError, NotFoundError, BusinessError } = require('../../../utils/errors');
 const { logSecurityEvent } = require('../../../utils/securityLogger');
 const parseOrderMessage = require('../helpers/parseOrderMessage');
+const { getIO } = require('../../../config/socketio');
+const { SOCKET_EVENTS } = require('../../../utils/socketEvents');
+const redisClient = require('../../../config/redis');
 
 class OrderMessagingService {
   constructor(orderService) {
@@ -100,9 +103,16 @@ class OrderMessagingService {
       await conn.commit();
 
       try {
+        const io = getIO();
         for (const msg of messagesToSend) {
           await notificationService.sendOrderMessage(orderId, order.customer_user_id, msg);
+          if (io) {
+            io.to(`order:${orderId}`).emit(SOCKET_EVENTS.NEW_ORDER_MESSAGE, msg);
+          }
         }
+        const unreadKey = `notification:unread:${order.customer_user_id}`;
+        await redisClient.incrBy(unreadKey, messagesToSend.length);
+        await redisClient.expire(unreadKey, 86400);
       } catch (err) {
         console.error('[NOTIFICATION_SERVICE_ERROR] Failed to send real-time notifications:', err.message);
       }
@@ -145,6 +155,13 @@ class OrderMessagingService {
       SET om.is_read = 1
       WHERE om.order_id = ? AND o.customer_user_id = ? AND om.sender_type = 'bot'
     `, [orderId, customerId]);
+
+    try {
+      const unreadKey = `notification:unread:${customerId}`;
+      await redisClient.del(unreadKey);
+    } catch (redisErr) {
+      console.error('[REDIS_DEL_ERROR] Error deleting unread notifications count cache:', redisErr.message);
+    }
 
     return { success: true };
   }

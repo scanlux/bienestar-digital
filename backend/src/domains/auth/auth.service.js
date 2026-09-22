@@ -1,4 +1,5 @@
 const db = require('../../config/db');
+const { logSecurityEvent } = require('../../utils/securityLogger');
 const AuthSessionService = require('./services/auth.session.service');
 const AuthMobileService = require('./services/auth.mobile.service');
 const AuthDriverService = require('./services/auth.driver.service');
@@ -67,6 +68,50 @@ class AuthService {
 
   async getMyNavigation(user, req) {
     return this.navigationService.getMyNavigation(user, req);
+  }
+
+  async reportSecurityEvent(eventType, severity, details, userId, req) {
+    let resolvedUserId = userId || null;
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const verified = jwt.verify(token, process.env.JWT_SECRET || 'super-secret-key-bienestar', { algorithms: ['HS256'] });
+        if (verified && verified.id) {
+          resolvedUserId = verified.id;
+        }
+      } catch (err) {
+        // Ignorar errores al decodificar token inválido/expirado
+      }
+    }
+    await logSecurityEvent(resolvedUserId, eventType, severity, req, details);
+    return { success: true };
+  }
+
+  async reportSecurityEventBatch(events, req) {
+    let resolvedUserId = null;
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const verified = jwt.verify(token, process.env.JWT_SECRET || 'super-secret-key-bienestar', { algorithms: ['HS256'] });
+        if (verified && verified.id) {
+          resolvedUserId = verified.id;
+        }
+      } catch (err) {
+        // Ignorar
+      }
+    }
+
+    // Procesar todos los eventos en paralelo
+    const promises = events.map(async (event) => {
+      const { eventType, severity, details, userId } = event;
+      const targetUserId = resolvedUserId || userId || null;
+      await logSecurityEvent(targetUserId, eventType, severity, req, details);
+    });
+
+    await Promise.all(promises);
+    return { success: true };
   }
 }
 

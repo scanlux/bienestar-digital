@@ -38,6 +38,10 @@ class StoreStatusService {
         }
       }
       await connection.commit();
+
+      const { notifyStoreUpdated } = require('../../../services/feedSyncNotifier');
+      await notifyStoreUpdated(targetStoreId);
+
       return true;
     } catch (err) {
       await connection.rollback();
@@ -88,6 +92,10 @@ class StoreStatusService {
       );
 
       await connection.commit();
+
+      const { notifyStoreUpdated } = require('../../../services/feedSyncNotifier');
+      await notifyStoreUpdated(targetStoreId);
+
       return true;
     } catch (err) {
       await connection.rollback();

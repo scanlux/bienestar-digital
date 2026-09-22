@@ -8,6 +8,8 @@ const domiRedis = require('../../../services/domiRedis');
 const notificationService = require('../../../services/notificationService');
 const assertOrderAccess = require('../helpers/orderAccessGuard');
 const fcmService = require('../../../services/fcmService');
+const { getIO } = require('../../../config/socketio');
+const { SOCKET_EVENTS } = require('../../../utils/socketEvents');
 
 class OrderLifecycleService {
   constructor(orderService) {
@@ -102,6 +104,19 @@ class OrderLifecycleService {
 
       // Trigger FCM push notification asynchronously
       if (status !== oldStatus) {
+        try {
+          const io = getIO();
+          if (io) {
+            io.to(`order:${orderId}`).emit(SOCKET_EVENTS.ORDER_STATUS_CHANGE, {
+              orderId: parseInt(orderId, 10),
+              newStatus: status,
+              timestamp: new Date().toISOString()
+            });
+          }
+        } catch (wsErr) {
+          console.error('[SOCKET_EMIT_ERROR] Error al emitir cambio de estado por WebSocket:', wsErr.message);
+        }
+
         let pushBody = '';
         if (status === 'aceptado') {
           pushBody = 'Tu pedido fue aceptado y está siendo preparado';
@@ -395,6 +410,19 @@ class OrderLifecycleService {
 
       await conn.commit();
 
+      try {
+        const io = getIO();
+        if (io) {
+          io.to(`order:${orderId}`).emit(SOCKET_EVENTS.ORDER_STATUS_CHANGE, {
+            orderId: parseInt(orderId, 10),
+            newStatus: 'listo_despacho',
+            timestamp: new Date().toISOString()
+          });
+        }
+      } catch (wsErr) {
+        console.error('[SOCKET_EMIT_ERROR] Error al emitir cambio de estado (aceptado) por WebSocket:', wsErr.message);
+      }
+
       this._sendPushToCustomer(
         order.customer_user_id,
         'Actualización de tu pedido',
@@ -490,9 +518,28 @@ class OrderLifecycleService {
       try {
         const textMessage = `Se ha modificado el detalle de los productos del pedido. Nuevo total: ${newTotal.toLocaleString()} COP.`;
         const [msgResult] = await conn.query(`INSERT INTO order_messages (order_id, sender_type, message, message_type) VALUES (?, 'system', ?, 'text')`, [orderId, textMessage]);
-        await notificationService.sendOrderMessage(orderId, order.customer_user_id, {
-          id: msgResult.insertId, order_id: orderId, sender_type: 'system', message: textMessage, message_type: 'text', extra_data: null, created_at: new Date()
-        });
+        
+        const msgPayload = {
+          id: msgResult.insertId,
+          order_id: orderId,
+          sender_type: 'system',
+          message: textMessage,
+          message_type: 'text',
+          extra_data: null,
+          created_at: new Date()
+        };
+
+        await notificationService.sendOrderMessage(orderId, order.customer_user_id, msgPayload);
+
+        const io = getIO();
+        if (io) {
+          io.to(`order:${orderId}`).emit(SOCKET_EVENTS.NEW_ORDER_MESSAGE, msgPayload);
+        }
+
+        const redisClient = require('../../../config/redis');
+        const unreadKey = `notification:unread:${order.customer_user_id}`;
+        await redisClient.incrBy(unreadKey, 1);
+        await redisClient.expire(unreadKey, 86400);
       } catch (msgErr) {
         console.error('Failed to log system modification message:', msgErr.message);
       }

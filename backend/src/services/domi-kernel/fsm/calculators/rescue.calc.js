@@ -22,8 +22,9 @@ function forComplete(order) {
   const isCod = order.payment_method_customer === 'cash_cod';
   const fee   = isCod ? parseFloat(order.platform_processing_fee_rate_snapshot || 0) : 0;
 
-  // Rescatista: 100% del domicilio (flujo normal, sin split)
-  const rescuerDeliveryPay = parseFloat(
+  // Rescatista: 100% del domicilio (flujo normal, sin split).
+  // En COD, el rescatista cobra en efectivo del cliente directamente; no recibe DOMIs de la plataforma.
+  const rescuerDeliveryPay = isCod ? 0 : parseFloat(
     (parseFloat(order.driver_domi_cost || 0) * (1 - fee)).toFixed(8)
   );
 

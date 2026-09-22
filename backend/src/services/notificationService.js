@@ -40,6 +40,17 @@ class NotificationService {
     const [result] = await db.query(query, [userId]);
     return result.affectedRows > 0;
   }
+
+  async sendOrderMessage(orderId, userId, msg) {
+    const title = msg.sender_type === 'bot' ? 'Mensaje del Asistente' : 'Mensaje del Pedido';
+    return this.createSystemNotification({
+      userId,
+      type: 'order_message',
+      title,
+      message: msg.message,
+      actionUrl: `/orders/${orderId}`
+    });
+  }
 }
 
 module.exports = new NotificationService();

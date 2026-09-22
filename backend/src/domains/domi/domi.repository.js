@@ -96,18 +96,43 @@ class DomiRepository {
     const [rows] = await db.query(
       `SELECT l.*, 
               CASE
-                WHEN fw.user_id IS NOT NULL THEN 'user'
                 WHEN fw.is_system = 1 THEN 'system'
+                WHEN f_store.id IS NOT NULL THEN 'store'
+                WHEN f_comm.id IS NOT NULL THEN 'commerce'
+                WHEN f_dc.id IS NOT NULL THEN 'delivery_company'
+                WHEN fw.user_id IS NOT NULL THEN 'user'
               END as from_owner_type,
-              fw.user_id as from_owner_id,
               CASE
-                WHEN tw.user_id IS NOT NULL THEN 'user'
+                WHEN fw.is_system = 1 THEN NULL
+                WHEN f_store.id IS NOT NULL THEN f_store.id
+                WHEN f_comm.id IS NOT NULL THEN f_comm.id
+                WHEN f_dc.id IS NOT NULL THEN f_dc.id
+                ELSE fw.user_id
+              END as from_owner_id,
+              CASE
                 WHEN tw.is_system = 1 THEN 'system'
+                WHEN t_store.id IS NOT NULL THEN 'store'
+                WHEN t_comm.id IS NOT NULL THEN 'commerce'
+                WHEN t_dc.id IS NOT NULL THEN 'delivery_company'
+                WHEN tw.user_id IS NOT NULL THEN 'user'
               END as to_owner_type,
-              tw.user_id as to_owner_id
+              CASE
+                WHEN tw.is_system = 1 THEN NULL
+                WHEN t_store.id IS NOT NULL THEN t_store.id
+                WHEN t_comm.id IS NOT NULL THEN t_comm.id
+                WHEN t_dc.id IS NOT NULL THEN t_dc.id
+                ELSE tw.user_id
+              END as to_owner_id
        FROM domi_ledger l
        LEFT JOIN wallets fw ON l.from_wallet_id = fw.id
+       LEFT JOIN stores f_store ON fw.user_id = f_store.usuario_id
+       LEFT JOIN commerces f_comm ON fw.user_id = f_comm.usuario_id
+       LEFT JOIN delivery_companies f_dc ON fw.user_id = f_dc.usuario_id
+       
        LEFT JOIN wallets tw ON l.to_wallet_id = tw.id
+       LEFT JOIN stores t_store ON tw.user_id = t_store.usuario_id
+       LEFT JOIN commerces t_comm ON tw.user_id = t_comm.usuario_id
+       LEFT JOIN delivery_companies t_dc ON tw.user_id = t_dc.usuario_id
        WHERE l.from_wallet_id = ? OR l.to_wallet_id = ?
        ORDER BY l.created_at DESC, l.id DESC
        LIMIT ?`,
@@ -124,16 +149,20 @@ class DomiRepository {
   async calculateCustodyBreakdown() {
     const [rows] = await db.query(`
       SELECT 
-        SUM(CASE WHEN u.rol = 'admin' THEN w.balance_custody ELSE 0 END) as commerce_custody,
-        0 as store_custody,
-        SUM(CASE WHEN u.rol = 'customer' THEN w.balance_custody ELSE 0 END) as user_custody
+        SUM(CASE WHEN s.id IS NOT NULL THEN w.balance_custody ELSE 0 END) as store_custody,
+        SUM(CASE WHEN c.id IS NOT NULL THEN w.balance_custody ELSE 0 END) as commerce_custody,
+        SUM(CASE WHEN dc.id IS NOT NULL THEN w.balance_custody ELSE 0 END) as delivery_company_custody,
+        SUM(CASE WHEN w.is_system = 0 AND s.id IS NULL AND c.id IS NULL AND dc.id IS NULL AND w.user_id IS NOT NULL THEN w.balance_custody ELSE 0 END) as user_custody
       FROM wallets w
-      LEFT JOIN users u ON w.user_id = u.id
+      LEFT JOIN stores s ON w.user_id = s.usuario_id
+      LEFT JOIN commerces c ON w.user_id = c.usuario_id
+      LEFT JOIN delivery_companies dc ON w.user_id = dc.usuario_id
     `);
     return {
       commerceCustody: parseFloat(rows[0]?.commerce_custody || 0),
       storeCustody: parseFloat(rows[0]?.store_custody || 0),
-      userCustody: parseFloat(rows[0]?.user_custody || 0)
+      userCustody: parseFloat(rows[0]?.user_custody || 0),
+      deliveryCompanyCustody: parseFloat(rows[0]?.delivery_company_custody || 0)
     };
   }
 
@@ -211,6 +240,13 @@ class DomiRepository {
     if (ownerType === 'store') {
       const [rows] = await db.query(
         'SELECT s.nombre_sucursal, s.matricula, c.nombre as commerce_nombre, c.nit FROM stores s LEFT JOIN commerces c ON s.commerce_id = c.id WHERE s.id = ? LIMIT 1',
+        [ownerId]
+      );
+      return rows[0] || null;
+    }
+    if (ownerType === 'delivery_company') {
+      const [rows] = await db.query(
+        'SELECT razon_social, nit FROM delivery_companies WHERE id = ? LIMIT 1',
         [ownerId]
       );
       return rows[0] || null;

@@ -1054,6 +1054,19 @@ const rbacData = {
       "ui_restriction_mode": "hidden",
       "created_at": "2026-07-21T12:00:00.000Z",
       "updated_at": "2026-07-21T12:00:00.000Z"
+    },
+    {
+      "id": 90,
+      "category_id": 1,
+      "name": "view_wallet",
+      "description": "Visualizar saldo y movimientos de la Billetera DOMI",
+      "display_name": "Ver Billetera DOMI",
+      "criticidad": "Baja",
+      "tipo": "Lectura",
+      "scope": "Permite visualizar el saldo y el historial de transacciones de la Billetera DOMI asociada.",
+      "ui_restriction_mode": "hidden",
+      "created_at": "2026-08-02T00:00:00.000Z",
+      "updated_at": "2026-08-02T00:00:00.000Z"
     }
   ],
   "roles": [
@@ -1547,10 +1560,6 @@ const rbacData = {
       "permission_id": 38
     },
     {
-      "role_id": 10,
-      "permission_id": 38
-    },
-    {
       "role_id": 11,
       "permission_id": 38
     },
@@ -1767,6 +1776,10 @@ const rbacData = {
       "permission_id": 64
     },
     {
+      "role_id": 6,
+      "permission_id": 64
+    },
+    {
       "role_id": 10,
       "permission_id": 64
     },
@@ -1861,6 +1874,34 @@ const rbacData = {
     {
       "role_id": 7,
       "permission_id": 89
+    },
+    {
+      "role_id": 1,
+      "permission_id": 90
+    },
+    {
+      "role_id": 2,
+      "permission_id": 90
+    },
+    {
+      "role_id": 4,
+      "permission_id": 90
+    },
+    {
+      "role_id": 5,
+      "permission_id": 90
+    },
+    {
+      "role_id": 6,
+      "permission_id": 90
+    },
+    {
+      "role_id": 10,
+      "permission_id": 90
+    },
+    {
+      "role_id": 11,
+      "permission_id": 90
     }
   ],
   "endpoints": [
@@ -2307,7 +2348,7 @@ const rbacData = {
     {
         "id": 89,
         "permission_id": 64,
-        "method_path": "POST /api/payments/checkout-session"
+        "method_path": "POST /api/domi/payment/checkout-session"
     },
     {
         "id": 90,
@@ -3772,7 +3813,7 @@ const configData = {
       "score_penalty_cash_cancel_in_transit": 60,
       "score_penalty_cash_cancel_dispatch": 50,
       "driver_cancellation_compensation_rate": "0.500000",
-      "driver_cancel_pre_pickup_refund_rate": "0.300000",
+      "driver_cancel_pre_pickup_refund_rate": "0.500000",
       "driver_cancel_post_pickup_penalty_rate": "1.000000",
       "customer_cancel_store_refund_prep_rate": "0.900000",
       "customer_cancel_client_refund_prep_rate": "0.040000",
@@ -3782,10 +3823,10 @@ const configData = {
       "customer_cancel_driver_commission_refund_dispatch_rate": "0.900000",
       "customer_cancel_driver_delivery_pct_dispatch": "0.500000",
       "platform_processing_fee_rate": "0.004000",
-      "driver_rescue_commission_refund_rate": "0.700000",
-      "driver_rescue_timeout_minutes": 30,
+      "driver_rescue_commission_refund_rate": "0.900000",
+      "driver_rescue_timeout_minutes": 15,
       "driver_rescue_max_attempts": 3,
-      "driver_penalty_points_rescue_original": 2,
+      "driver_penalty_points_rescue_original": 1,
       "driver_rescue_chain_penalty_points": 1,
       "minimum_delivery_rate": "3000.00",
       "store_solvency_delivery_multiplier": 3,
@@ -4810,6 +4851,23 @@ async function seed(connection) {
     'INSERT IGNORE INTO wallets (is_system, tier) VALUES (1, "system")'
   );
 
+  // Seeding system quarantine wallet (Vault)
+  console.log('Seeding system quarantine wallet...');
+  const [qRes] = await c.query(
+    'INSERT IGNORE INTO wallets (is_system, is_quarantine, tier) VALUES (1, 1, "system")'
+  );
+  let qWalletId = qRes.insertId;
+  if (!qWalletId) {
+    const [qRow] = await c.query('SELECT id FROM wallets WHERE is_quarantine = 1 LIMIT 1');
+    qWalletId = qRow[0]?.id;
+  }
+  if (qWalletId) {
+    await c.query(
+      'INSERT IGNORE INTO wallet_aliases (wallet_id, alias) VALUES (?, "QUARANTINE_VAULT")',
+      [qWalletId]
+    );
+  }
+
   // 18. Local Environment test data
   if (process.env.NODE_ENV !== 'production') {
     console.log('Seeding local development test data...');
@@ -5106,7 +5164,8 @@ async function seedLocalTestData(c) {
   // 7. Crear Clientes
   const customers = [
     { email: 'customer_1@trendy.sytes.net', nombres: 'Camila', apellidos: 'Cliente Uno', cedula: '3000000001', telefono: '3200000001' },
-    { email: 'customer_2@trendy.sytes.net', nombres: 'César', apellidos: 'Cliente Dos', cedula: '3000000002', telefono: '3200000002' }
+    { email: 'customer_2@trendy.sytes.net', nombres: 'César', apellidos: 'Cliente Dos', cedula: '3000000002', telefono: '3200000002' },
+    { email: 'locosviralesjimenezlarotta@gmail.com', nombres: 'Locos', apellidos: 'Virales', cedula: '3000000003', telefono: '3200000003' }
   ];
 
   for (const cust of customers) {

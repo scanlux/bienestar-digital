@@ -8,6 +8,7 @@ const { assertWalletAccess } = require('../../domi/guards/WalletAccessGuard');
 const { isStoreCurrentlyOpen } = require('../../../utils/timeUtils');
 const bcrypt = require('bcryptjs');
 const appLogger = require('../../../utils/appLogger');
+const { invalidatePublicCommercesCache } = require('../../../utils/cacheInvalidator');
 
 class StoreManagementService {
   constructor(storeService) {
@@ -117,6 +118,20 @@ class StoreManagementService {
       throw new ForbiddenError('No tienes permisos para crear una sede en otro comercio (BOLA).');
     }
 
+    if (latitud !== undefined && latitud !== null) {
+      const latNum = parseFloat(latitud);
+      if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+        throw new BusinessError('Latitud de sede inválida. Debe estar entre -90 y 90.');
+      }
+    }
+
+    if (longitud !== undefined && longitud !== null) {
+      const lngNum = parseFloat(longitud);
+      if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+        throw new BusinessError('Longitud de sede inválida. Debe estar entre -180 y 180.');
+      }
+    }
+
     const connection = await db.getConnection();
     await connection.beginTransaction();
 
@@ -168,6 +183,7 @@ class StoreManagementService {
       );
 
       await connection.commit();
+      await invalidatePublicCommercesCache();
       return storeId;
     } catch (error) {
       await connection.rollback();
@@ -188,6 +204,20 @@ class StoreManagementService {
     if (!isSystem && store.commerce_id !== userContext.commerceId) {
       await logSecurityEvent(userContext.id, 'BOLA_ATTEMPT', 'HIGH', req, { storeId, action: 'edit_store' }, 'store', storeId);
       throw new ForbiddenError('Acceso no autorizado sobre la sede especificada.');
+    }
+
+    if (updateData.latitud !== undefined && updateData.latitud !== null) {
+      const latNum = parseFloat(updateData.latitud);
+      if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+        throw new BusinessError('Latitud de sede inválida. Debe estar entre -90 y 90.');
+      }
+    }
+
+    if (updateData.longitud !== undefined && updateData.longitud !== null) {
+      const lngNum = parseFloat(updateData.longitud);
+      if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+        throw new BusinessError('Longitud de sede inválida. Debe estar entre -180 y 180.');
+      }
     }
 
     const connection = await db.getConnection();
@@ -215,6 +245,8 @@ class StoreManagementService {
       await logSecurityEvent(userContext.id, 'EDIT_STORE', 'MEDIUM', req, { storeId, nombre_sucursal: payload.nombre_sucursal }, 'store', storeId);
       
       await connection.commit();
+      const { notifyStoreUpdated } = require('../../../services/feedSyncNotifier');
+      await notifyStoreUpdated(storeId);
       return storeId;
     } catch (error) {
       await connection.rollback();

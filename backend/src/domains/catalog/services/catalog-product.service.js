@@ -4,6 +4,7 @@ const db = require('../../../config/db');
 const { BusinessError, ForbiddenError, NotFoundError } = require('../../../utils/errors');
 const { logSecurityEvent } = require('../../../utils/securityLogger');
 const appLogger = require('../../../utils/appLogger');
+const { invalidatePublicCommercesCache } = require('../../../utils/cacheInvalidator');
 
 class CatalogProductService {
   constructor(catalogService) {
@@ -102,6 +103,7 @@ class CatalogProductService {
         'store',
         finalStoreId
       );
+      await invalidatePublicCommercesCache();
       return id;
     } else {
       const newId = await catalogRepository.createProduct(data);
@@ -114,6 +116,7 @@ class CatalogProductService {
         'store',
         finalStoreId
       );
+      await invalidatePublicCommercesCache();
       return newId;
     }
   }
@@ -155,6 +158,7 @@ class CatalogProductService {
       'commerce',
       userContext.commerceId
     );
+    await invalidatePublicCommercesCache();
     return true;
   }
 
@@ -245,6 +249,7 @@ class CatalogProductService {
       targetStoreId
     );
 
+    await invalidatePublicCommercesCache();
     return true;
   }
 

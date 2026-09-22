@@ -4,6 +4,7 @@ const db = require('../../../config/db');
 const { BusinessError, ForbiddenError, NotFoundError } = require('../../../utils/errors');
 const { logSecurityEvent } = require('../../../utils/securityLogger');
 const appLogger = require('../../../utils/appLogger');
+const { invalidatePublicCommercesCache } = require('../../../utils/cacheInvalidator');
 
 class CatalogMenuService {
   constructor(catalogService) {
@@ -77,7 +78,6 @@ class CatalogMenuService {
       );
       throw new ForbiddenError('No autorizado para realizar esta acción.');
     }
-
     if (id) {
       await catalogRepository.updateMenu(id, { ...data, store_id: finalStoreId });
       await logSecurityEvent(
@@ -89,6 +89,7 @@ class CatalogMenuService {
         'store',
         finalStoreId
       );
+      await invalidatePublicCommercesCache();
       return id;
     } else {
       const newId = await catalogRepository.createMenu({ ...data, store_id: finalStoreId });
@@ -101,6 +102,7 @@ class CatalogMenuService {
         'store',
         finalStoreId
       );
+      await invalidatePublicCommercesCache();
       return newId;
     }
   }
@@ -161,6 +163,7 @@ class CatalogMenuService {
       'commerce',
       userContext.commerceId
     );
+    await invalidatePublicCommercesCache();
     return true;
   }
 
@@ -217,6 +220,7 @@ class CatalogMenuService {
       targetStoreId
     );
 
+    await invalidatePublicCommercesCache();
     return true;
   }
 
@@ -278,7 +282,6 @@ class CatalogMenuService {
         throw new ForbiddenError('No autorizado para realizar esta acción.');
       }
     }
-
     if (id) {
       await catalogRepository.updateCategory(id, data);
       await logSecurityEvent(
@@ -290,6 +293,7 @@ class CatalogMenuService {
         'commerce',
         userContext.commerceId
       );
+      await invalidatePublicCommercesCache();
       return id;
     } else {
       const newId = await catalogRepository.createCategory(data);
@@ -302,6 +306,7 @@ class CatalogMenuService {
         'commerce',
         userContext.commerceId
       );
+      await invalidatePublicCommercesCache();
       return newId;
     }
   }
@@ -361,6 +366,7 @@ class CatalogMenuService {
       'commerce',
       userContext.commerceId
     );
+    await invalidatePublicCommercesCache();
     return true;
   }
 
@@ -477,6 +483,7 @@ class CatalogMenuService {
       targetStoreId
     );
 
+    await invalidatePublicCommercesCache();
     return true;
   }
 }

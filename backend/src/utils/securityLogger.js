@@ -47,7 +47,7 @@ async function logSecurityEvent(
       details.maintenanceMode = true;
       details.maintenanceState = isMaintenance;
       if (eventType === 'FAILED_LOGIN_ATTEMPT' || eventType === 'SUCCESSFUL_LOGIN') {
-        actualSeverity = 'ALERT';
+        actualSeverity = 'CRITICAL';
       }
     }
 

@@ -42,7 +42,7 @@ class AuthRepository {
     const [rows] = await db.query(`
       SELECT u.id, u.email, u.password_hash, u.rol, u.estado, u.password_locked, 
              u.es_repartidor, u.repartidor_activo,
-             p.nombres, p.apellidos, p.telefono,
+             p.nombres, p.apellidos, p.telefono, p.cedula,
              c.id AS commerce_id,
              s.id AS store_id,
              s.commerce_id AS store_commerce_id,
@@ -60,7 +60,7 @@ class AuthRepository {
   async findUserById(userId) {
     const [rows] = await db.query(`
       SELECT u.id, u.email, u.rol, u.estado, u.password_locked, u.es_repartidor, u.repartidor_activo,
-             p.nombres, p.apellidos,
+             p.nombres, p.apellidos, p.telefono, p.cedula,
              c.id AS commerce_id,
              s.id AS store_id,
              s.commerce_id AS store_commerce_id,

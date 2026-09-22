@@ -137,23 +137,92 @@ const calculateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const securityEventLimiter = rateLimit({
+  store: createRedisStore('security_event'),
+  windowMs: 60 * 1000,
+  max: 15, // Max 15 reports per minute per IP to prevent audit spam
+  message: { error: 'Demasiados reportes de seguridad enviados. Por favor, espere.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const securityEventBatchLimiter = rateLimit({
+  store: createRedisStore('security_event_batch'),
+  windowMs: 60 * 1000,
+  max: 5, // Max 5 batch reports per minute per IP to prevent audit spam
+  message: { error: 'Demasiados reportes de seguridad en lote enviados. Por favor, espere.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Apply specific rate limits
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/mobile/register', registerLimiter);
 app.use('/api/auth/mobile/register-full', registerLimiter);
 app.use('/api/auth/mobile/token-sync', authLimiter);
 app.use('/api/auth/mobile/check-user', checkUserLimiter);
+app.use('/api/auth/report-security-event', securityEventLimiter);
+app.use('/api/auth/report-security-event-batch', securityEventBatchLimiter);
 app.use('/api/domi/calculate', calculateLimiter);
 
 // Limit JSON payload to 1MB to prevent memory exhaustion DoS
 app.use(express.json({ limit: '1mb' }));
 
-app.get('/api/health', (req, res) => {
-  res.json({
+app.get('/api/health', async (req, res) => {
+  const health = {
     status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'backend'
-  });
+    service: 'backend',
+    checks: {
+      database: 'unknown',
+      redis: 'unknown'
+    }
+  };
+
+  let hasError = false;
+
+  // 1. Verificación profunda de MariaDB
+  try {
+    const startDb = Date.now();
+    await db.query('SELECT 1');
+    health.checks.database = `healthy (${Date.now() - startDb}ms)`;
+  } catch (err) {
+    hasError = true;
+    health.checks.database = `unhealthy: ${err.message}`;
+  }
+
+  // 2. Verificación profunda de Redis
+  try {
+    const startRedis = Date.now();
+    await redisClient.ping();
+    health.checks.redis = `healthy (${Date.now() - startRedis}ms)`;
+  } catch (err) {
+    hasError = true;
+    health.checks.redis = `unhealthy: ${err.message}`;
+  }
+
+  if (hasError) {
+    health.status = 'error';
+    return res.status(500).json(health);
+  }
+
+  // 3. Verificación de Modo Mantenimiento
+  try {
+    const isMaintenance = await redisClient.get('system:maintenance_mode');
+    if (isMaintenance === 'true' || isMaintenance === 'quiescing') {
+      return res.status(503).json({
+        status: 'maintenance',
+        maintenance: true,
+        timestamp: health.timestamp,
+        service: health.service,
+        checks: health.checks
+      });
+    }
+  } catch (err) {
+    console.error('[HEALTH] Error al verificar modo mantenimiento:', err.message);
+  }
+
+  res.json(health);
 });
 
 // Guardián global del modo mantenimiento
@@ -165,6 +234,9 @@ app.use('/api/generate', generateDomainRouter);
 
 const authDomainRouter = require('./domains/auth/auth.router');
 app.use('/api/auth', authDomainRouter);
+
+const telemetryDomainRouter = require('./domains/telemetry/telemetry.router');
+app.use('/api/telemetry', telemetryDomainRouter);
 
 const publicHomeRouter = require('./domains/public/public.home.router');
 app.use('/api', publicHomeRouter);

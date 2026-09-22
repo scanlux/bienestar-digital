@@ -3,7 +3,8 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const { UPLOAD_DIR, DATASET_DIR } = require('../config/env');
-const { EXPECTED_SESSION_HASH, explAuthMiddleware } = require('../middleware/explAuth');
+const { getExplSessionToken, EXPECTED_SESSION_HASH, explAuthMiddleware } = require('../middleware/explAuth');
+const { explLoginLimiter, explGeneralLimiter } = require('../middleware/rateLimiters');
 const { renderExplLoginPage } = require('../views/loginView');
 const { generateExplorerHtml } = require('../views/explorerView');
 const { getAppIcon } = require('../utils/appIcons');
@@ -31,24 +32,33 @@ function getDeviceSyncRules(safeId) {
 
 // Ruta GET /expl/login para mostrar el formulario
 router.get('/expl/login', (req, res) => {
+  const token = getExplSessionToken(req);
+  if (token && token === EXPECTED_SESSION_HASH) {
+    return res.redirect('/expl');
+  }
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(renderExplLoginPage(req.query.error ? 'Usuario o contraseña incorrectos.' : ''));
 });
 
 // Ruta POST para procesar el login de /expl
-router.post('/expl/login', (req, res) => {
+router.post('/expl/login', explLoginLimiter, (req, res) => {
   const { username, password } = req.body;
+  const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
   if (username === 'Olmedo' && password === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
-    res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
+    console.log(`[SECURITY_LOG] [LOGIN_SUCCESS] Usuario: '${username}' - IP: ${clientIp} - Time: ${new Date().toISOString()}`);
+    res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800`);
     return res.redirect(303, '/expl');
   }
+
+  console.warn(`[SECURITY_LOG] [LOGIN_FAILED] Usuario intentado: '${username}' - IP: ${clientIp} - Time: ${new Date().toISOString()}`);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.status(401).send(renderExplLoginPage('Usuario o contraseña incorrectos.'));
 });
 
 // Ruta GET /expl/logout para cerrar sesión
 router.get('/expl/logout', (req, res) => {
-  res.setHeader('Set-Cookie', 'expl_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  res.setHeader('Set-Cookie', 'expl_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
   return res.redirect('/expl/login');
 });
 
@@ -117,8 +127,8 @@ router.get('/downloads/app-teclado.apk', (req, res) => {
   }
 });
 
-// Aplicar protección de autenticación a /expl y todas sus subrutas
-router.use(['/expl', '/expl/*'], explAuthMiddleware);
+// Aplicar protección de rate limiting y autenticación a /expl y todas sus subrutas
+router.use(['/expl', '/expl/*'], explGeneralLimiter, explAuthMiddleware);
 
 // Responder con texto "Cannot GET /dataset" idéntico a Express 404 estándar
 router.use(['/dataset', '/dataset*'], (req, res) => {

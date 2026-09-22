@@ -29,7 +29,10 @@ router.get('/wallet/aliases/check-availability', auth, domiController.checkAlias
 router.get('/wallet/:ownerType/:ownerId', auth, domiController.getWallet);
 router.post('/mint', auth, hasPermission('purchase_domis'), validateBody(mintDomisSchema), domiController.mintDomis);
 router.get('/packages/:storeId', auth, domiController.getPackages);
+router.get('/packages/:ref/lineage', auth, hasPermission('view_ledger'), domiController.getTransactionLineage);
 router.get('/ledger', auth, hasPermission('view_ledger'), domiController.getLedger);
+router.get('/quarantine', auth, hasPermission('view_ledger'), domiController.getQuarantineDeposits);
+router.post('/quarantine/:packageId/resolve', auth, hasPermission('mint_manual_domis'), domiController.resolveQuarantineDeposit);
 router.post('/wallet/store/:storeId/topup', auth, hasPermission('purchase_domis'), validateBody(topupStoreSchema), domiController.topupStore);
 
 // Wallet bank operations endpoints

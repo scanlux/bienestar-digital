@@ -10,7 +10,10 @@ const {
   mobileRegisterSchema, 
   mobileRegisterFullSchema,
   activateDriverSchema,
-  driverStatusSchema
+  driverStatusSchema,
+  resetPasswordSchema,
+  reportSecurityEventSchema,
+  reportSecurityEventBatchSchema
 } = require('./auth.validation');
 
 // @route   POST /api/auth/login
@@ -38,12 +41,22 @@ router.patch('/driver-status', auth, validateBody(driverStatusSchema), authContr
 router.post('/refresh-session', auth, authController.refreshSession);
 
 // @route   POST /api/auth/reset-password
-router.post('/reset-password', authController.resetPassword);
+router.post('/reset-password', validateBody(resetPasswordSchema), authController.resetPassword);
 
 // @route   POST /api/auth/push-token
 router.post('/push-token', auth, authController.savePushToken);
 
 // @route   GET /api/auth/my-nav
 router.get('/my-nav', auth, authController.getMyNav);
+
+// @route   POST /api/auth/report-security-event
+router.post('/report-security-event', validateBody(reportSecurityEventSchema), authController.reportSecurityEvent);
+
+// @route   POST /api/auth/report-security-event-batch
+router.post('/report-security-event-batch', validateBody(reportSecurityEventBatchSchema), authController.reportSecurityEventBatch);
+
+// Mount user addresses sub-router under /api/auth/addresses
+const addressRouter = require('./addresses/address.router');
+router.use('/addresses', addressRouter);
 
 module.exports = router;

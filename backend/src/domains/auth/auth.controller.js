@@ -108,6 +108,26 @@ class AuthController {
       handleControllerError(res, error);
     }
   }
+
+  async reportSecurityEvent(req, res) {
+    try {
+      const { eventType, severity, details, userId } = req.body;
+      const result = await authService.reportSecurityEvent(eventType, severity, details, userId, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
+
+  async reportSecurityEventBatch(req, res) {
+    try {
+      const { events } = req.body;
+      const result = await authService.reportSecurityEventBatch(events, req);
+      res.json(result);
+    } catch (error) {
+      handleControllerError(res, error);
+    }
+  }
 }
 
 module.exports = new AuthController();

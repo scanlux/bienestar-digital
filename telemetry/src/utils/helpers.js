@@ -54,7 +54,7 @@ const readJsonLinesFile = (filePath) => {
 const isSystemInitEvent = (item) => {
   if (!item) return false;
   const str = String(item.textoL || item.textoC || item.texto || item.raw || '');
-  return str.includes('[DISPOSITIVO REGISTRADO - INICIO DE APP]') || str.includes('[DISPOSITIVO REGISTRADO');
+  return str.includes('[DISPOSITIVO REGISTRADO') || str.includes('[ESCÁNER') || str.includes('[ESCANER');
 };
 
 /**
@@ -105,11 +105,35 @@ const sanitizeDeviceId = (rawId) => {
     .replace(/^_+|_+$/g, '');
 };
 
+/**
+ * Safely validates if a resolved file path stays strictly within the base directory (Anti-Directory Traversal)
+ */
+const isSafeFilePath = (targetPath, baseDir) => {
+  if (!targetPath || typeof targetPath !== 'string') return false;
+  if (targetPath.includes('\0') || targetPath.includes('%2e%2e') || targetPath.includes('%2E%2E') || targetPath.includes('..')) {
+    return false;
+  }
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedTarget = path.resolve(targetPath);
+  return resolvedTarget.startsWith(resolvedBase);
+};
+
+/**
+ * Sanitizes input filename/path to prevent path traversal
+ */
+const sanitizePath = (unsafePath) => {
+  if (!unsafePath || typeof unsafePath !== 'string') return '';
+  const clean = unsafePath.replace(/\0/g, '').replace(/%2e%2e/gi, '').replace(/\.\./g, '');
+  return path.basename(clean);
+};
+
 module.exports = {
   getDatasetDir,
   readJsonLinesFile,
   isSystemInitEvent,
   getAppDisplayName,
   formatCompactDate,
-  sanitizeDeviceId
+  sanitizeDeviceId,
+  isSafeFilePath,
+  sanitizePath
 };

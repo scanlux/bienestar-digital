@@ -28,6 +28,7 @@ module.exports = {
 
   // Mint
   mintDomis: mint.mintDomis,
+  quarantineMint: mint.quarantineMint,
 
   // Burn
   burnDomis: burn.burnDomis,

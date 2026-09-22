@@ -1,25 +1,34 @@
 const redisClient = require('../config/redis');
 const db = require('../config/db');
+const { OWNER_TYPES } = require('./domi-kernel/owner-type.constants');
 
 function getCacheKey(ownerType, ownerId) {
+  if (ownerType === 'system') {
+    return 'domi:balance:system';
+  }
   return `domi:balance:${ownerType}:${ownerId}`;
 }
 
 async function resolveOwner(ownerType, ownerId) {
+  // Guard explícito para tipos no soportados
+  if (!Object.values(OWNER_TYPES).includes(ownerType)) {
+    throw new Error(`[CRITICAL_FINANCIAL_ERR] Tipo de propietario '${ownerType}' no soportado en la resolución de Redis.`);
+  }
+
   let resolvedType = ownerType;
   let resolvedId = ownerId;
 
-  if (ownerType === 'store') {
+  if (ownerType === OWNER_TYPES.STORE) {
     const [rows] = await db.query('SELECT usuario_id FROM stores WHERE id = ?', [ownerId]);
-    resolvedType = 'user';
+    resolvedType = OWNER_TYPES.USER;
     resolvedId = rows[0]?.usuario_id || null;
-  } else if (ownerType === 'commerce') {
+  } else if (ownerType === OWNER_TYPES.COMMERCE) {
     const [rows] = await db.query('SELECT usuario_id FROM commerces WHERE id = ?', [ownerId]);
-    resolvedType = 'user';
+    resolvedType = OWNER_TYPES.USER;
     resolvedId = rows[0]?.usuario_id || null;
-  } else if (ownerType === 'delivery_company') {
+  } else if (ownerType === OWNER_TYPES.DELIVERY_COMPANY) {
     const [rows] = await db.query('SELECT usuario_id FROM delivery_companies WHERE id = ?', [ownerId]);
-    resolvedType = 'user';
+    resolvedType = OWNER_TYPES.USER;
     resolvedId = rows[0]?.usuario_id || null;
   }
 

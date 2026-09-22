@@ -74,7 +74,37 @@ class ProcessWompiWebhook {
 
     // --- 8. Acuner DOMIs de forma atomica ---
     // La restriccion UNIQUE uq_payment_ref en DB es la segunda barrera de idempotencia
-    const result = await domiEngine.mintDomis(ownerType, ownerId, fiatAmount, transactionId);
+    let result;
+    try {
+      result = await domiEngine.mintDomis(ownerType, ownerId, fiatAmount, transactionId);
+    } catch (err) {
+      // Si ocurre un error crítico financiero (tipo de owner desconocido o fallo de wallet),
+      // enviamos los fondos a cuarentena de forma controlada en lugar de fallar (y evitar reintentos infinitos de Wompi)
+      if (err.message && (err.message.includes('CRITICAL_FINANCIAL_ERR') || err.message.includes('DOMI_ENGINE:'))) {
+        try {
+          result = await domiEngine.quarantineMint(ownerType, ownerId, fiatAmount, transactionId, err.message);
+          await logSecurityEvent(null, 'FINANCIAL_MINT_QUARANTINED', 'HIGH', req, {
+            reference,
+            ownerType,
+            ownerId,
+            fiatAmount,
+            transactionId,
+            error: err.message,
+            packageId: result.packageId
+          });
+          return {
+            received: true,
+            processed: true,
+            quarantined: true,
+            packageId: result.packageId
+          };
+        } catch (quarantineErr) {
+          console.error('[DOMI] Error catastrófico al intentar cuarentenar depósito:', quarantineErr);
+          throw err; // lanzamos el error original si la cuarentena también falló
+        }
+      }
+      throw err;
+    }
 
     // --- 9. Auditoria del exito ---
     await logSecurityEvent(null, 'WOMPI_MINT_SUCCESS', 'LOW', req, {

@@ -8,6 +8,7 @@ const { logSecurityEvent } = require('../../../utils/securityLogger');
 const AUTH_CONSTANTS = require('../auth.constants');
 const resolveActorContext = require('../helpers/resolveActorContext');
 const getOrCreateSessionStamp = require('../helpers/sessionStampHelper');
+const redisClient = require('../../../config/redis');
 
 class AuthMobileService {
   constructor(authService) {
@@ -22,6 +23,22 @@ class AuthMobileService {
     if (!firebaseIdToken) {
       throw new BusinessError('Token de Firebase es obligatorio para la sincronización');
     }
+
+    const lockKey = `auth:token_sync_lock:${email}`;
+    let acquired = false;
+    try {
+      acquired = await redisClient.set(lockKey, 'locked', {
+        NX: true,
+        PX: 3000
+      });
+      if (!acquired) {
+        throw new BusinessError('Autosincronización en progreso para este usuario. Por favor espere.', 429);
+      }
+    } catch (redisErr) {
+      if (redisErr instanceof BusinessError) throw redisErr;
+      // No bloquear el inicio de sesión si Redis no está disponible
+    }
+
     try {
       let decodedToken;
       if (process.env.NODE_ENV === 'development' && admin.apps.length === 0) {
@@ -38,6 +55,9 @@ class AuthMobileService {
         throw new BusinessError('El UID del token de Firebase no coincide con el UID provisto', 401);
       }
     } catch (firebaseErr) {
+      if (firebaseErr instanceof BusinessError) {
+        throw firebaseErr;
+      }
       await logSecurityEvent(null, 'FAILED_TOKEN_SYNC', 'HIGH', req, {
         email,
         reason: 'Error al verificar token con Firebase: ' + firebaseErr.message
@@ -45,75 +65,93 @@ class AuthMobileService {
       throw new BusinessError('Token de Firebase inválido o expirado: ' + firebaseErr.message, 401);
     }
 
-    const user = await authRepository.findUserByEmail(email);
-    if (!user) {
-      await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, type: 'mobile_sync', reason: 'Usuario no encontrado' });
-      throw new NotFoundError('Usuario no sincronizado en base de datos local');
-    }
+    try {
+      const user = await authRepository.findUserByEmail(email);
+      if (!user) {
+        await logSecurityEvent(null, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, type: 'mobile_sync', reason: 'Usuario no encontrado' });
+        throw new NotFoundError('Usuario no sincronizado en base de datos local');
+      }
 
-    if (user.estado !== 'activo') {
-      await logSecurityEvent(user.id, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, type: 'mobile_sync', reason: 'Cuenta inactiva o bloqueada' });
-      throw new ForbiddenError('Cuenta inactiva o bloqueada');
-    }
+      if (user.estado !== 'activo') {
+        await logSecurityEvent(user.id, 'FAILED_LOGIN_ATTEMPT', 'MEDIUM', req, { email, type: 'mobile_sync', reason: 'Cuenta inactiva o bloqueada' });
+        throw new ForbiddenError('Cuenta inactiva o bloqueada');
+      }
 
-    const hasIdentity = await authRepository.findFirebaseIdentity(user.id, firebaseUid);
-    if (!hasIdentity) {
-      await logSecurityEvent(user.id, 'FAILED_LOGIN_ATTEMPT', 'HIGH', req, { email, type: 'mobile_sync', reason: 'Fallo de autenticación de identidad móvil de Firebase' });
-      throw new BusinessError('Fallo de autenticación del token móvil', 401);
-    }
+      let hasIdentity = await authRepository.findFirebaseIdentity(user.id, firebaseUid);
+      if (!hasIdentity) {
+        // Auto-vincular la identidad de Firebase si el token fue validado con éxito.
+        // Esto evita que usuarios de la semilla (seeds) queden bloqueados en su primer inicio en la app.
+        await db.query(
+          'INSERT IGNORE INTO firebase_identities (user_id, firebase_uid, provider) VALUES (?, ?, "firebase")',
+          [user.id, firebaseUid]
+        );
+        hasIdentity = true;
+        await logSecurityEvent(user.id, 'FIREBASE_IDENTITY_AUTOLINK', 'MEDIUM', req, { email, firebaseUid });
+      }
 
-    const { permissions, permissionModes, roles } = await authRepository.getUserRolesAndPermissions('user', user.id);
-    const systemFlags = await this.authService.getSystemFlags();
+      const { permissions, permissionModes, roles } = await authRepository.getUserRolesAndPermissions('user', user.id);
+      const systemFlags = await this.authService.getSystemFlags();
 
-    const actorCtx = await resolveActorContext(user);
-    const commerceId = actorCtx.commerceId;
-    const storeIds = actorCtx.storeIds;
-    const deliveryCompanyId = actorCtx.deliveryCompanyId;
-    const adminType = actorCtx.adminType;
+      const actorCtx = await resolveActorContext(user);
+      const commerceId = actorCtx.commerceId;
+      const storeIds = actorCtx.storeIds;
+      const deliveryCompanyId = actorCtx.deliveryCompanyId;
+      const adminType = actorCtx.adminType;
 
-    const jwtSecret = await this.authService.getJWTSecret();
-    let stamp = await getOrCreateSessionStamp('user', user.id);
+      const jwtSecret = await this.authService.getJWTSecret();
+      let stamp = await getOrCreateSessionStamp('user', user.id);
 
-    const tokenPayload = { 
-      id: user.id, 
-      email: user.email, 
-      rol: user.rol, 
-      actorType: 'user',
-      adminType,
-      es_repartidor: user.es_repartidor, 
-      repartidor_activo: user.repartidor_activo,
-      permissions, 
-      roles,
-      commerceId, 
-      storeIds,
-      deliveryCompanyId,
-      session_stamp: stamp
-    };
-
-    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: AUTH_CONSTANTS.JWT_EXPIRY });
-
-    await logSecurityEvent(user.id, 'SUCCESSFUL_LOGIN', 'LOW', req, { type: 'mobile_sync' });
-
-    return {
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        nombre: `${user.nombres || ''} ${user.apellidos || ''}`.trim() || process.env.APP_DISPLAY_NAME || 'Usuario',
-        rol: user.rol,
+      const tokenPayload = { 
+        id: user.id, 
+        email: user.email, 
+        rol: user.rol, 
         actorType: 'user',
         adminType,
-        es_repartidor: user.es_repartidor,
+        es_repartidor: user.es_repartidor, 
         repartidor_activo: user.repartidor_activo,
-        permissions,
-        permissionModes,
-        systemFlags,
+        permissions, 
         roles,
-        commerceId,
+        commerceId, 
         storeIds,
-        deliveryCompanyId
+        deliveryCompanyId,
+        session_stamp: stamp
+      };
+
+      const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: AUTH_CONSTANTS.JWT_EXPIRY });
+
+      await logSecurityEvent(user.id, 'SUCCESSFUL_LOGIN', 'LOW', req, { type: 'mobile_sync' });
+
+      return {
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          nombre: `${user.nombres || ''} ${user.apellidos || ''}`.trim() || process.env.APP_DISPLAY_NAME || 'Usuario',
+          rol: user.rol,
+          actorType: 'user',
+          adminType,
+          es_repartidor: user.es_repartidor,
+          repartidor_activo: user.repartidor_activo,
+          permissions,
+          permissionModes,
+          systemFlags,
+          roles,
+          commerceId,
+          storeIds,
+          deliveryCompanyId,
+          telefono: user.telefono,
+          cedula: user.cedula
+        }
+      };
+    } finally {
+      if (acquired) {
+        try {
+          await redisClient.del(lockKey);
+        } catch (delErr) {
+          // Silencioso
+        }
       }
-    };
+    }
   }
 
   async mobileRegister(email, nombre, firebaseUid, firebaseIdToken, req) {
@@ -208,10 +246,24 @@ class AuthMobileService {
   }
 
   async mobileRegisterFull(data, req = null) {
-    const { email, nombres, apellidos, nombre, cedula, celular, firebaseUid, password, direccion, latitud, longitud } = data;
+    const { email, nombres, apellidos, nombre, cedula, celular, firebaseUid, password, direccion, latitud, longitud, direccion_nombre } = data;
 
     if (!email || !direccion || !celular) {
       throw new BusinessError('Faltan datos obligatorios del perfil');
+    }
+
+    if (latitud !== undefined && latitud !== null) {
+      const latNum = parseFloat(latitud);
+      if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+        throw new BusinessError('Latitud de dirección inválida. Debe estar entre -90 y 90.');
+      }
+    }
+
+    if (longitud !== undefined && longitud !== null) {
+      const lngNum = parseFloat(longitud);
+      if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+        throw new BusinessError('Longitud de dirección inválida. Debe estar entre -180 y 180.');
+      }
     }
 
     if (!firebaseUid && !password) {
@@ -260,7 +312,7 @@ class AuthMobileService {
         }
       }
 
-      await authRepository.insertUserAddress(userId, 'Casa', direccion, latitud || null, longitud || null, true, connection);
+      await authRepository.insertUserAddress(userId, direccion_nombre || 'Casa', direccion, latitud || null, longitud || null, true, connection);
 
       await connection.commit();
       connection.release();

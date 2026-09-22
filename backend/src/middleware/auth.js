@@ -5,6 +5,7 @@ const sessionStampService = require('../services/sessionStampService');
 const redisClient = require('../config/redis');
 const appLogger = require('../utils/appLogger');
 const db = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 
 if (!process.env.JWT_SECRET) {
@@ -246,8 +247,6 @@ const conditionalFinancialPin = async (req, res, next) => {
     res.status(500).json({ error: 'Error interno al evaluar el umbral del PIN financiero.' });
   }
 };
-
-const bcrypt = require('bcryptjs');
 
 module.exports = { 
   auth, 
