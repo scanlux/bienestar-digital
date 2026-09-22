@@ -314,6 +314,30 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
             </div>
           </div>
         </a>
+
+        <!-- Card 3: Libreta de Contactos -->
+        <a href="/expl/devices/${deviceId}/contacts" style="text-decoration:none;">
+          <div class="hub-card" onmouseover="this.style.borderColor='#a855f7'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
+            <div>
+              <div class="hub-icon">📱</div>
+              <h2 class="hub-title" style="color: #fff;">Módulo 3: Libreta de Contactos</h2>
+              <p class="hub-desc">
+                Consulta la copia de respaldo diaria de la libreta de direcciones del dispositivo. Buscador reactivo, vista de tabla con columnas y ficha de detalle completo.
+              </p>
+            </div>
+            <div class="hub-link" style="color:#c084fc;">
+              Abrir Libreta de Contactos &rarr;
+            </div>
+          </div>
+        </a>
+      </div>
+    ` : ''}
+
+    ${(level === 'contacts' || level === '2-contacts') ? `
+      <div style="background:#111827; border:1px solid #a855f7; border-radius:16px; padding:24px; margin-top:20px;">
+        <h2 style="font-size:1.3rem; font-weight:700; color:#c084fc; margin-bottom:8px;">Libreta de Contactos</h2>
+        <p style="font-size:0.88rem; color:#9ca3af; margin-bottom:20px;">Copia de respaldo diaria de contactos para el dispositivo <span style="font-family:monospace; font-weight:600; color:#e5e7eb;">${deviceId}</span>.</p>
+        <iframe src="/contacts-viewer/index.html?device=${encodeURIComponent(deviceId)}" style="width:100%; height:680px; border:none; border-radius:12px;" title="Libreta de Contactos"></iframe>
       </div>
     ` : ''}
 
@@ -666,14 +690,14 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
         </div>
 
         ${allFiles.length === 0 ? `
-          <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 24px; color: #e5e7eb;">
-            <div style="font-weight: 700; font-size: 1rem; color: #38bdf8; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+          <div id="scanStatusBanner" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 24px; color: #e5e7eb;">
+            <div id="scanStatusTitle" style="font-weight: 700; font-size: 1rem; color: #38bdf8; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
               ℹ️ El teléfono aún no ha enviado el manifiesto de archivos (file_index.json)
             </div>
-            <p style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 14px;">
+            <p id="scanStatusDesc" style="font-size: 0.88rem; color: #9ca3af; line-height: 1.5; margin-bottom: 14px;">
               La aplicación móvil en el teléfono envía la lista de archivos al iniciarse o en su ciclo de fondo. Puedes presionar el botón a continuación para enviar una directiva de escaneo de estructura:
             </p>
-            <button type="button" data-device-id="${deviceId}" onclick="requestStructureScan(this)" class="btn" style="background:#3b82f6; font-size:0.85rem; padding:8px 16px;">
+            <button type="button" id="scanStatusBtn" data-device-id="${deviceId}" onclick="requestStructureScan(this)" class="btn" style="background:#3b82f6; font-size:0.85rem; padding:8px 16px;">
               ⚡ Solicitar Escaneo de Estructura
             </button>
           </div>
@@ -1079,6 +1103,36 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 folderCard.style.background = isAct ? 'rgba(16, 185, 129, 0.08)' : '#151d30';
               }
             });
+          });
+          syncSocket.on('sync:status_scanning', function(data) {
+            console.log('[REALTIME_SYNC] Evento sync:status_scanning recibido:', data);
+            const banner = document.getElementById('scanStatusBanner');
+            const title = document.getElementById('scanStatusTitle');
+            const desc = document.getElementById('scanStatusDesc');
+            const btn = document.getElementById('scanStatusBtn');
+
+            if (title && desc) {
+              title.innerHTML = '⏳ El teléfono está indexando y procesando los archivos (file_index.json)...';
+              title.style.color = '#fbbf24';
+              desc.textContent = (data && data.message) ? data.message : 'La aplicación móvil está escaneando el almacenamiento interno y transmitiendo la estructura completa al servidor...';
+              if (btn) {
+                btn.disabled = true;
+                btn.textContent = '⏳ Escaneando en progreso...';
+                btn.className = 'btn btn-secondary';
+              }
+            }
+          });
+
+          syncSocket.on('sync:index_updated', function(data) {
+            console.log('[REALTIME_SYNC] Evento sync:index_updated recibido:', data);
+            const title = document.getElementById('scanStatusTitle');
+            if (title) {
+              title.innerHTML = '✓ ¡Estructura de archivos cargada correctamente!';
+              title.style.color = '#34d399';
+            }
+            setTimeout(function() {
+              window.location.reload();
+            }, 600);
           });
         } catch (e) {
           console.error('[REALTIME_SYNC_ERROR]', e);

@@ -224,6 +224,18 @@ router.get(['/expl/devices/:deviceId/files-hub', '/expl/devices/:deviceId/files-
   }));
 });
 
+// Nivel 2.6: Módulo de Libreta de Contactos
+router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contacts/'], (req, res) => {
+  const cleanId = sanitizeDeviceId(req.params.deviceId);
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.send(generateExplorerHtml({
+    title: `📱 Libreta de Contactos — ${cleanId}`,
+    level: 'contacts',
+    deviceId: cleanId
+  }));
+});
+
 // Nivel 3 - Módulo Archivos Disponibles (Solo Sincronizados en Servidor)
 router.get(['/expl/devices/:deviceId/available', '/expl/devices/:deviceId/available/'], (req, res) => {
   const cleanId = sanitizeDeviceId(req.params.deviceId);
