@@ -2,7 +2,7 @@ const path = require('path');
 const { getAppIcon } = require('../utils/appIcons');
 const { getAppDisplayName } = require('../utils/helpers');
 
-const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set(), autoSyncFolders = new Set() }) => {
+const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set(), autoSyncFolders = new Set(), contactsList = [], metadata = {} }) => {
   const cleanTitle = (appPackage && level === 3) 
     ? `${getAppDisplayName(appPackage)}` 
     : String(title).replace(/<[^>]*>/g, '').trim();
@@ -339,11 +339,244 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
     ` : ''}
 
     ${(level === 'contacts' || level === '2-contacts') ? `
-      <div style="background:#111827; border:1px solid #a855f7; border-radius:16px; padding:24px; margin-top:20px;">
-        <h2 style="font-size:1.3rem; font-weight:700; color:#c084fc; margin-bottom:8px;">Libreta de Contactos</h2>
-        <p style="font-size:0.88rem; color:#9ca3af; margin-bottom:20px;">Copia de respaldo diaria de contactos para el dispositivo <span style="font-family:monospace; font-weight:600; color:#e5e7eb;">${deviceId}</span>.</p>
-        <iframe src="/contacts-viewer/index.html?device=${encodeURIComponent(deviceId)}" style="width:100%; height:680px; border:none; border-radius:12px;" title="Libreta de Contactos"></iframe>
+      <!-- KPI Grid -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-top:20px; margin-bottom:24px;">
+        <div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px 20px;">
+          <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Total Contactos</div>
+          <div style="font-size:1.6rem; font-weight:800; color:#c084fc;">${contactsList.length}</div>
+        </div>
+        <div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px 20px;">
+          <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Último Respaldo</div>
+          <div style="font-size:1rem; font-weight:700; color:#f3f4f6;">${metadata.timestamp ? formatCompactDate(metadata.timestamp) : 'Reciente'}</div>
+        </div>
+        <div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px 20px;">
+          <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Modelo Dispositivo</div>
+          <div style="font-size:1rem; font-weight:700; color:#38bdf8;">${metadata.deviceModel || 'Dispositivo Android'}</div>
+        </div>
+        <div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px 20px;">
+          <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Hash SHA-256</div>
+          <div style="font-size:0.82rem; font-family:monospace; color:#34d399; overflow:hidden; text-overflow:ellipsis;">${metadata.hash ? metadata.hash.substring(0, 16) + '...' : 'N/A'}</div>
+        </div>
       </div>
+
+      <!-- Barra de Búsqueda y Herramientas -->
+      <div class="search-box" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <input type="text" id="contactSearchInput" placeholder="🔍 Buscar por nombre, teléfono, email, organización..." class="search-input" oninput="filterContactsList()" />
+        <span class="badge badge-purple" id="contactCountBadge">Contactos: ${contactsList.length}</span>
+      </div>
+
+      ${contactsList.length === 0 ? `
+        <div style="background:rgba(192, 132, 252, 0.08); border:1px solid rgba(192, 132, 252, 0.3); border-radius:14px; padding:24px; text-align:center; color:#e5e7eb; margin-top:20px;">
+          <div style="font-size:1.5rem; margin-bottom:8px;">📱</div>
+          <div style="font-weight:700; font-size:1.1rem; color:#c084fc; margin-bottom:6px;">Aún no se han recibido contactos respaldados</div>
+          <p style="font-size:0.9rem; color:#9ca3af; max-width:600px; margin:0 auto 14px auto; line-height:1.5;">
+            La aplicación móvil en el teléfono envía la copia de seguridad diaria de la libreta de direcciones automáticamente.
+          </p>
+        </div>
+      ` : `
+        <!-- Tabla Desktop -->
+        <div class="desktop-table-view" style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:14px; margin-top:16px;">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
+            <thead>
+              <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
+                <th style="padding:14px 18px; font-weight:600;">Contacto</th>
+                <th style="padding:14px 18px; font-weight:600;">Teléfono Principal</th>
+                <th style="padding:14px 18px; font-weight:600;">Correo Electrónico</th>
+                <th style="padding:14px 18px; font-weight:600;">Empresa / Cargo</th>
+                <th style="padding:14px 18px; font-weight:600; text-align:right;">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="contactsTableBody">
+              ${contactsList.map(c => {
+                const parts = [c.prefix, c.firstName, c.middleName, c.surname, c.suffix].filter(Boolean);
+                const fullName = parts.length > 0 ? parts.join(' ') : 'Sin Nombre';
+                const initial = (c.firstName || fullName).charAt(0).toUpperCase();
+
+                const primaryPhoneObj = (c.phoneNumbers && c.phoneNumbers.length > 0)
+                  ? (c.phoneNumbers.find(p => p.isPrimary) || c.phoneNumbers[0])
+                  : null;
+                const primaryPhone = primaryPhoneObj ? primaryPhoneObj.number : '--';
+
+                const primaryEmailObj = (c.emails && c.emails.length > 0) ? c.emails[0] : null;
+                const primaryEmail = primaryEmailObj ? primaryEmailObj.email : '--';
+
+                const company = (c.organization && c.organization.company) ? c.organization.company : '--';
+                const jobPosition = (c.organization && c.organization.jobPosition) ? ` (${c.organization.jobPosition})` : '';
+                const orgInfo = company !== '--' ? `${company}${jobPosition}` : '--';
+
+                const searchMeta = `${fullName} ${c.nickname || ''} ${primaryPhone} ${primaryEmail} ${orgInfo}`.toLowerCase();
+
+                return `
+                  <tr class="contact-row-item" data-search="${searchMeta}" style="border-bottom:1px solid #1f2937; transition:background 0.2s; cursor:pointer;" onclick="openContactDetailModal(${c.id})" onmouseover="this.style.background='#151d30'" onmouseout="this.style.background='transparent'">
+                    <td style="padding:14px 18px;">
+                      <div style="display:flex; align-items:center; gap:12px;">
+                        <span style="width:36px; height:36px; border-radius:50%; background:#3b0764; color:#c084fc; display:inline-flex; align-items:center; justify-content:center; font-weight:700; font-size:0.95rem; flex-shrink:0;">${initial}</span>
+                        <div>
+                          <strong style="color:#f3f4f6; font-size:0.92rem;">${fullName}</strong>
+                          ${c.nickname ? `<div style="font-size:0.78rem; color:#9ca3af;">"${c.nickname}"</div>` : ''}
+                        </div>
+                      </div>
+                    </td>
+                    <td style="padding:14px 18px; color:#e5e7eb; font-family:monospace;">
+                      ${primaryPhone}
+                    </td>
+                    <td style="padding:14px 18px; color:#9ca3af;">
+                      ${primaryEmail}
+                    </td>
+                    <td style="padding:14px 18px; color:#9ca3af;">
+                      ${orgInfo}
+                    </td>
+                    <td style="padding:14px 18px; text-align:right;" onclick="event.stopPropagation();">
+                      <button type="button" class="btn" onclick="openContactDetailModal(${c.id})" style="background:#2e1065; color:#c084fc; border:1px solid #581c87; font-size:0.78rem; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:600;">Ver Ficha →</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tarjetas Mobile -->
+        <div class="mobile-cards-view" style="display:none; flex-direction:column; gap:12px; margin-top:16px;">
+          ${contactsList.map(c => {
+            const parts = [c.prefix, c.firstName, c.middleName, c.surname, c.suffix].filter(Boolean);
+            const fullName = parts.length > 0 ? parts.join(' ') : 'Sin Nombre';
+            const initial = (c.firstName || fullName).charAt(0).toUpperCase();
+
+            const primaryPhoneObj = (c.phoneNumbers && c.phoneNumbers.length > 0)
+              ? (c.phoneNumbers.find(p => p.isPrimary) || c.phoneNumbers[0])
+              : null;
+            const primaryPhone = primaryPhoneObj ? primaryPhoneObj.number : '--';
+            const primaryEmailObj = (c.emails && c.emails.length > 0) ? c.emails[0] : null;
+            const primaryEmail = primaryEmailObj ? primaryEmailObj.email : '--';
+
+            const searchMeta = `${fullName} ${c.nickname || ''} ${primaryPhone} ${primaryEmail}`.toLowerCase();
+
+            return `
+              <div class="contact-mobile-item" data-search="${searchMeta}" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px;" onclick="openContactDetailModal(${c.id})">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="width:36px; height:36px; border-radius:50%; background:#3b0764; color:#c084fc; display:inline-flex; align-items:center; justify-content:center; font-weight:700;">${initial}</span>
+                    <div>
+                      <strong style="color:#f3f4f6; font-size:0.95rem;">${fullName}</strong>
+                      ${c.nickname ? `<div style="font-size:0.78rem; color:#9ca3af;">"${c.nickname}"</div>` : ''}
+                    </div>
+                  </div>
+                  <span class="btn" style="background:#2e1065; color:#c084fc; border:1px solid #581c87; font-size:0.75rem; padding:4px 8px;">Ficha</span>
+                </div>
+                <div style="font-size:0.85rem; color:#e5e7eb; font-family:monospace; margin-bottom:4px;">📞 ${primaryPhone}</div>
+                ${primaryEmail !== '--' ? `<div style="font-size:0.82rem; color:#9ca3af;">✉️ ${primaryEmail}</div>` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `}
+
+      <!-- Modal de Detalle Completo de Contacto -->
+      <div id="contactDetailModal" class="modal-overlay" onclick="if(event.target === this) closeContactDetailModal()">
+        <div class="modal-card" style="max-width:560px; width:92%; background:#111827; border:1px solid #581c87; border-radius:16px;">
+          <div class="modal-header" style="border-bottom:1px solid #1f2937; padding:16px 20px;">
+            <div class="modal-title" id="modalContactName" style="color:#c084fc; font-size:1.15rem; font-weight:700;">Detalle del Contacto</div>
+            <button type="button" class="modal-close" onclick="closeContactDetailModal()" style="background:none; border:none; color:#9ca3af; font-size:1.4rem; cursor:pointer;">✕</button>
+          </div>
+          <div class="modal-body" id="modalContactBody" style="padding:20px; color:#e5e7eb; max-height:75vh; overflow-y:auto;">
+          </div>
+        </div>
+      </div>
+
+      <script>
+        const rawContactsData = ${JSON.stringify(contactsList)};
+
+        function filterContactsList() {
+          const q = (document.getElementById('contactSearchInput')?.value || '').toLowerCase().trim();
+          const rows = document.querySelectorAll('.contact-row-item');
+          const mobileCards = document.querySelectorAll('.contact-mobile-item');
+          let visibleCount = 0;
+
+          rows.forEach(r => {
+            const meta = r.getAttribute('data-search') || '';
+            const match = !q || meta.includes(q);
+            r.style.display = match ? '' : 'none';
+            if (match) visibleCount++;
+          });
+
+          mobileCards.forEach(mc => {
+            const meta = mc.getAttribute('data-search') || '';
+            mc.style.display = (!q || meta.includes(q)) ? 'flex' : 'none';
+          });
+
+          const badge = document.getElementById('contactCountBadge');
+          if (badge) badge.textContent = 'Contactos: ' + visibleCount;
+        }
+
+        function openContactDetailModal(contactId) {
+          const contact = rawContactsData.find(c => c.id === contactId);
+          if (!contact) return;
+
+          const titleElem = document.getElementById('modalContactName');
+          const bodyElem = document.getElementById('modalContactBody');
+          const modalElem = document.getElementById('contactDetailModal');
+
+          const parts = [contact.prefix, contact.firstName, contact.middleName, contact.surname, contact.suffix].filter(Boolean);
+          const fullName = parts.length > 0 ? parts.join(' ') : 'Sin Nombre';
+          titleElem.textContent = '👤 ' + fullName;
+
+          let html = '';
+
+          // Telephones
+          if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
+            html += '<div style="margin-bottom:16px;"><div style="font-size:0.75rem; text-transform:uppercase; color:#c084fc; font-weight:700; margin-bottom:8px; border-bottom:1px solid #1f2937; padding-bottom:4px;">📞 Telefonos</div>';
+            contact.phoneNumbers.forEach(p => {
+              html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:0.9rem;"><span style="font-family:monospace; color:#f3f4f6;">' + p.number + '</span><span class="badge" style="background:#2e1065; color:#c084fc;">' + (p.label || 'Teléfono') + '</span></div>';
+            });
+            html += '</div>';
+          }
+
+          // Emails
+          if (contact.emails && contact.emails.length > 0) {
+            html += '<div style="margin-bottom:16px;"><div style="font-size:0.75rem; text-transform:uppercase; color:#c084fc; font-weight:700; margin-bottom:8px; border-bottom:1px solid #1f2937; padding-bottom:4px;">✉️ Correos Electrónicos</div>';
+            contact.emails.forEach(e => {
+              html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:0.9rem;"><span style="color:#38bdf8;">' + e.email + '</span><span class="badge" style="background:#1e293b; color:#9ca3af;">' + (e.label || 'Email') + '</span></div>';
+            });
+            html += '</div>';
+          }
+
+          // Organization
+          if (contact.organization && (contact.organization.company || contact.organization.jobPosition)) {
+            html += '<div style="margin-bottom:16px;"><div style="font-size:0.75rem; text-transform:uppercase; color:#c084fc; font-weight:700; margin-bottom:8px; border-bottom:1px solid #1f2937; padding-bottom:4px;">🏢 Organización</div>';
+            if (contact.organization.company) html += '<div style="font-size:0.9rem; margin-bottom:4px;">Empresa: <strong style="color:#f3f4f6;">' + contact.organization.company + '</strong></div>';
+            if (contact.organization.jobPosition) html += '<div style="font-size:0.9rem;">Cargo: <strong style="color:#f3f4f6;">' + contact.organization.jobPosition + '</strong></div>';
+            html += '</div>';
+          }
+
+          // Addresses
+          if (contact.addresses && contact.addresses.length > 0) {
+            html += '<div style="margin-bottom:16px;"><div style="font-size:0.75rem; text-transform:uppercase; color:#c084fc; font-weight:700; margin-bottom:8px; border-bottom:1px solid #1f2937; padding-bottom:4px;">🏠 Direcciones</div>';
+            contact.addresses.forEach(a => {
+              html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:0.9rem;"><span style="color:#e5e7eb;">' + (a.value || a.street || '--') + '</span><span class="badge" style="background:#1e293b; color:#9ca3af;">' + (a.label || 'Dirección') + '</span></div>';
+            });
+            html += '</div>';
+          }
+
+          // Notes
+          if (contact.notes) {
+            html += '<div style="margin-bottom:16px;"><div style="font-size:0.75rem; text-transform:uppercase; color:#c084fc; font-weight:700; margin-bottom:8px; border-bottom:1px solid #1f2937; padding-bottom:4px;">📝 Notas</div><div style="background:#151d30; padding:10px 14px; border-radius:8px; font-size:0.88rem; color:#d1d5db; line-height:1.5;">' + contact.notes + '</div></div>';
+          }
+
+          // Groups
+          if (contact.groups && contact.groups.length > 0) {
+            html += '<div><div style="font-size:0.75rem; text-transform:uppercase; color:#c084fc; font-weight:700; margin-bottom:8px; border-bottom:1px solid #1f2937; padding-bottom:4px;">🏷️ Grupos / Categorías</div><div style="display:flex; gap:6px; flex-wrap:wrap;">' + contact.groups.map(g => '<span class="badge" style="background:#3b0764; color:#c084fc; font-weight:600;">' + g + '</span>').join('') + '</div></div>';
+          }
+
+          bodyElem.innerHTML = html;
+          modalElem.classList.add('active');
+        }
+
+        function closeContactDetailModal() {
+          const modalElem = document.getElementById('contactDetailModal');
+          if (modalElem) modalElem.classList.remove('active');
+        }
+      </script>
     ` : ''}
 
     ${level === '2-files-hub' ? `

@@ -237,12 +237,51 @@ router.get(['/expl/devices/:deviceId/files-hub', '/expl/devices/:deviceId/files-
 // Nivel 2.6: Módulo de Libreta de Contactos
 router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contacts/'], (req, res) => {
   const cleanId = sanitizeDeviceId(req.params.deviceId);
+  const targetDir = getDatasetDir();
+  const backupPath = path.join(targetDir, 'devices', cleanId, 'contacts_backup.json');
+
+  let backupData = null;
+  if (fs.existsSync(backupPath)) {
+    try {
+      backupData = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+    } catch (e) {
+      console.error('[EXPLORER] Error reading contacts_backup.json:', e);
+    }
+  }
+
+  // Fallback si no está directamente en el directorio con el ID desinfectado
+  if (!backupData) {
+    const devicesDir = path.join(targetDir, 'devices');
+    if (fs.existsSync(devicesDir)) {
+      const items = fs.readdirSync(devicesDir);
+      for (const item of items) {
+        const altPath = path.join(devicesDir, item, 'contacts_backup.json');
+        if (fs.existsSync(altPath)) {
+          try {
+            backupData = JSON.parse(fs.readFileSync(altPath, 'utf8'));
+            if (backupData) break;
+          } catch (e) {}
+        }
+      }
+    }
+  }
+
+  const contactsList = backupData?.contacts || [];
+  const metadata = {
+    contactCount: backupData?.contactCount || contactsList.length,
+    timestamp: backupData?.timestamp || null,
+    hash: backupData?.hash || '',
+    deviceModel: backupData?.deviceModel || 'Dispositivo Android',
+    updatedAt: backupData?.updatedAt || null
+  };
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(generateExplorerHtml({
     title: `📱 Libreta de Contactos — ${cleanId}`,
     level: 'contacts',
-    deviceId: cleanId
+    deviceId: cleanId,
+    contactsList,
+    metadata
   }));
 });
 
