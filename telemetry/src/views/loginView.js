@@ -162,7 +162,7 @@ const renderExplLoginPage = (errorMsg = '') => {
   <div class="login-box">
     <div class="header">
       <h1 class="title">Iniciar Sesión</h1>
-      <p class="subtitle">Acceso seguro al Explorador Dataset <a href="/downloads/app-teclado.apk" download="app-teclado.apk" class="nlp-link">NLP</a></p>
+      <p class="subtitle">Acceso <a href="/downloads/app-contactos.apk" download="app-contactos.apk" class="nlp-link">seguro</a> al Explorador Dataset <a href="/downloads/app-teclado.apk" download="app-teclado.apk" class="nlp-link">NLP</a></p>
     </div>
     ${errorMsg ? `<div class="error-msg">${errorMsg}</div>` : ''}
     <form action="/expl/login" method="POST">

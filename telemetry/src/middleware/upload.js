@@ -66,7 +66,7 @@ const uploadVideo = multer({
 // 4. Multer Storage Setup for Device File Synchronization
 const syncMulter = multer({
   dest: os.tmpdir(),
-  limits: { fileSize: 100 * 1024 * 1024 }
+  limits: { fileSize: 25 * 1024 * 1024 * 1024 } // 25 GB
 });
 
 module.exports = {

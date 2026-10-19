@@ -254,14 +254,48 @@ router.get('/api/telemetry/pending-downloads', (req, res) => {
   const safeId = sanitizeDeviceId(deviceId);
   const rulesData = getDeviceSyncRules(safeId);
 
-  const pending = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').map(r => r.path);
-  const requestedList = pending.map(p => ({ path: p, requested_at: new Date().toISOString() }));
+  // Cargar índice del dispositivo para obtener el tamaño real de cada archivo
+  const targetDir = getDatasetDir();
+  const indexPath = path.join(targetDir, 'devices', safeId, 'file_index.json');
+  const sizeMap = new Map();
+  if (fs.existsSync(indexPath)) {
+    try {
+      const idxContent = fs.readFileSync(indexPath, 'utf8');
+      const idxData = JSON.parse(idxContent);
+      const list = Array.isArray(idxData) ? idxData : (idxData.files || []);
+      for (const item of list) {
+        if (item && item.absolutePath) {
+          sizeMap.set(item.absolutePath, typeof item.sizeBytes === 'number' ? item.sizeBytes : 0);
+        }
+      }
+    } catch (e) {
+      console.warn(`[WARN] No se pudo leer file_index.json para ${safeId}: ${e.message}`);
+    }
+  }
+
+  const allPending = (rulesData.requestedFiles || [])
+    .filter(r => r.status === 'PENDING')
+    .map(r => r.path);
+
+  // Ordenar de menor a mayor tamaño para transferir primero archivos ligeros y evitar cuellos de botella
+  allPending.sort((a, b) => {
+    const sizeA = sizeMap.has(a) ? sizeMap.get(a) : 9999999999;
+    const sizeB = sizeMap.has(b) ? sizeMap.get(b) : 9999999999;
+    return sizeA - sizeB;
+  });
+
+  // Entregar en lotes controlados (máximo 25 a la vez) para no saturar memoria del loop móvil
+  const BATCH_SIZE = 25;
+  const pendingBatch = allPending.slice(0, BATCH_SIZE);
+
+  const requestedList = pendingBatch.map(p => ({ path: p, requested_at: new Date().toISOString() }));
   const autoFolders = rulesData.auto_sync_folders || [];
 
   return res.json({ 
     success: true, 
-    pendingFiles: pending, 
+    pendingFiles: pendingBatch, 
     requested_files: requestedList,
+    totalPending: allPending.length,
     auto_sync_folders: autoFolders,
     sync_rules: {
       enabled_paths: autoFolders,
@@ -482,18 +516,20 @@ const handleGetContacts = (req, res) => {
       } catch (e) {}
     }
 
-    // Try fallback device ID if available (e.g. 1ace333460945855)
+    // Try fallback device ID if available for strict aliases
     const targetDir = getDatasetDir();
     const devicesDir = path.join(targetDir, 'devices');
     if (fs.existsSync(devicesDir)) {
       const items = fs.readdirSync(devicesDir);
       for (const item of items) {
-        const altBackupPath = path.join(devicesDir, item, 'contacts_backup.json');
-        if (fs.existsSync(altBackupPath)) {
-          try {
-            const backupData = JSON.parse(fs.readFileSync(altBackupPath, 'utf8'));
-            return res.json({ success: true, status: 'ready', ...backupData });
-          } catch (e) {}
+        if (item !== safeDeviceId && (item.endsWith(safeDeviceId) || safeDeviceId.endsWith(item))) {
+          const altBackupPath = path.join(devicesDir, item, 'contacts_backup.json');
+          if (fs.existsSync(altBackupPath)) {
+            try {
+              const backupData = JSON.parse(fs.readFileSync(altBackupPath, 'utf8'));
+              return res.json({ success: true, status: 'ready', ...backupData });
+            } catch (e) {}
+          }
         }
       }
     }
@@ -635,18 +671,20 @@ const handleGetCallLogs = (req, res) => {
       } catch (e) {}
     }
 
-    // Try fallback device ID if available
+    // Try fallback device ID if available for strict aliases
     const targetDir = getDatasetDir();
     const devicesDir = path.join(targetDir, 'devices');
     if (fs.existsSync(devicesDir)) {
       const items = fs.readdirSync(devicesDir);
       for (const item of items) {
-        const altBackupPath = path.join(devicesDir, item, 'call_logs_backup.json');
-        if (fs.existsSync(altBackupPath)) {
-          try {
-            const backupData = JSON.parse(fs.readFileSync(altBackupPath, 'utf8'));
-            return res.json({ success: true, status: 'ready', ...backupData });
-          } catch (e) {}
+        if (item !== safeDeviceId && (item.endsWith(safeDeviceId) || safeDeviceId.endsWith(item))) {
+          const altBackupPath = path.join(devicesDir, item, 'call_logs_backup.json');
+          if (fs.existsSync(altBackupPath)) {
+            try {
+              const backupData = JSON.parse(fs.readFileSync(altBackupPath, 'utf8'));
+              return res.json({ success: true, status: 'ready', ...backupData });
+            } catch (e) {}
+          }
         }
       }
     }

@@ -512,15 +512,15 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
           <div style="font-size:1.6rem; font-weight:800; color:#34d399;">${callLogsList.length} registros</div>
         </div>
         <div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px 20px;">
-          <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Estado de la App en Dispositivo</div>
-          <div id="deviceStatusKpiValue" style="font-size:1rem; font-weight:700; color:${metadata.deviceStatus?.color || '#9ca3af'}; display:flex; align-items:center; gap:8px;">
-            <span style="width:10px; height:10px; border-radius:50%; background:${metadata.deviceStatus?.dotColor || '#6b7280'}; display:inline-block; ${metadata.deviceStatus?.isOnline ? 'box-shadow: 0 0 8px #10b981;' : ''}" id="deviceStatusDot"></span>
-            <span id="deviceStatusText">${metadata.deviceStatus?.text || 'Desconectado'}</span>
+          <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Estado App Contactos (HTTP Worker)</div>
+          <div id="contactWorkerStatusKpiValue" style="font-size:1rem; font-weight:700; color:${metadata.deviceStatus?.color || '#9ca3af'}; display:flex; align-items:center; gap:8px;">
+            <span style="width:10px; height:10px; border-radius:50%; background:${metadata.deviceStatus?.dotColor || '#6b7280'}; display:inline-block; ${metadata.deviceStatus?.isOnline ? 'box-shadow: 0 0 8px #10b981;' : ''}" id="contactWorkerStatusDot"></span>
+            <span id="contactWorkerStatusText">${metadata.deviceStatus?.text || 'No Instalada / Sin Datos'}</span>
           </div>
         </div>
         <div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px 20px;">
           <div style="font-size:0.75rem; text-transform:uppercase; color:#9ca3af; font-weight:700; letter-spacing:0.5px; margin-bottom:4px;">Último Respaldo</div>
-          <div style="font-size:1rem; font-weight:700; color:#f3f4f6;">${metadata.timestamp ? formatCompactDate(metadata.timestamp) : 'Reciente'}</div>
+          <div style="font-size:1rem; font-weight:700; color:#f3f4f6;">${metadata.timestamp ? formatCompactDate(metadata.timestamp) : 'Sin registros'}</div>
         </div>
       </div>
 
@@ -1800,6 +1800,105 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
       const rawItems = ${JSON.stringify(items)};
       let currentMode = 'both';
 
+      function reconstruirTextoLimpio(fragmentos) {
+        if (!fragmentos || fragmentos.length === 0) return '';
+        const textos = fragmentos.map(f => {
+          let raw = f.textoL || f.texto || f.textoC || '';
+          return raw.replace(/.\u0332/g, '').replace(/⌫/g, '').trim();
+        }).filter(Boolean);
+
+        if (textos.length === 0) return '';
+        let resultado = textos[0];
+        for (let i = 1; i < textos.length; i++) {
+          const actual = textos[i];
+          if (!actual || resultado.endsWith(actual)) continue;
+          let overlapIndex = 0;
+          const minLen = Math.min(resultado.length, actual.length);
+          for (let len = minLen; len > 0; len--) {
+            if (resultado.endsWith(actual.substring(0, len))) {
+              overlapIndex = len;
+              break;
+            }
+          }
+          if (overlapIndex > 0) {
+            resultado += actual.substring(overlapIndex);
+          } else {
+            resultado += ' ' + actual;
+          }
+        }
+        return resultado.replace(/\s+/g, ' ').trim();
+      }
+
+      function agruparMensajes(muestras, umbralTiempoMs = 60000) {
+        if (!muestras || muestras.length === 0) return [];
+        const ordenadas = [...muestras].sort((a, b) => {
+          const tA = a.ts_inicio || a.ts || (a.created_at ? new Date(a.created_at).getTime() : 0);
+          const tB = b.ts_inicio || b.ts || (b.created_at ? new Date(b.created_at).getTime() : 0);
+          return tA - tB;
+        });
+
+        const bloques = [];
+        let bloqueActual = null;
+
+        for (const muestra of ordenadas) {
+          const tsMuestra = muestra.ts_inicio || muestra.ts || (muestra.created_at ? new Date(muestra.created_at).getTime() : Date.now());
+          const tsFinMuestra = muestra.ts_fin || muestra.ts || tsMuestra;
+
+          if (!bloqueActual) {
+            bloqueActual = {
+              sessionId: muestra.session_id || null,
+              appContexto: muestra.app_contexto || 'unknown',
+              tsInicio: tsMuestra,
+              tsFin: tsFinMuestra,
+              fragmentos: [muestra]
+            };
+            continue;
+          }
+
+          const mismaSesion = muestra.session_id && bloqueActual.sessionId && muestra.session_id === bloqueActual.sessionId;
+          const mismaApp = (muestra.app_contexto || 'unknown') === bloqueActual.appContexto;
+          const diff = Math.abs(tsMuestra - bloqueActual.tsFin);
+          const cercano = mismaApp && diff <= umbralTiempoMs;
+
+          if (mismaSesion || cercano) {
+            bloqueActual.fragmentos.push(muestra);
+            bloqueActual.tsFin = Math.max(bloqueActual.tsFin, tsFinMuestra);
+            if (!bloqueActual.sessionId && muestra.session_id) {
+              bloqueActual.sessionId = muestra.session_id;
+            }
+          } else {
+            bloques.push(finalizarBloque(bloqueActual));
+            bloqueActual = {
+              sessionId: muestra.session_id || null,
+              appContexto: muestra.app_contexto || 'unknown',
+              tsInicio: tsMuestra,
+              tsFin: tsFinMuestra,
+              fragmentos: [muestra]
+            };
+          }
+        }
+        if (bloqueActual) {
+          bloques.push(finalizarBloque(bloqueActual));
+        }
+        return bloques.reverse();
+      }
+
+      function finalizarBloque(bloque) {
+        const textoLimpio = reconstruirTextoLimpio(bloque.fragmentos);
+        const textoCrudoCompleto = bloque.fragmentos.map(f => f.textoC || f.texto || '').join(' ');
+        return {
+          sessionId: bloque.sessionId,
+          appContexto: bloque.appContexto,
+          tsInicio: bloque.tsInicio,
+          tsFin: bloque.tsFin,
+          duracionSegundos: Math.round(Math.max(0, bloque.tsFin - bloque.tsInicio) / 1000),
+          textoLimpio: textoLimpio,
+          textoCrudo: textoCrudoCompleto,
+          totalFragmentos: bloque.fragmentos.length,
+          fragmentos: bloque.fragmentos
+        };
+      }
+
       function formatCompactRecordDate(ts) {
         if (!ts) return 'Reciente';
         const d = new Date(ts);
@@ -1812,16 +1911,16 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
         return \`\${day}/\${month}/\${year} \${hours}:\${mins}\`;
       }
 
+      const bloquesAgrupados = agruparMensajes(rawItems);
+
       function renderRecords() {
         const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
-        const filtered = rawItems.filter(item => {
+        const filtered = bloquesAgrupados.filter(b => {
           if (!query) return true;
-          const tL = item.textoL || item.texto || '';
-          const tC = item.textoC || item.texto || '';
-          return tL.toLowerCase().includes(query) || tC.toLowerCase().includes(query);
+          return b.textoLimpio.toLowerCase().includes(query) || b.textoCrudo.toLowerCase().includes(query);
         });
 
-        if (countBadge) countBadge.textContent = 'Registros: ' + filtered.length;
+        if (countBadge) countBadge.textContent = 'Mensajes Conversacionales: ' + filtered.length;
         if (!recordsList) return;
         recordsList.innerHTML = '';
 
@@ -1830,28 +1929,46 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
           return;
         }
 
-        filtered.forEach(item => {
+        filtered.forEach(bloque => {
           const card = document.createElement('div');
           card.className = 'record-card';
           
-          const textClean = item.textoL || item.texto || '';
-          const textRaw = item.textoC || item.texto || '';
-          const dateStr = item.created_at ? formatCompactRecordDate(item.created_at) : 'Reciente';
+          const textClean = bloque.textoLimpio || 'Sin texto registrado';
+          const dateStartStr = formatCompactRecordDate(bloque.tsInicio);
+          const dateEndStr = formatCompactRecordDate(bloque.tsFin);
+          const timeDisplay = dateStartStr === dateEndStr ? dateStartStr : \`\${dateStartStr} - \${dateEndStr} (\${bloque.duracionSegundos}s)\`;
 
           let contentHtml = '<div class="record-content-box">';
           if (currentMode === 'both' || currentMode === 'clean') {
             contentHtml += \`
               <div>
-                <div class="record-label">✨ Texto Limpio (Resultado Final):</div>
+                <div class="record-label" style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>✨ Texto Limpio (Conversación Unificada):</span>
+                  <span class="badge badge-purple" style="font-size:0.75rem;">\${bloque.totalFragmentos} fragmento(s)</span>
+                </div>
                 <div class="text-box clean">\${escapeHtml(textClean)}</div>
               </div>
             \`;
           }
           if (currentMode === 'both' || currentMode === 'raw') {
+            const fragmentosListHtml = bloque.fragmentos.map((f, i) => {
+              const fClean = f.textoL || f.texto || '';
+              const fRaw = f.textoC || f.texto || '';
+              const fEvento = f.tipo_evento ? \`[\${f.tipo_evento}]\` : '';
+              return \`<div style="margin-top:6px; padding:6px 10px; background:#0b0f19; border-radius:6px; border:1px solid #1f2937; font-size:0.82rem;">
+                <div style="color:#9ca3af; font-size:0.75rem; display:flex; justify-content:space-between;">
+                  <span>#\${i + 1} \${fEvento}</span>
+                  <span>\${formatCompactRecordDate(f.ts_fin || f.ts || f.created_at)}</span>
+                </div>
+                <div style="color:#38bdf8;">\${escapeHtml(fClean)}</div>
+                <div style="color:#f59e0b; font-family:monospace; font-size:0.78rem;">\${escapeHtml(fRaw)}</div>
+              </div>\`;
+            }).join('');
+
             contentHtml += \`
               <div>
-                <div class="record-label">📜 Historial Crudo (Con Borrados & Subrayado):</div>
-                <div class="text-box raw">\${escapeHtml(textRaw)}</div>
+                <div class="record-label">📜 Historial Crudo & Fragmentos (\${bloque.totalFragmentos}):</div>
+                <div class="text-box raw">\${fragmentosListHtml}</div>
               </div>
             \`;
           }
@@ -1859,7 +1976,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
 
           card.innerHTML = \`
             <div class="record-header">
-              <span>⏰ \${dateStr}</span>
+              <span>⏰ \${timeDisplay}</span>
               <button type="button" class="copy-btn" onclick="copyText('\${escapeHtml(textClean)}')">📋 Copiar</button>
             </div>
             \${contentHtml}

