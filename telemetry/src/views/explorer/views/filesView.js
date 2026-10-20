@@ -17,7 +17,8 @@ function renderFilesView({
 }) {
   const normCurrent = currentPath.endsWith('/') ? currentPath : currentPath + '/';
   const dirSet = new Map();
-  const folderCountMap = new Map();
+  const folderTotalMap = new Map();
+  const folderDownloadedMap = new Map();
   const filesList = [];
 
   allFiles.forEach(f => {
@@ -45,7 +46,10 @@ function renderFilesView({
           dirSet.set(folderName, { name: folderName, path: folderPath });
         }
         if (!f.isDirectory && !isNaN(numSize) && numSize >= 100) {
-          folderCountMap.set(folderName, (folderCountMap.get(folderName) || 0) + 1);
+          folderTotalMap.set(folderName, (folderTotalMap.get(folderName) || 0) + 1);
+          if (downloadedMap[normalizedFilePath] || downloadedMap[filePath]) {
+            folderDownloadedMap.set(folderName, (folderDownloadedMap.get(folderName) || 0) + 1);
+          }
         }
       } else {
         if (f.isDirectory) {
@@ -182,7 +186,8 @@ function renderFilesView({
       ${subdirs.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay subcarpetas en esta ruta.</p>' : `
         <div class="folder-grid">
           ${subdirs.map(d => {
-            const count = folderCountMap.get(d.name) || 0;
+            const totalCount = folderTotalMap.get(d.name) || 0;
+            const downloadedCount = folderDownloadedMap.get(d.name) || 0;
             return `
               <a href="/expl/devices/${deviceId}/files?path=${encodeURIComponent(d.path)}" class="folder-card">
                 <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
@@ -190,7 +195,7 @@ function renderFilesView({
                   <span style="font-weight:600; font-size:0.88rem; color:#f3f4f6; font-family:monospace; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${d.name}">${d.name}</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                  <span class="badge" style="background:rgba(56,189,248,0.1); color:#38bdf8; border-color:rgba(56,189,248,0.25); font-size:0.75rem; padding:2px 8px; font-weight:600;">${count}</span>
+                  <span class="badge" style="background:rgba(56,189,248,0.1); color:#38bdf8; border-color:rgba(56,189,248,0.25); font-size:0.75rem; padding:2px 8px; font-weight:600;">${downloadedCount}/${totalCount}</span>
                   <span style="color:#6b7280; font-size:0.9rem; font-weight:bold;">&rarr;</span>
                 </div>
               </a>
