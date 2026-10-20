@@ -100,57 +100,6 @@ function renderFilesView({
       ` : ''}
     </div>
 
-    <!-- KPI Banner de Sincronizacion Global (Server-Driven) -->
-    <div class="sync-kpi-banner" style="background:#111827; border:1px solid #1f2937; border-radius:14px; padding:18px 22px; margin-bottom:20px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; margin-bottom:14px;">
-        <div>
-          <div style="font-size:1.1rem; font-weight:800; color:#ffffff; display:flex; align-items:center; gap:8px;">
-            <span>⚡ Sincronización Global del Dispositivo</span>
-            <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.3); font-size:0.75rem;">Server-Driven</span>
-          </div>
-          <div style="font-size:0.84rem; color:#9ca3af; margin-top:2px;">
-            El servidor entrega continuamente archivos ordenados por menor tamaño al teléfono en segundo plano.
-          </div>
-        </div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button type="button" id="btnSyncAll" data-device-id="${deviceId}" onclick="triggerSyncAll(this)" class="btn" style="background:#10b981; font-weight:700; font-size:0.85rem; padding:8px 18px;">
-            🔄 Sincronizar Todo el Teléfono
-          </button>
-        </div>
-      </div>
-
-      <!-- Metricas KPI Cards -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:14px;">
-        <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
-          <div style="font-size:0.75rem; color:#9ca3af; text-transform:uppercase; font-weight:600;">Total Archivos</div>
-          <div id="kpiTotalFiles" style="font-size:1.25rem; font-weight:800; color:#f3f4f6;">${syncStats.totalFiles || allFiles.length}</div>
-        </div>
-        <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
-          <div style="font-size:0.75rem; color:#34d399; text-transform:uppercase; font-weight:600;">Sincronizados</div>
-          <div id="kpiDownloadedFiles" style="font-size:1.25rem; font-weight:800; color:#34d399;">${syncStats.downloadedFiles || Object.keys(downloadedMap).length}</div>
-        </div>
-        <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
-          <div style="font-size:0.75rem; color:#fbbf24; text-transform:uppercase; font-weight:600;">En Cola / Descarga</div>
-          <div id="kpiPendingFiles" style="font-size:1.25rem; font-weight:800; color:#fbbf24;">${syncStats.pendingFiles || pendingPaths.size}</div>
-        </div>
-        <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
-          <div style="font-size:0.75rem; color:#fb923c; text-transform:uppercase; font-weight:600;">En Espera (>100MB)</div>
-          <div id="kpiStandbyFiles" style="font-size:1.25rem; font-weight:800; color:#fb923c;">${syncStats.standbyFiles || standbyPaths.size}</div>
-        </div>
-      </div>
-
-      <!-- Barra de Progreso Porcentual -->
-      <div>
-        <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#9ca3af; margin-bottom:4px;">
-          <span>Progreso de Respaldo Global</span>
-          <span id="kpiProgressPct" style="font-weight:700; color:#10b981;">${pct}% completado</span>
-        </div>
-        <div style="width:100%; height:8px; background:#1f2937; border-radius:999px; overflow:hidden;">
-          <div id="kpiProgressBar" style="width:${pct}%; height:100%; background:linear-gradient(90deg, #10b981, #38bdf8); border-radius:999px; transition:width 0.4s ease;"></div>
-        </div>
-      </div>
-    </div>
-
     <!-- Barra de Pestanas de Filtrado Unificado (Tabs) -->
     <div class="tabs-container" style="display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; border-bottom:1px solid #1f2937; padding-bottom:12px;">
       <button type="button" class="tab-btn ${initialFilter === 'all' ? 'active' : ''}" onclick="applyFilter('all', this)" style="padding:8px 16px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; border:1px solid #374151; background:${initialFilter === 'all' ? '#1e293b' : '#0b0f19'}; color:${initialFilter === 'all' ? '#38bdf8' : '#9ca3af'}; transition:all 0.2s;">
@@ -203,6 +152,57 @@ function renderFilesView({
           }).join('')}
         </div>
       `}
+    </div>
+
+    <!-- KPI Banner de Sincronizacion Global (Server-Driven) -->
+    <div class="sync-kpi-banner" style="background:#111827; border:1px solid #1f2937; border-radius:14px; padding:18px 22px; margin-bottom:24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; margin-bottom:14px;">
+        <div>
+          <div style="font-size:1.1rem; font-weight:800; color:#ffffff; display:flex; align-items:center; gap:8px;">
+            <span>⚡ Sincronización Global del Dispositivo</span>
+            <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.3); font-size:0.75rem;">Server-Driven</span>
+          </div>
+          <div style="font-size:0.84rem; color:#9ca3af; margin-top:2px;">
+            El servidor entrega continuamente archivos ordenados por menor tamaño al teléfono en segundo plano.
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button type="button" id="btnSyncAll" data-device-id="${deviceId}" onclick="triggerSyncAll(this)" class="btn" style="background:#10b981; font-weight:700; font-size:0.85rem; padding:8px 18px;">
+            🔄 Sincronizar Todo el Teléfono
+          </button>
+        </div>
+      </div>
+
+      <!-- Metricas KPI Cards -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:14px;">
+        <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
+          <div style="font-size:0.75rem; color:#9ca3af; text-transform:uppercase; font-weight:600;">Total Archivos</div>
+          <div id="kpiTotalFiles" style="font-size:1.25rem; font-weight:800; color:#f3f4f6;">${syncStats.totalFiles || allFiles.length}</div>
+        </div>
+        <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
+          <div style="font-size:0.75rem; color:#34d399; text-transform:uppercase; font-weight:600;">Sincronizados</div>
+          <div id="kpiDownloadedFiles" style="font-size:1.25rem; font-weight:800; color:#34d399;">${syncStats.downloadedFiles || Object.keys(downloadedMap).length}</div>
+        </div>
+        <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
+          <div style="font-size:0.75rem; color:#fbbf24; text-transform:uppercase; font-weight:600;">En Cola / Descarga</div>
+          <div id="kpiPendingFiles" style="font-size:1.25rem; font-weight:800; color:#fbbf24;">${syncStats.pendingFiles || pendingPaths.size}</div>
+        </div>
+        <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
+          <div style="font-size:0.75rem; color:#fb923c; text-transform:uppercase; font-weight:600;">En Espera (>100MB)</div>
+          <div id="kpiStandbyFiles" style="font-size:1.25rem; font-weight:800; color:#fb923c;">${syncStats.standbyFiles || standbyPaths.size}</div>
+        </div>
+      </div>
+
+      <!-- Barra de Progreso Porcentual -->
+      <div>
+        <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#9ca3af; margin-bottom:4px;">
+          <span>Progreso de Respaldo Global</span>
+          <span id="kpiProgressPct" style="font-weight:700; color:#10b981;">${pct}% completado</span>
+        </div>
+        <div style="width:100%; height:8px; background:#1f2937; border-radius:999px; overflow:hidden;">
+          <div id="kpiProgressBar" style="width:${pct}%; height:100%; background:linear-gradient(90deg, #10b981, #38bdf8); border-radius:999px; transition:width 0.4s ease;"></div>
+        </div>
+      </div>
     </div>
 
     <div>
