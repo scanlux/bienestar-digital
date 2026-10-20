@@ -153,6 +153,62 @@ function getFilesClientScript({ deviceId, initialFilter }) {
       }
     }
 
+    let sortState = {
+      column: null,
+      direction: 'asc'
+    };
+
+    function sortFilesTable(col) {
+      const tbody = document.getElementById('filesTableBody');
+      if (!tbody) return;
+
+      if (sortState.column === col) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortState.column = col;
+        sortState.direction = (col === 'size' || col === 'date') ? 'desc' : 'asc';
+      }
+
+      ['name', 'size', 'date', 'status'].forEach(c => {
+        const icon = document.getElementById('sortIcon_' + c);
+        if (icon) {
+          if (c === sortState.column) {
+            icon.textContent = sortState.direction === 'asc' ? '▲' : '▼';
+            icon.style.color = '#38bdf8';
+          } else {
+            icon.textContent = '↕';
+            icon.style.color = '#6b7280';
+          }
+        }
+      });
+
+      const rows = Array.from(tbody.querySelectorAll('tr[data-file-path]'));
+      const dirMultiplier = sortState.direction === 'asc' ? 1 : -1;
+
+      rows.sort((a, b) => {
+        if (col === 'name') {
+          const nameA = (a.getAttribute('data-file-name') || '').toLowerCase();
+          const nameB = (b.getAttribute('data-file-name') || '').toLowerCase();
+          return nameA.localeCompare(nameB) * dirMultiplier;
+        } else if (col === 'size') {
+          const sizeA = parseFloat(a.getAttribute('data-file-size') || 0);
+          const sizeB = parseFloat(b.getAttribute('data-file-size') || 0);
+          return (sizeA - sizeB) * dirMultiplier;
+        } else if (col === 'date') {
+          const dateA = parseFloat(a.getAttribute('data-file-date') || 0);
+          const dateB = parseFloat(b.getAttribute('data-file-date') || 0);
+          return (dateA - dateB) * dirMultiplier;
+        } else if (col === 'status') {
+          const statusA = parseInt(a.getAttribute('data-file-status') || 4, 10);
+          const statusB = parseInt(b.getAttribute('data-file-status') || 4, 10);
+          return (statusA - statusB) * dirMultiplier;
+        }
+        return 0;
+      });
+
+      rows.forEach(r => tbody.appendChild(r));
+    }
+
     function prioritizeFile(btn) {
       const deviceId = btn.getAttribute('data-device-id');
       const encodedPath = btn.getAttribute('data-path');

@@ -212,31 +212,41 @@ function renderFilesView({
         <div class="desktop-table-view" style="overflow-x:auto; background:#111827; border:1px solid #1f2937; border-radius:14px;">
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
             <thead>
-              <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af;">
+              <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af; user-select:none;">
                 <th style="padding:12px 10px 12px 20px; width:48px; text-align:center; white-space:nowrap;">
                   <input type="checkbox" id="selectAllCb" onclick="toggleSelectAll(this)" style="width:18px; height:18px; cursor:pointer;" title="Seleccionar todos" />
                 </th>
-                <th style="padding:12px 14px; font-weight:600; max-width:280px;">Nombre del Archivo</th>
-                <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:90px; text-align:right;">Tamaño</th>
-                <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:135px; text-align:center;">Fecha</th>
-                <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:140px; text-align:center;">Estado</th>
+                <th style="padding:12px 14px; font-weight:600; max-width:280px; cursor:pointer;" onclick="sortFilesTable('name')" title="Ordenar por Nombre">
+                  Nombre del Archivo <span id="sortIcon_name" style="font-size:0.75rem; color:#6b7280; margin-left:4px;">↕</span>
+                </th>
+                <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:90px; text-align:right; cursor:pointer;" onclick="sortFilesTable('size')" title="Ordenar por Tamaño">
+                  Tamaño <span id="sortIcon_size" style="font-size:0.75rem; color:#6b7280; margin-left:4px;">↕</span>
+                </th>
+                <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:135px; text-align:center; cursor:pointer;" onclick="sortFilesTable('date')" title="Ordenar por Fecha">
+                  Fecha <span id="sortIcon_date" style="font-size:0.75rem; color:#6b7280; margin-left:4px;">↕</span>
+                </th>
+                <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:140px; text-align:center; cursor:pointer;" onclick="sortFilesTable('status')" title="Ordenar por Estado">
+                  Estado <span id="sortIcon_status" style="font-size:0.75rem; color:#6b7280; margin-left:4px;">↕</span>
+                </th>
                 <th style="padding:12px 14px; font-weight:600; text-align:right; white-space:nowrap; width:175px;">Acción</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="filesTableBody">
               ${filesList.map(f => {
                 const isDownloaded = Boolean(downloadedMap[f.path]);
                 const isPending = pendingPaths.has(f.path);
                 const isStandby = standbyPaths.has(f.path);
+                const statusCode = isDownloaded ? 1 : isPending ? 2 : isStandby ? 3 : 4;
                 const isAudio = Boolean(f.name && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
                 const isImage = Boolean(f.name && (/\\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
-                const isVideo = Boolean(f.name && (/\\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
+                const videoRegex = /\\.(mp4|webm|mkv|mov|avi|3gp)$/i;
+                const isVideo = Boolean(f.name && videoRegex.test(f.name));
                 const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
                 const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
                 const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
 
                 return `
-                  <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${f.name}" data-downloaded="${isDownloaded ? 'true' : 'false'}" data-file-type="${fileType}">
+                  <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${(f.name || '').toLowerCase()}" data-file-size="${f.size || 0}" data-file-date="${f.lastModified || 0}" data-file-status="${statusCode}" data-downloaded="${isDownloaded ? 'true' : 'false'}" data-file-type="${fileType}">
                     <td style="padding:12px 10px 12px 20px; text-align:center; white-space:nowrap;" class="cb-cell">
                       ${isDownloaded ? '' : `<input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />`}
                     </td>
