@@ -486,6 +486,13 @@ router.get(['/expl/devices/:deviceId/files', '/expl/devices/:deviceId/files/'], 
   const syncStats = getDeviceSyncStats(cleanId);
   const initialFilter = req.query.filter || 'all';
 
+  const pendingList = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING');
+  const activeTransferFile = pendingList.length > 0 ? {
+    path: pendingList[0].path,
+    name: path.basename(pendingList[0].path),
+    sizeBytes: pendingList[0].sizeBytes || null
+  } : null;
+
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(generateExplorerHtml({
     title: `📂 Explorador Unificado de Archivos — ${cleanId}`,
@@ -499,7 +506,8 @@ router.get(['/expl/devices/:deviceId/files', '/expl/devices/:deviceId/files/'], 
     completedPaths,
     autoSyncFolders,
     syncStats,
-    initialFilter
+    initialFilter,
+    activeTransferFile
   }));
 });
 

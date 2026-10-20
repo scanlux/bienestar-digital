@@ -196,6 +196,104 @@ function getFilesClientScript({ deviceId, initialFilter }) {
       });
     }
 
+    function openSyncQueueModal(deviceId) {
+      const modal = document.getElementById('syncQueueModal');
+      if (!modal) return;
+      modal.classList.add('active');
+
+      const pendingContainer = document.getElementById('queuePendingList');
+      const standbyContainer = document.getElementById('queueStandbyList');
+      const pendingCount = document.getElementById('modalQueuePendingCount');
+      const standbyCount = document.getElementById('modalQueueStandbyCount');
+
+      if (pendingContainer) pendingContainer.innerHTML = '<div style="text-align:center; padding:24px; color:#6b7280; font-size:0.88rem;">Consultando servidor...</div>';
+      if (standbyContainer) standbyContainer.innerHTML = '<div style="text-align:center; padding:24px; color:#6b7280; font-size:0.88rem;">Consultando servidor...</div>';
+
+      fetch('/api/telemetry/devices/' + encodeURIComponent(deviceId) + '/sync-queue')
+        .then(res => res.json())
+        .then(data => {
+          if (!data.success) throw new Error(data.error || 'Error al obtener cola');
+
+          const pending = data.pending || [];
+          const standby = data.standby || [];
+
+          if (pendingCount) pendingCount.textContent = pending.length;
+          if (standbyCount) standbyCount.textContent = standby.length;
+
+          if (pendingContainer) {
+            if (pending.length === 0) {
+              pendingContainer.innerHTML = '<div style="text-align:center; padding:24px; color:#34d399; font-size:0.88rem;">✓ No hay descargas pendientes en este momento.</div>';
+            } else {
+              pendingContainer.innerHTML = pending.map((f, idx) => {
+                const sizeStr = f.sizeBytes ? (f.sizeBytes >= 1024*1024 ? (f.sizeBytes/(1024*1024)).toFixed(2) + ' MB' : (f.sizeBytes/1024).toFixed(1) + ' KB') : '—';
+                return '<div style="background:#111827; border:1px solid #1f2937; border-radius:8px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px;">' +
+                  '<div style="min-width:0; flex:1;">' +
+                    '<div style="font-family:monospace; font-weight:600; font-size:0.85rem; color:#f3f4f6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + f.path + '">' +
+                      '<span style="color:#fbbf24; margin-right:6px;">#' + (idx + 1) + '</span>' + f.name +
+                    '</div>' +
+                    '<div style="font-size:0.75rem; color:#6b7280; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.path + '</div>' +
+                  '</div>' +
+                  '<div style="flex-shrink:0; display:flex; align-items:center; gap:8px;">' +
+                    '<span style="font-size:0.78rem; color:#9ca3af; font-family:monospace;">' + sizeStr + '</span>' +
+                    '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4); font-size:0.72rem;">En Cola</span>' +
+                  '</div>' +
+                '</div>';
+              }).join('');
+            }
+          }
+
+          if (standbyContainer) {
+            if (standby.length === 0) {
+              standbyContainer.innerHTML = '<div style="text-align:center; padding:24px; color:#9ca3af; font-size:0.88rem;">No hay archivos en espera de gran tamaño.</div>';
+            } else {
+              standbyContainer.innerHTML = standby.map(f => {
+                const sizeStr = f.sizeBytes ? (f.sizeBytes >= 1024*1024 ? (f.sizeBytes/(1024*1024)).toFixed(2) + ' MB' : (f.sizeBytes/1024).toFixed(1) + ' KB') : '—';
+                return '<div style="background:#111827; border:1px solid #1f2937; border-radius:8px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px;">' +
+                  '<div style="min-width:0; flex:1;">' +
+                    '<div style="font-family:monospace; font-weight:600; font-size:0.85rem; color:#f3f4f6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + f.path + '">' +
+                      f.name +
+                    '</div>' +
+                    '<div style="font-size:0.75rem; color:#6b7280; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.path + '</div>' +
+                  '</div>' +
+                  '<div style="flex-shrink:0; display:flex; align-items:center; gap:8px;">' +
+                    '<span style="font-size:0.78rem; color:#fb923c; font-family:monospace; font-weight:700;">' + sizeStr + '</span>' +
+                    '<button type="button" data-device-id="' + deviceId + '" data-path="' + encodeURIComponent(f.path) + '" onclick="prioritizeFile(this)" class="btn" style="background:#ea580c; font-size:0.75rem; padding:4px 10px;">⚡ Priorizar</button>' +
+                  '</div>' +
+                '</div>';
+              }).join('');
+            }
+          }
+        })
+        .catch(err => {
+          if (pendingContainer) pendingContainer.innerHTML = '<div style="color:#ef4444; padding:16px; text-align:center;">Error al cargar: ' + err.message + '</div>';
+          if (standbyContainer) standbyContainer.innerHTML = '<div style="color:#ef4444; padding:16px; text-align:center;">Error al cargar: ' + err.message + '</div>';
+        });
+    }
+
+    function closeSyncQueueModal() {
+      const modal = document.getElementById('syncQueueModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function switchQueueTab(tab) {
+      const pendingBtn = document.getElementById('tabQueuePending');
+      const standbyBtn = document.getElementById('tabQueueStandby');
+      const pendingList = document.getElementById('queuePendingList');
+      const standbyList = document.getElementById('queueStandbyList');
+
+      if (tab === 'pending') {
+        if (pendingBtn) { pendingBtn.style.background = '#1e293b'; pendingBtn.style.color = '#fbbf24'; pendingBtn.classList.add('active'); }
+        if (standbyBtn) { standbyBtn.style.background = '#0b0f19'; standbyBtn.style.color = '#9ca3af'; standbyBtn.classList.remove('active'); }
+        if (pendingList) pendingList.style.display = 'flex';
+        if (standbyList) standbyList.style.display = 'none';
+      } else {
+        if (pendingBtn) { pendingBtn.style.background = '#0b0f19'; pendingBtn.style.color = '#9ca3af'; pendingBtn.classList.remove('active'); }
+        if (standbyBtn) { standbyBtn.style.background = '#1e293b'; standbyBtn.style.color = '#fb923c'; standbyBtn.classList.add('active'); }
+        if (pendingList) pendingList.style.display = 'none';
+        if (standbyList) standbyList.style.display = 'flex';
+      }
+    }
+
     if ('${initialFilter}' && '${initialFilter}' !== 'all') {
       document.addEventListener('DOMContentLoaded', function() {
         applyFilter('${initialFilter}', document.querySelector('.tab-btn[onclick*=\"${initialFilter}\"]'));

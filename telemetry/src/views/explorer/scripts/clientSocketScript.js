@@ -116,6 +116,72 @@ function getClientSocketScript({ deviceId }) {
             }
           });
 
+          syncSocket.on('sync:transfer_status', function(data) {
+            console.log('[REALTIME_SYNC] Evento sync:transfer_status recibido:', data);
+            const icon = document.getElementById('activeTransferIcon');
+            const name = document.getElementById('activeTransferName');
+            const size = document.getElementById('activeTransferSize');
+            const badge = document.getElementById('activeTransferBadge');
+            const errBanner = document.getElementById('transferErrorBanner');
+
+            if (!data) return;
+
+            if (data.status === 'uploading') {
+              if (icon) icon.textContent = '⏳';
+              if (name) {
+                name.textContent = data.filename || data.path || 'Archivo en proceso...';
+                name.title = data.path || '';
+                name.style.color = '#38bdf8';
+              }
+              if (size) {
+                const s = Number(data.sizeBytes);
+                if (s && s > 0) {
+                  size.textContent = s >= 1024*1024 ? (s/(1024*1024)).toFixed(2) + ' MB' : (s/1024).toFixed(1) + ' KB';
+                }
+              }
+              if (badge) {
+                badge.textContent = 'Subiendo';
+                badge.style.background = 'rgba(56,189,248,0.15)';
+                badge.style.color = '#38bdf8';
+                badge.style.borderColor = 'rgba(56,189,248,0.3)';
+              }
+            } else if (data.status === 'completed') {
+              if (icon) icon.textContent = '✓';
+              if (name) {
+                name.textContent = 'Último completado: ' + (data.filename || data.path || '');
+                name.style.color = '#34d399';
+              }
+              if (badge) {
+                badge.textContent = 'Completado';
+                badge.style.background = 'rgba(16,185,129,0.15)';
+                badge.style.color = '#10b981';
+                badge.style.borderColor = 'rgba(16,185,129,0.3)';
+              }
+            }
+          });
+
+          syncSocket.on('sync:transfer_error', function(data) {
+            console.warn('[REALTIME_SYNC] Error de transferencia recibido:', data);
+            const errBanner = document.getElementById('transferErrorBanner');
+            const errText = document.getElementById('transferErrorText');
+            const badge = document.getElementById('activeTransferBadge');
+            const icon = document.getElementById('activeTransferIcon');
+
+            if (errBanner && errText) {
+              const msg = data && (data.message || data.error) ? (data.message || data.error) : 'Fallo en la transferencia remota';
+              const file = data && data.filename ? ' (' + data.filename + ')' : '';
+              errText.textContent = msg + file;
+              errBanner.style.display = 'flex';
+            }
+            if (badge) {
+              badge.textContent = 'Fallo';
+              badge.style.background = 'rgba(239,68,68,0.15)';
+              badge.style.color = '#f87171';
+              badge.style.borderColor = 'rgba(239,68,68,0.3)';
+            }
+            if (icon) icon.textContent = '⚠️';
+          });
+
           syncSocket.on('sync:status_scanning', function(data) {
             console.log('[REALTIME_SYNC] Evento sync:status_scanning recibido:', data);
             const banner = document.getElementById('scanStatusBanner');

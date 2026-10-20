@@ -251,6 +251,20 @@ router.get('/api/telemetry/pending-downloads', (req, res) => {
   const BATCH_SIZE = 25;
   const pendingBatch = allPending.slice(0, BATCH_SIZE);
 
+  if (pendingBatch.length > 0) {
+    const currentActivePath = pendingBatch[0];
+    const deviceSyncNs = req.app.get('deviceSyncNamespace');
+    if (deviceSyncNs) {
+      deviceSyncNs.to(`web:device:${safeId}`).emit('sync:transfer_status', {
+        status: 'uploading',
+        filename: path.basename(currentActivePath),
+        path: currentActivePath,
+        sizeBytes: sizeMap.get(currentActivePath) || null,
+        timestamp: Date.now()
+      });
+    }
+  }
+
   const requestedList = pendingBatch.map(p => ({ path: p, requested_at: new Date().toISOString() }));
   const autoFolders = rulesData.auto_sync_folders || [];
 
@@ -275,6 +289,33 @@ router.get('/api/telemetry/devices/:deviceId/sync-stats', (req, res) => {
 
   const stats = getDeviceSyncStats(safeId);
   return res.json({ success: true, deviceId: safeId, stats });
+});
+
+// GET /api/telemetry/devices/:deviceId/sync-queue - Lista detallada de archivos en cola y en espera
+router.get('/api/telemetry/devices/:deviceId/sync-queue', (req, res) => {
+  const safeId = sanitizeDeviceId(req.params.deviceId);
+  if (!safeId) return res.status(400).json({ error: 'Falta parametro deviceId' });
+
+  const rulesData = getDeviceSyncRules(safeId);
+  const pending = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING');
+  const standby = (rulesData.requestedFiles || []).filter(r => r.status === 'STANDBY');
+
+  return res.json({
+    success: true,
+    deviceId: safeId,
+    pending: pending.map(r => ({
+      path: r.path,
+      name: path.basename(r.path),
+      sizeBytes: r.sizeBytes || null,
+      requestedAt: r.requestedAt
+    })),
+    standby: standby.map(r => ({
+      path: r.path,
+      name: path.basename(r.path),
+      sizeBytes: r.sizeBytes || null,
+      requestedAt: r.requestedAt
+    }))
+  });
 });
 
 // POST /api/telemetry/devices/:deviceId/sync-all - Disparador de sincronizacion de todo el almacenamiento
@@ -378,6 +419,12 @@ router.post('/api/telemetry/upload-file', syncMulter.single('file'), (req, res) 
   const deviceSyncNs = req.app.get('deviceSyncNamespace');
   if (deviceSyncNs) {
     deviceSyncNs.to(`web:device:${safeId}`).emit('file:uploaded', { path: remotePath || filename, filename });
+    deviceSyncNs.to(`web:device:${safeId}`).emit('sync:transfer_status', { 
+      status: 'completed', 
+      filename, 
+      path: remotePath || filename,
+      timestamp: Date.now()
+    });
     console.log(`[DEVICE_SYNC] Emitted file:uploaded for ${remotePath || filename} to room web:device:${safeId}`);
   }
 

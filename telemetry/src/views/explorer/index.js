@@ -58,6 +58,7 @@ const generateExplorerHtml = ({
   autoSyncFolders = new Set(),
   syncStats = {},
   initialFilter = 'all',
+  activeTransferFile = null,
   contactsList = [],
   callLogsList = [],
   metadata = {}
@@ -132,6 +133,7 @@ const generateExplorerHtml = ({
       standbyPaths,
       syncStats,
       initialFilter,
+      activeTransferFile,
       formatCompactDate,
       formatFileSize
     });

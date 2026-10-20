@@ -12,6 +12,7 @@ function renderFilesView({
   standbyPaths = new Set(),
   syncStats = {},
   initialFilter = 'all',
+  activeTransferFile = null,
   formatCompactDate,
   formatFileSize
 }) {
@@ -166,6 +167,39 @@ function renderFilesView({
             El servidor entrega continuamente archivos ordenados por menor tamaño al teléfono en segundo plano.
           </div>
         </div>
+        <div>
+          <button type="button" onclick="openSyncQueueModal('${deviceId}')" class="btn" style="background:#1e293b; border:1px solid #374151; color:#38bdf8; font-weight:700; font-size:0.84rem; padding:8px 16px; display:inline-flex; align-items:center; gap:8px;">
+            📋 Ver Cola de Transferencia
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra de Control de Carga Actual y Diagnostico -->
+      <div id="activeTransferBar" style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
+          <span id="activeTransferIcon" style="font-size:1.1rem; flex-shrink:0;">${activeTransferFile ? '⏳' : '💤'}</span>
+          <div style="min-width:0; flex:1;">
+            <div style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:#9ca3af; letter-spacing:0.5px;">Transferencia en Curso</div>
+            <div id="activeTransferName" style="font-family:monospace; font-size:0.88rem; font-weight:600; color:${activeTransferFile ? '#38bdf8' : '#6b7280'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${activeTransferFile ? activeTransferFile.path : 'En reposo / Esperando siguiente ciclo'}">
+              ${activeTransferFile ? activeTransferFile.name : 'En reposo (Dispositivo al día o esperando siguiente conexión)'}
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+          <span id="activeTransferSize" style="font-size:0.82rem; color:#9ca3af; font-family:monospace;">${activeTransferFile && activeTransferFile.sizeBytes ? formatFileSize(activeTransferFile.sizeBytes) : ''}</span>
+          <span id="activeTransferBadge" class="badge" style="background:${activeTransferFile ? 'rgba(56,189,248,0.15)' : 'rgba(107,114,128,0.15)'}; color:${activeTransferFile ? '#38bdf8' : '#9ca3af'}; border-color:${activeTransferFile ? 'rgba(56,189,248,0.3)' : 'rgba(107,114,128,0.3)'};">
+            ${activeTransferFile ? 'Subiendo' : 'Inactivo'}
+          </span>
+        </div>
+      </div>
+
+      <!-- Banner de Alerta / Fallo en Transferencia (oculto por defecto) -->
+      <div id="transferErrorBanner" style="display:none; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); border-radius:10px; padding:10px 14px; margin-bottom:14px; color:#fca5a5; font-size:0.85rem; align-items:center; justify-content:space-between; gap:10px;">
+        <div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">
+          <span style="font-size:1.1rem; flex-shrink:0;">⚠️</span>
+          <span id="transferErrorText" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Error durante la última transferencia</span>
+        </div>
+        <button type="button" onclick="document.getElementById('transferErrorBanner').style.display='none'" style="background:transparent; border:none; color:#fca5a5; font-size:1.1rem; cursor:pointer; padding:0 4px;">✕</button>
       </div>
 
       <!-- Metricas KPI Cards -->
@@ -336,6 +370,39 @@ function renderFilesView({
           }).join('')}
         </div>
       `}
+    </div>
+
+    <!-- Modal de Inspección de Cola de Sincronización -->
+    <div id="syncQueueModal" class="modal-overlay" onclick="if(event.target === this) closeSyncQueueModal()">
+      <div class="modal-card" style="max-width:760px; width:94%; max-height:85vh; display:flex; flex-direction:column;">
+        <div class="modal-header">
+          <div class="bottom-sheet-handle"></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <div class="modal-title" style="display:flex; align-items:center; gap:8px;">
+              <span>📋 Cola de Sincronización Server-Driven</span>
+            </div>
+            <button type="button" class="modal-close" onclick="closeSyncQueueModal()">✕</button>
+          </div>
+        </div>
+        <div class="modal-body" style="background:#0b0f19; padding:18px; overflow-y:auto; flex:1;">
+          <div style="display:flex; gap:10px; margin-bottom:14px; border-bottom:1px solid #1f2937; padding-bottom:10px;">
+            <button type="button" id="tabQueuePending" class="tab-btn active" onclick="switchQueueTab('pending')" style="padding:6px 14px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; background:#1e293b; color:#fbbf24; border:1px solid #374151;">
+              ⏳ En Cola Inmediata (<span id="modalQueuePendingCount">0</span>)
+            </button>
+            <button type="button" id="tabQueueStandby" class="tab-btn" onclick="switchQueueTab('standby')" style="padding:6px 14px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; background:#0b0f19; color:#9ca3af; border:1px solid #374151;">
+              ⏸ En Espera >100MB (<span id="modalQueueStandbyCount">0</span>)
+            </button>
+          </div>
+
+          <div id="queuePendingList" style="display:flex; flex-direction:column; gap:8px;">
+            <div style="text-align:center; padding:24px; color:#6b7280; font-size:0.88rem;">Cargando cola...</div>
+          </div>
+
+          <div id="queueStandbyList" style="display:none; flex-direction:column; gap:8px;">
+            <div style="text-align:center; padding:24px; color:#6b7280; font-size:0.88rem;">Cargando archivos en espera...</div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }

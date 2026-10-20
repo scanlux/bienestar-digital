@@ -65,6 +65,11 @@ const setupDeviceSyncSocket = (io, app) => {
         deviceSyncNamespace.to(`web:device:${deviceId}`).emit('sync:status_scanning', data);
         console.log(`[DEVICE_SYNC] Forwarded sync:status_scanning from mobile to web:device:${deviceId}`);
       });
+
+      socket.on('sync:error', (data) => {
+        deviceSyncNamespace.to(`web:device:${deviceId}`).emit('sync:transfer_error', data);
+        console.log(`[DEVICE_SYNC] Forwarded sync:error to web:device:${deviceId}`, data);
+      });
     }
 
     socket.on('disconnect', () => {
