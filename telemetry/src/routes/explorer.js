@@ -30,6 +30,56 @@ function getDeviceSyncRules(safeId) {
   return data;
 }
 
+// Helper para calcular estadisticas globales de sincronizacion
+function getDeviceSyncStats(safeId) {
+  const targetDir = getDatasetDir();
+  const deviceDir = path.join(targetDir, 'devices', safeId);
+  const indexPath = path.join(deviceDir, 'file_index.json');
+  const downloadsMapPath = path.join(deviceDir, 'downloaded_files.json');
+  const downloadsDir = path.join(deviceDir, 'downloads');
+
+  let totalFiles = 0;
+  let totalBytes = 0;
+  if (fs.existsSync(indexPath)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+      const list = Array.isArray(raw) ? raw : (raw.files || []);
+      for (const item of list) {
+        if (item && !item.isDirectory) {
+          totalFiles++;
+          totalBytes += Number(item.sizeBytes) || 0;
+        }
+      }
+    } catch (e) {}
+  }
+
+  let downloadedFiles = 0;
+  if (fs.existsSync(downloadsMapPath)) {
+    try {
+      const map = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8'));
+      downloadedFiles = Object.keys(map).length;
+    } catch (e) {}
+  } else if (fs.existsSync(downloadsDir)) {
+    try {
+      downloadedFiles = fs.readdirSync(downloadsDir).length;
+    } catch (e) {}
+  }
+
+  const rulesData = getDeviceSyncRules(safeId);
+  const pendingFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').length;
+  const standbyFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'STANDBY').length;
+  const completedFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'COMPLETED').length;
+
+  return {
+    totalFiles,
+    totalBytes,
+    downloadedFiles,
+    completedFiles,
+    pendingFiles,
+    standbyFiles
+  };
+}
+
 // Ruta GET /expl/login para mostrar el formulario
 router.get('/expl/login', (req, res) => {
   const token = getExplSessionToken(req);
@@ -241,16 +291,10 @@ router.get(['/expl/devices/:deviceId', '/expl/devices/:deviceId/'], (req, res) =
   }));
 });
 
-// Nivel 2.5: Hub de Selección de Modo de Archivos (FilesHub)
+// Nivel 2.5: Redireccion transparente a Explorador Remoto Unificado
 router.get(['/expl/devices/:deviceId/files-hub', '/expl/devices/:deviceId/files-hub/'], (req, res) => {
   const cleanId = sanitizeDeviceId(req.params.deviceId);
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  return res.send(generateExplorerHtml({
-    title: `📂 Hub de Archivos — ${cleanId}`,
-    level: '2-files-hub',
-    deviceId: cleanId
-  }));
+  return res.redirect(`/expl/devices/${cleanId}/files`);
 });
 
 // Nivel 2.6: Módulo de Libreta de Contactos
@@ -383,51 +427,11 @@ router.get(['/expl/devices/:deviceId/contacts', '/expl/devices/:deviceId/contact
   }));
 });
 
-// Nivel 3 - Módulo Archivos Disponibles (Solo Sincronizados en Servidor)
+// Nivel 3 - Redireccion de compatibilidad: Modo Archivos Disponibles hacia el Explorador Unificado
 router.get(['/expl/devices/:deviceId/available', '/expl/devices/:deviceId/available/'], (req, res) => {
   const cleanId = sanitizeDeviceId(req.params.deviceId);
   const currentPath = req.query.path || '/storage/emulated/0';
-
-  const targetDir = getDatasetDir();
-  const downloadsMapPath = path.join(targetDir, 'devices', cleanId, 'downloaded_files.json');
-  const downloadsDir = path.join(targetDir, 'devices', cleanId, 'downloads');
-
-  let downloadedMap = {};
-  if (fs.existsSync(downloadsMapPath)) {
-    try { downloadedMap = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8')); } catch (e) {}
-  }
-
-  const allFiles = [];
-  Object.entries(downloadedMap).forEach(([remotePath, filename]) => {
-    const physicalPath = path.join(downloadsDir, filename);
-    let size = null;
-    let lastModified = 0;
-    if (fs.existsSync(physicalPath)) {
-      try {
-        const stat = fs.statSync(physicalPath);
-        size = stat.size;
-        lastModified = stat.mtimeMs || stat.mtime.getTime();
-      } catch (e) {}
-    }
-    // Excluir archivos inexistentes o stubs de prueba/vacios (< 100 bytes)
-    if (size !== null && size > 100) {
-      allFiles.push({
-        path: remotePath,
-        name: filename,
-        size: size,
-        lastModified: lastModified
-      });
-    }
-  });
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  return res.send(generateExplorerHtml({
-    title: `✓ Archivos Sincronizados — ${cleanId}`,
-    level: '3-available',
-    deviceId: cleanId,
-    currentPath,
-    allFiles
-  }));
+  return res.redirect(`/expl/devices/${cleanId}/files?filter=available&path=${encodeURIComponent(currentPath)}`);
 });
 
 // Nivel 3 - Módulo NLP: Grupos de Aplicaciones por Dispositivo
@@ -545,18 +549,26 @@ router.get(['/expl/devices/:deviceId/files', '/expl/devices/:deviceId/files/'], 
 
   const rulesData = getDeviceSyncRules(cleanId);
   const pendingPaths = new Set((rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').map(r => r.path));
+  const standbyPaths = new Set((rulesData.requestedFiles || []).filter(r => r.status === 'STANDBY').map(r => r.path));
+  const completedPaths = new Set((rulesData.requestedFiles || []).filter(r => r.status === 'COMPLETED').map(r => r.path));
   const autoSyncFolders = new Set(rulesData.auto_sync_folders || []);
+  const syncStats = getDeviceSyncStats(cleanId);
+  const initialFilter = req.query.filter || 'all';
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.send(generateExplorerHtml({
-    title: `📂 Explorador Remoto de Archivos — ${cleanId}`,
+    title: `📂 Explorador Unificado de Archivos — ${cleanId}`,
     level: '3-files',
     deviceId: cleanId,
     currentPath,
     allFiles,
     downloadedMap,
     pendingPaths,
-    autoSyncFolders
+    standbyPaths,
+    completedPaths,
+    autoSyncFolders,
+    syncStats,
+    initialFilter
   }));
 });
 
