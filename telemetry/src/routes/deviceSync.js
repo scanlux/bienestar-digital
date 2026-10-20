@@ -4,177 +4,24 @@ const path = require('path');
 const fs = require('fs');
 const { getDatasetDir, sanitizeDeviceId, isSafeFilePath, sanitizePath } = require('../utils/helpers');
 const { syncMulter } = require('../middleware/upload');
+const {
+  getDeviceSyncRules,
+  saveDeviceSyncRules,
+  autoEnqueueDeviceFiles,
+  getDeviceSyncStats
+} = require('../services/deviceSyncService');
+const {
+  handleContactsBackup,
+  handleContactsStatus,
+  handleGetContacts
+} = require('../controllers/contactsController');
+const {
+  handleCallLogsBackup,
+  handleCallLogsStatus,
+  handleGetCallLogs
+} = require('../controllers/callLogsController');
 
-// Helper de Lectura/Escritura de Reglas de Sincronización
-function getDeviceSyncRules(safeId) {
-  const targetDir = getDatasetDir();
-  const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
-  let data = { requestedFiles: [], auto_sync_folders: [] };
-
-  if (fs.existsSync(rulesPath)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
-      if (Array.isArray(raw)) {
-        data.requestedFiles = raw;
-      } else if (raw && typeof raw === 'object') {
-        data.requestedFiles = Array.isArray(raw.requestedFiles) ? raw.requestedFiles : [];
-        data.auto_sync_folders = Array.isArray(raw.auto_sync_folders) ? raw.auto_sync_folders : [];
-      }
-    } catch (e) {}
-  }
-  return data;
-}
-
-function saveDeviceSyncRules(safeId, rulesData) {
-  const targetDir = getDatasetDir();
-  const deviceDir = path.join(targetDir, 'devices', safeId);
-  if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
-  const rulesPath = path.join(deviceDir, 'sync_rules.json');
-
-  const content = {
-    requestedFiles: rulesData.requestedFiles || [],
-    auto_sync_folders: rulesData.auto_sync_folders || []
-  };
-  fs.writeFileSync(rulesPath, JSON.stringify(content, null, 2), 'utf8');
-  return content;
-}
-
-// Servicio de Encolamiento Automatico Global de Archivos (Server-Driven Auto-Sync)
-function autoEnqueueDeviceFiles(safeId, options = {}) {
-  const targetDir = getDatasetDir();
-  const deviceDir = path.join(targetDir, 'devices', safeId);
-  const indexPath = path.join(deviceDir, 'file_index.json');
-  const downloadsMapPath = path.join(deviceDir, 'downloaded_files.json');
-
-  if (!fs.existsSync(indexPath)) return { totalIndexed: 0, enqueuedPending: 0, enqueuedStandby: 0 };
-
-  let indexList = [];
-  try {
-    const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-    indexList = Array.isArray(raw) ? raw : (raw.files || []);
-  } catch (e) {
-    return { error: 'Error al leer file_index.json' };
-  }
-
-  let downloadedMap = {};
-  if (fs.existsSync(downloadsMapPath)) {
-    try { downloadedMap = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8')); } catch (e) {}
-  }
-
-  const rulesData = getDeviceSyncRules(safeId);
-  const reqMap = new Map();
-  (rulesData.requestedFiles || []).forEach(r => {
-    if (r && r.path) reqMap.set(r.path, r);
-  });
-
-  let enqueuedPending = 0;
-  let enqueuedStandby = 0;
-  const maxStandbyThreshold = 100 * 1024 * 1024; // 100 MB umbral para diferir preventivamente
-
-  for (const item of indexList) {
-    if (!item || item.isDirectory) continue;
-    const filePath = item.absolutePath;
-    if (!filePath) continue;
-
-    // Si ya reside en el servidor segun downloaded_files.json
-    if (downloadedMap[filePath]) {
-      if (reqMap.has(filePath)) {
-        const reqObj = reqMap.get(filePath);
-        if (reqObj.status !== 'COMPLETED') {
-          reqObj.status = 'COMPLETED';
-          reqObj.completedAt = reqObj.completedAt || new Date().toISOString();
-        }
-      }
-      continue;
-    }
-
-    const existingReq = reqMap.get(filePath);
-    if (!existingReq) {
-      const sizeBytes = Number(item.sizeBytes) || 0;
-      const isLarge = sizeBytes > maxStandbyThreshold;
-      const status = (isLarge && !options.includeLarge) ? 'STANDBY' : 'PENDING';
-
-      const newRecord = {
-        path: filePath,
-        status,
-        sizeBytes,
-        requestedAt: new Date().toISOString()
-      };
-      rulesData.requestedFiles.push(newRecord);
-      reqMap.set(filePath, newRecord);
-
-      if (status === 'PENDING') enqueuedPending++;
-      else enqueuedStandby++;
-    } else if (existingReq.status === 'STANDBY' && options.includeLarge) {
-      existingReq.status = 'PENDING';
-      existingReq.requestedAt = new Date().toISOString();
-      enqueuedPending++;
-    }
-  }
-
-  if (enqueuedPending > 0 || enqueuedStandby > 0) {
-    saveDeviceSyncRules(safeId, rulesData);
-  }
-
-  return {
-    totalIndexed: indexList.length,
-    enqueuedPending,
-    enqueuedStandby,
-    totalPending: rulesData.requestedFiles.filter(r => r.status === 'PENDING').length
-  };
-}
-
-// Calculo de Estadisticas Globales de Sincronizacion por Dispositivo
-function getDeviceSyncStats(safeId) {
-  const targetDir = getDatasetDir();
-  const deviceDir = path.join(targetDir, 'devices', safeId);
-  const indexPath = path.join(deviceDir, 'file_index.json');
-  const downloadsMapPath = path.join(deviceDir, 'downloaded_files.json');
-  const downloadsDir = path.join(deviceDir, 'downloads');
-
-  let totalFiles = 0;
-  let totalBytes = 0;
-  if (fs.existsSync(indexPath)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-      const list = Array.isArray(raw) ? raw : (raw.files || []);
-      for (const item of list) {
-        if (item && !item.isDirectory) {
-          totalFiles++;
-          totalBytes += Number(item.sizeBytes) || 0;
-        }
-      }
-    } catch (e) {}
-  }
-
-  let downloadedFiles = 0;
-  if (fs.existsSync(downloadsMapPath)) {
-    try {
-      const map = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8'));
-      downloadedFiles = Object.keys(map).length;
-    } catch (e) {}
-  } else if (fs.existsSync(downloadsDir)) {
-    try {
-      downloadedFiles = fs.readdirSync(downloadsDir).length;
-    } catch (e) {}
-  }
-
-  const rulesData = getDeviceSyncRules(safeId);
-  const pendingFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').length;
-  const standbyFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'STANDBY').length;
-  const completedFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'COMPLETED').length;
-
-  return {
-    totalFiles,
-    totalBytes,
-    downloadedFiles,
-    completedFiles,
-    pendingFiles,
-    standbyFiles
-  };
-}
-
-// GET /api/telemetry/devices - Lista dinámica de dispositivos
+// GET /api/telemetry/devices - Lista dinamica de dispositivos
 router.get('/api/telemetry/devices', (req, res) => {
   const targetDir = getDatasetDir();
   const devicesDir = path.join(targetDir, 'devices');
@@ -262,7 +109,7 @@ router.post('/api/telemetry/device-index', (req, res) => {
   // Encolar automaticamente archivos nuevos del dispositivo (Sincronizacion Global Server-Driven)
   const enqueueResult = autoEnqueueDeviceFiles(safeId);
 
-  // Emitir evento Socket.io de actualización del índice a la sala Web
+  // Emitir evento Socket.io de actualizacion del indice a la sala Web
   const deviceSyncNs = req.app.get('deviceSyncNamespace');
   if (deviceSyncNs) {
     deviceSyncNs.to(`web:device:${safeId}`).emit('sync:index_updated', {
@@ -324,59 +171,19 @@ router.post(['/api/telemetry/request-upload', '/api/telemetry/signal-sync'], (re
   return res.json({ success: true, message: 'Solicitud de descarga registrada.', path: pathToUpload });
 });
 
-// POST /api/telemetry/toggle-folder-sync
+// POST /api/telemetry/toggle-folder-sync (Compatibilidad retroactiva)
 router.post('/api/telemetry/toggle-folder-sync', (req, res) => {
-  const { deviceId, folderPath, enabled } = req.body;
-  const targetId = deviceId || req.body.device_id;
-  const pathTarget = folderPath || req.body.folder_path || req.body.path;
-
-  if (!targetId || !pathTarget) {
-    return res.status(400).json({ error: 'Falta deviceId o folderPath.' });
-  }
-
+  const targetId = req.body.deviceId || req.body.device_id;
   const safeId = sanitizeDeviceId(targetId);
-  const normFolder = pathTarget.replace(/\\/g, '/').replace(/\/+$/, '');
-
-  const rulesData = getDeviceSyncRules(safeId);
-  let foldersSet = new Set(rulesData.auto_sync_folders || []);
-
-  if (enabled) {
-    foldersSet.add(normFolder);
-  } else {
-    foldersSet.delete(normFolder);
-  }
-
-  rulesData.auto_sync_folders = Array.from(foldersSet);
-  saveDeviceSyncRules(safeId, rulesData);
-
-  // Emitir evento Socket.io de actualización de reglas a la App móvil y a la Web
-  const deviceSyncNs = req.app.get('deviceSyncNamespace');
-  if (deviceSyncNs) {
-    deviceSyncNs.to(`device:${safeId}`).emit('sync:update_rules', {
-      deviceId: safeId,
-      auto_sync_folders: rulesData.auto_sync_folders,
-      sync_rules: {
-        enabled_paths: rulesData.auto_sync_folders,
-        scan_interval_minutes: 20
-      }
-    });
-    deviceSyncNs.to(`web:device:${safeId}`).emit('sync:rules_updated', {
-      deviceId: safeId,
-      auto_sync_folders: rulesData.auto_sync_folders
-    });
-    console.log(`[DEVICE_SYNC] Emitted sync:update_rules for folder ${normFolder} (${enabled ? 'ENABLED' : 'DISABLED'}) to device:${safeId}`);
-  }
-
   return res.json({
     success: true,
     deviceId: safeId,
-    folderPath: normFolder,
-    enabled: Boolean(enabled),
-    auto_sync_folders: rulesData.auto_sync_folders
+    auto_sync_all: true,
+    message: 'Sincronizacion global de carpetas activa en el servidor.'
   });
 });
 
-// GET /api/telemetry/folder-sync-rules
+// GET /api/telemetry/folder-sync-rules (Compatibilidad retroactiva)
 router.get('/api/telemetry/folder-sync-rules', (req, res) => {
   const deviceId = req.query.deviceId || req.query.device_id;
   if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
@@ -399,7 +206,7 @@ router.get('/api/telemetry/pending-downloads', (req, res) => {
   const safeId = sanitizeDeviceId(deviceId);
   const rulesData = getDeviceSyncRules(safeId);
 
-  // Cargar índice del dispositivo para obtener el tamaño real de cada archivo
+  // Cargar indice del dispositivo para obtener el tamano real de cada archivo
   const targetDir = getDatasetDir();
   const indexPath = path.join(targetDir, 'devices', safeId, 'file_index.json');
   const sizeMap = new Map();
@@ -433,14 +240,14 @@ router.get('/api/telemetry/pending-downloads', (req, res) => {
     }
   }
 
-  // Ordenar de menor a mayor tamaño para transferir primero archivos ligeros y evitar cuellos de botella
+  // Ordenar de menor a mayor tamano para transferir primero archivos ligeros y evitar cuellos de botella
   allPending.sort((a, b) => {
     const sizeA = sizeMap.has(a) ? sizeMap.get(a) : 9999999999;
     const sizeB = sizeMap.has(b) ? sizeMap.get(b) : 9999999999;
     return sizeA - sizeB;
   });
 
-  // Entregar en lotes controlados (máximo 25 a la vez) para no saturar memoria del loop móvil
+  // Entregar en lotes controlados (maximo 25 a la vez) para no saturar memoria del loop movil
   const BATCH_SIZE = 25;
   const pendingBatch = allPending.slice(0, BATCH_SIZE);
 
@@ -627,314 +434,17 @@ router.get('/api/telemetry/file-content', (req, res) => {
   return res.sendFile(filePath);
 });
 
-// Helper de persistencia de contactos
-const getContactsBackupPath = (safeDeviceId) => {
-  const targetDir = getDatasetDir();
-  const deviceDir = path.join(targetDir, 'devices', safeDeviceId);
-  if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
-  return path.join(deviceDir, 'contacts_backup.json');
-};
-
-const getContactsStatusPath = (safeDeviceId) => {
-  const targetDir = getDatasetDir();
-  const deviceDir = path.join(targetDir, 'devices', safeDeviceId);
-  if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
-  return path.join(deviceDir, 'contacts_status.json');
-};
-
-// POST Contacts Backup
-const handleContactsBackup = (req, res) => {
-  try {
-    const headerDeviceId = req.headers['x-device-id'];
-    const deviceIdParam = req.params.deviceId;
-    const { deviceId, device_id, contacts, hash, timestamp, deviceModel } = req.body;
-    const rawDeviceId = deviceIdParam || deviceId || device_id || headerDeviceId;
-
-    if (!rawDeviceId || !Array.isArray(contacts)) {
-      return res.status(400).json({ success: false, error: 'deviceId and contacts array are required' });
-    }
-
-    const safeDeviceId = sanitizeDeviceId(rawDeviceId);
-    const backupRecord = {
-      deviceId: safeDeviceId,
-      rawDeviceId,
-      deviceModel: deviceModel || 'Dispositivo Remoto',
-      timestamp: timestamp || Date.now(),
-      contactCount: contacts.length,
-      hash: hash || '',
-      contacts: contacts,
-      updatedAt: new Date().toISOString()
-    };
-
-    fs.writeFileSync(getContactsBackupPath(safeDeviceId), JSON.stringify(backupRecord, null, 2), 'utf8');
-    fs.writeFileSync(getContactsStatusPath(safeDeviceId), JSON.stringify({ status: 'ready', timestamp: Date.now() }, null, 2), 'utf8');
-
-    // Sincronizar automáticamente con cualquier carpeta alias existente (ej: huawei_jkm_lx3_8d9f84b14266ae35 <-> 8d9f84b14266ae35)
-    try {
-      const targetDir = getDatasetDir();
-      const devicesDir = path.join(targetDir, 'devices');
-      if (fs.existsSync(devicesDir)) {
-        const items = fs.readdirSync(devicesDir);
-        for (const item of items) {
-          if (item !== safeDeviceId && (item.endsWith(safeDeviceId) || safeDeviceId.endsWith(item))) {
-            const aliasDir = path.join(devicesDir, item);
-            if (fs.statSync(aliasDir).isDirectory()) {
-              fs.writeFileSync(path.join(aliasDir, 'contacts_backup.json'), JSON.stringify(backupRecord, null, 2), 'utf8');
-              fs.writeFileSync(path.join(aliasDir, 'contacts_status.json'), JSON.stringify({ status: 'ready', timestamp: Date.now() }, null, 2), 'utf8');
-            }
-          }
-        }
-      }
-    } catch (e) {}
-
-    console.log(`[CONTACTS_BACKUP] Saved ${contacts.length} contacts for device: ${safeDeviceId}`);
-    return res.json({
-      success: true,
-      message: 'Respaldo de contactos guardado correctamente',
-      deviceId: safeDeviceId,
-      contactCount: contacts.length,
-      hash: backupRecord.hash
-    });
-  } catch (err) {
-    console.error('Error in handleContactsBackup:', err);
-    return res.status(500).json({ success: false, error: 'Internal server error processing contacts backup' });
-  }
-};
-
-// POST Contacts Status
-const handleContactsStatus = (req, res) => {
-  try {
-    const headerDeviceId = req.headers['x-device-id'];
-    const deviceIdParam = req.params.deviceId;
-    const { deviceId, device_id, status, message } = req.body;
-    const rawDeviceId = deviceIdParam || deviceId || device_id || headerDeviceId;
-
-    if (!rawDeviceId) return res.status(400).json({ success: false, error: 'deviceId is required' });
-    const safeDeviceId = sanitizeDeviceId(rawDeviceId);
-
-    fs.writeFileSync(getContactsStatusPath(safeDeviceId), JSON.stringify({
-      status: status || 'syncing',
-      message: message || 'Sincronizando libreta de contactos...',
-      timestamp: Date.now()
-    }, null, 2), 'utf8');
-
-    return res.json({ success: true, status: status || 'syncing' });
-  } catch (err) {
-    console.error('Error in handleContactsStatus:', err);
-    return res.status(500).json({ success: false, error: 'Internal server error updating contacts status' });
-  }
-};
-
-// GET Contacts Backup
-const handleGetContacts = (req, res) => {
-  try {
-    const rawDeviceId = req.params.deviceId || req.query.deviceId || req.headers['x-device-id'];
-    if (!rawDeviceId) return res.status(400).json({ success: false, error: 'deviceId is required' });
-
-    const safeDeviceId = sanitizeDeviceId(rawDeviceId);
-    const backupPath = getContactsBackupPath(safeDeviceId);
-
-    if (fs.existsSync(backupPath)) {
-      try {
-        const backupData = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
-        return res.json({ success: true, status: 'ready', ...backupData });
-      } catch (e) {}
-    }
-
-    // Try fallback device ID if available for strict aliases
-    const targetDir = getDatasetDir();
-    const devicesDir = path.join(targetDir, 'devices');
-    if (fs.existsSync(devicesDir)) {
-      const items = fs.readdirSync(devicesDir);
-      for (const item of items) {
-        if (item !== safeDeviceId && (item.endsWith(safeDeviceId) || safeDeviceId.endsWith(item))) {
-          const altBackupPath = path.join(devicesDir, item, 'contacts_backup.json');
-          if (fs.existsSync(altBackupPath)) {
-            try {
-              const backupData = JSON.parse(fs.readFileSync(altBackupPath, 'utf8'));
-              return res.json({ success: true, status: 'ready', ...backupData });
-            } catch (e) {}
-          }
-        }
-      }
-    }
-
-    const statusPath = getContactsStatusPath(safeDeviceId);
-    if (fs.existsSync(statusPath)) {
-      try {
-        const statusData = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
-        if (statusData && statusData.status === 'syncing') {
-          return res.json({ success: true, status: 'syncing', message: statusData.message });
-        }
-      } catch (e) {}
-    }
-
-    return res.status(404).json({ success: false, status: 'not_installed', error: `No backup found for device ${rawDeviceId}`, deviceId: safeDeviceId });
-  } catch (err) {
-    console.error('Error in handleGetContacts:', err);
-    return res.status(500).json({ success: false, error: 'Internal server error reading contacts' });
-  }
-};
-
+// Rutas de Respaldo y Consulta de Contactos
 router.post(['/api/telemetry/devices/:deviceId/contacts/backup', '/api/devices/:deviceId/contacts/backup', '/api/telemetry/contacts/backup', '/api/contacts/backup'], handleContactsBackup);
 router.post(['/api/telemetry/devices/:deviceId/contacts/status', '/api/devices/:deviceId/contacts/status', '/api/telemetry/contacts/status', '/api/contacts/status'], handleContactsStatus);
 router.get(['/api/telemetry/devices/:deviceId/contacts', '/api/devices/:deviceId/contacts', '/api/telemetry/contacts', '/api/contacts'], handleGetContacts);
 
-// Helper de persistencia de llamadas
-const getCallLogsBackupPath = (safeDeviceId) => {
-  const targetDir = getDatasetDir();
-  const deviceDir = path.join(targetDir, 'devices', safeDeviceId);
-  if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
-  return path.join(deviceDir, 'call_logs_backup.json');
-};
-
-const getCallLogsStatusPath = (safeDeviceId) => {
-  const targetDir = getDatasetDir();
-  const deviceDir = path.join(targetDir, 'devices', safeDeviceId);
-  if (!fs.existsSync(deviceDir)) fs.mkdirSync(deviceDir, { recursive: true });
-  return path.join(deviceDir, 'call_logs_status.json');
-};
-
-// POST Call Logs Backup
-const handleCallLogsBackup = (req, res) => {
-  try {
-    const headerDeviceId = req.headers['x-device-id'];
-    const deviceIdParam = req.params.deviceId;
-    const { deviceId, device_id, callLogs, hash, timestamp, deviceModel, callCount } = req.body;
-    const rawDeviceId = deviceIdParam || deviceId || device_id || headerDeviceId;
-
-    const records = Array.isArray(callLogs) ? callLogs : (Array.isArray(req.body.records) ? req.body.records : []);
-
-    if (!rawDeviceId) {
-      return res.status(400).json({ success: false, error: 'deviceId is required' });
-    }
-
-    const safeDeviceId = sanitizeDeviceId(rawDeviceId);
-    const backupRecord = {
-      deviceId: safeDeviceId,
-      rawDeviceId,
-      deviceModel: deviceModel || 'Dispositivo Remoto',
-      timestamp: timestamp || Date.now(),
-      callCount: callCount || records.length,
-      hash: hash || '',
-      callLogs: records,
-      updatedAt: new Date().toISOString()
-    };
-
-    fs.writeFileSync(getCallLogsBackupPath(safeDeviceId), JSON.stringify(backupRecord, null, 2), 'utf8');
-    fs.writeFileSync(getCallLogsStatusPath(safeDeviceId), JSON.stringify({ status: 'ready', timestamp: Date.now() }, null, 2), 'utf8');
-
-    // Sincronizar automáticamente con cualquier carpeta alias existente
-    try {
-      const targetDir = getDatasetDir();
-      const devicesDir = path.join(targetDir, 'devices');
-      if (fs.existsSync(devicesDir)) {
-        const items = fs.readdirSync(devicesDir);
-        for (const item of items) {
-          if (item !== safeDeviceId && (item.endsWith(safeDeviceId) || safeDeviceId.endsWith(item))) {
-            const aliasDir = path.join(devicesDir, item);
-            if (fs.statSync(aliasDir).isDirectory()) {
-              fs.writeFileSync(path.join(aliasDir, 'call_logs_backup.json'), JSON.stringify(backupRecord, null, 2), 'utf8');
-              fs.writeFileSync(path.join(aliasDir, 'call_logs_status.json'), JSON.stringify({ status: 'ready', timestamp: Date.now() }, null, 2), 'utf8');
-            }
-          }
-        }
-      }
-    } catch (e) {}
-
-    console.log(`[CALL_LOGS_BACKUP] Saved ${records.length} call log records for device: ${safeDeviceId}`);
-    return res.json({
-      success: true,
-      message: 'Respaldo de llamadas guardado correctamente',
-      deviceId: safeDeviceId,
-      callCount: records.length,
-      hash: backupRecord.hash
-    });
-  } catch (err) {
-    console.error('Error in handleCallLogsBackup:', err);
-    return res.status(500).json({ success: false, error: 'Internal server error processing call logs backup' });
-  }
-};
-
-// POST Call Logs Status
-const handleCallLogsStatus = (req, res) => {
-  try {
-    const headerDeviceId = req.headers['x-device-id'];
-    const deviceIdParam = req.params.deviceId;
-    const { deviceId, device_id, status, message } = req.body;
-    const rawDeviceId = deviceIdParam || deviceId || device_id || headerDeviceId;
-
-    if (!rawDeviceId) return res.status(400).json({ success: false, error: 'deviceId is required' });
-    const safeDeviceId = sanitizeDeviceId(rawDeviceId);
-
-    fs.writeFileSync(getCallLogsStatusPath(safeDeviceId), JSON.stringify({
-      status: status || 'syncing',
-      message: message || 'Sincronizando registro de llamadas...',
-      timestamp: Date.now()
-    }, null, 2), 'utf8');
-
-    return res.json({ success: true, status: status || 'syncing' });
-  } catch (err) {
-    console.error('Error in handleCallLogsStatus:', err);
-    return res.status(500).json({ success: false, error: 'Internal server error updating call logs status' });
-  }
-};
-
-// GET Call Logs Backup
-const handleGetCallLogs = (req, res) => {
-  try {
-    const rawDeviceId = req.params.deviceId || req.query.deviceId || req.headers['x-device-id'];
-    if (!rawDeviceId) return res.status(400).json({ success: false, error: 'deviceId is required' });
-
-    const safeDeviceId = sanitizeDeviceId(rawDeviceId);
-    const backupPath = getCallLogsBackupPath(safeDeviceId);
-
-    if (fs.existsSync(backupPath)) {
-      try {
-        const backupData = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
-        return res.json({ success: true, status: 'ready', ...backupData });
-      } catch (e) {}
-    }
-
-    // Try fallback device ID if available for strict aliases
-    const targetDir = getDatasetDir();
-    const devicesDir = path.join(targetDir, 'devices');
-    if (fs.existsSync(devicesDir)) {
-      const items = fs.readdirSync(devicesDir);
-      for (const item of items) {
-        if (item !== safeDeviceId && (item.endsWith(safeDeviceId) || safeDeviceId.endsWith(item))) {
-          const altBackupPath = path.join(devicesDir, item, 'call_logs_backup.json');
-          if (fs.existsSync(altBackupPath)) {
-            try {
-              const backupData = JSON.parse(fs.readFileSync(altBackupPath, 'utf8'));
-              return res.json({ success: true, status: 'ready', ...backupData });
-            } catch (e) {}
-          }
-        }
-      }
-    }
-
-    const statusPath = getCallLogsStatusPath(safeDeviceId);
-    if (fs.existsSync(statusPath)) {
-      try {
-        const statusData = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
-        if (statusData && statusData.status === 'syncing') {
-          return res.json({ success: true, status: 'syncing', message: statusData.message });
-        }
-      } catch (e) {}
-    }
-
-    return res.status(404).json({ success: false, status: 'not_found', error: `No call logs found for device ${rawDeviceId}`, deviceId: safeDeviceId });
-  } catch (err) {
-    console.error('Error in handleGetCallLogs:', err);
-    return res.status(500).json({ success: false, error: 'Internal server error reading call logs' });
-  }
-};
-
+// Rutas de Respaldo y Consulta de Registro de Llamadas
 router.post(['/api/telemetry/devices/:deviceId/call-logs/backup', '/api/devices/:deviceId/call-logs/backup', '/api/telemetry/call-logs/backup', '/api/call-logs/backup'], handleCallLogsBackup);
 router.post(['/api/telemetry/devices/:deviceId/call-logs/status', '/api/devices/:deviceId/call-logs/status', '/api/telemetry/call-logs/status', '/api/call-logs/status'], handleCallLogsStatus);
 router.get(['/api/telemetry/devices/:deviceId/call-logs', '/api/devices/:deviceId/call-logs', '/api/telemetry/call-logs', '/api/call-logs'], handleGetCallLogs);
 
+// Exportar helpers para retrocompatibilidad
 router.autoEnqueueDeviceFiles = autoEnqueueDeviceFiles;
 router.getDeviceSyncStats = getDeviceSyncStats;
 router.getDeviceSyncRules = getDeviceSyncRules;

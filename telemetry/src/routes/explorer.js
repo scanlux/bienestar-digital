@@ -9,76 +9,7 @@ const { renderExplLoginPage } = require('../views/loginView');
 const { generateExplorerHtml } = require('../views/explorerView');
 const { getAppIcon } = require('../utils/appIcons');
 const { getDatasetDir, readJsonLinesFile, isSystemInitEvent, getAppDisplayName, sanitizeDeviceId } = require('../utils/helpers');
-
-// Helper local para leer reglas de sincronización de un dispositivo
-function getDeviceSyncRules(safeId) {
-  const targetDir = getDatasetDir();
-  const rulesPath = path.join(targetDir, 'devices', safeId, 'sync_rules.json');
-  let data = { requestedFiles: [], auto_sync_folders: [] };
-
-  if (fs.existsSync(rulesPath)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
-      if (Array.isArray(raw)) {
-        data.requestedFiles = raw;
-      } else if (raw && typeof raw === 'object') {
-        data.requestedFiles = Array.isArray(raw.requestedFiles) ? raw.requestedFiles : [];
-        data.auto_sync_folders = Array.isArray(raw.auto_sync_folders) ? raw.auto_sync_folders : [];
-      }
-    } catch (e) {}
-  }
-  return data;
-}
-
-// Helper para calcular estadisticas globales de sincronizacion
-function getDeviceSyncStats(safeId) {
-  const targetDir = getDatasetDir();
-  const deviceDir = path.join(targetDir, 'devices', safeId);
-  const indexPath = path.join(deviceDir, 'file_index.json');
-  const downloadsMapPath = path.join(deviceDir, 'downloaded_files.json');
-  const downloadsDir = path.join(deviceDir, 'downloads');
-
-  let totalFiles = 0;
-  let totalBytes = 0;
-  if (fs.existsSync(indexPath)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-      const list = Array.isArray(raw) ? raw : (raw.files || []);
-      for (const item of list) {
-        if (item && !item.isDirectory) {
-          totalFiles++;
-          totalBytes += Number(item.sizeBytes) || 0;
-        }
-      }
-    } catch (e) {}
-  }
-
-  let downloadedFiles = 0;
-  if (fs.existsSync(downloadsMapPath)) {
-    try {
-      const map = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8'));
-      downloadedFiles = Object.keys(map).length;
-    } catch (e) {}
-  } else if (fs.existsSync(downloadsDir)) {
-    try {
-      downloadedFiles = fs.readdirSync(downloadsDir).length;
-    } catch (e) {}
-  }
-
-  const rulesData = getDeviceSyncRules(safeId);
-  const pendingFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING').length;
-  const standbyFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'STANDBY').length;
-  const completedFiles = (rulesData.requestedFiles || []).filter(r => r.status === 'COMPLETED').length;
-
-  return {
-    totalFiles,
-    totalBytes,
-    downloadedFiles,
-    completedFiles,
-    pendingFiles,
-    standbyFiles
-  };
-}
+const { getDeviceSyncRules, getDeviceSyncStats } = require('../services/deviceSyncService');
 
 // Ruta GET /expl/login para mostrar el formulario
 router.get('/expl/login', (req, res) => {
