@@ -3,58 +3,6 @@
  */
 function getFilesClientScript({ deviceId, initialFilter }) {
   return `
-    // Funciones específicas de selección y escaneo en vista Remota
-    function updateSelectedCount() {
-      const checkboxes = document.querySelectorAll('.file-cb:checked');
-      const count = checkboxes.length;
-      const countSpan = document.getElementById('selectedCount');
-      const syncBtn = document.getElementById('syncSelectedBtn');
-      const mobileCountSpan = document.getElementById('mobileSelectedCount');
-      const mobileBar = document.getElementById('mobileStickyBar');
-
-      if (countSpan) countSpan.textContent = count;
-      if (mobileCountSpan) mobileCountSpan.textContent = count;
-      if (syncBtn) {
-        syncBtn.disabled = count === 0;
-        syncBtn.style.opacity = count > 0 ? '1' : '0.5';
-      }
-      if (mobileBar) {
-        mobileBar.style.display = count > 0 ? 'flex' : 'none';
-      }
-    }
-
-    function toggleSelectAll(masterCb) {
-      const checkboxes = document.querySelectorAll('.file-cb');
-      checkboxes.forEach(cb => { cb.checked = masterCb.checked; });
-      updateSelectedCount();
-    }
-
-    function requestSelectedSync(deviceId) {
-      const checkboxes = document.querySelectorAll('.file-cb:checked');
-      const paths = Array.from(checkboxes).map(cb => cb.getAttribute('data-path')).filter(Boolean);
-      if (paths.length === 0) return;
-
-      const btn = document.getElementById('syncSelectedBtn');
-      if (btn) { btn.disabled = true; btn.textContent = 'Enviando directivas...'; }
-
-      let sent = 0;
-      let errors = 0;
-
-      Promise.all(paths.map(path => {
-        return fetch('/api/telemetry/request-upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId: deviceId, filePath: path })
-        })
-        .then(res => res.json())
-        .then(data => { if (data.success) sent++; else errors++; })
-        .catch(() => errors++);
-      })).then(() => {
-        alert('Se registraron ' + sent + ' solicitudes de sincronización para los elementos seleccionados.');
-        window.location.reload();
-      });
-    }
-
     function requestStructureScan(btn) {
       const deviceId = btn.getAttribute('data-device-id');
       btn.disabled = true;
@@ -245,34 +193,6 @@ function getFilesClientScript({ deviceId, initialFilter }) {
         alert('Error al conectar con el servidor.');
         btn.disabled = false;
         btn.textContent = '⚡ Priorizar Ahora';
-      });
-    }
-
-    function triggerSyncAll(btn) {
-      const deviceId = btn.getAttribute('data-device-id');
-      btn.disabled = true;
-      btn.textContent = 'Sincronizando...';
-
-      fetch('/api/telemetry/devices/' + encodeURIComponent(deviceId) + '/sync-all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ includeLarge: false })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          alert('Sincronizacion total activada. Se encolaron ' + (data.result ? data.result.enqueuedPending || 0 : 0) + ' archivos ligeros (<100MB) para descarga inmediata.');
-          window.location.reload();
-        } else {
-          alert('Error al iniciar sincronizacion total.');
-          btn.disabled = false;
-          btn.textContent = '🔄 Sincronizar Todo el Teléfono';
-        }
-      })
-      .catch(err => {
-        alert('Error de comunicacion con el servidor.');
-        btn.disabled = false;
-        btn.textContent = '🔄 Sincronizar Todo el Teléfono';
       });
     }
 

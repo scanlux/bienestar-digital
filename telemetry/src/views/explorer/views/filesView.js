@@ -166,11 +166,6 @@ function renderFilesView({
             El servidor entrega continuamente archivos ordenados por menor tamaño al teléfono en segundo plano.
           </div>
         </div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button type="button" id="btnSyncAll" data-device-id="${deviceId}" onclick="triggerSyncAll(this)" class="btn" style="background:#10b981; font-weight:700; font-size:0.85rem; padding:8px 18px;">
-            🔄 Sincronizar Todo el Teléfono
-          </button>
-        </div>
       </div>
 
       <!-- Metricas KPI Cards -->
@@ -213,13 +208,10 @@ function renderFilesView({
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
             <thead>
               <tr style="border-bottom:1px solid #1f2937; background:#151d30; color:#9ca3af; user-select:none;">
-                <th style="padding:12px 10px 12px 20px; width:48px; text-align:center; white-space:nowrap;">
-                  <input type="checkbox" id="selectAllCb" onclick="toggleSelectAll(this)" style="width:18px; height:18px; cursor:pointer;" title="Seleccionar todos" />
-                </th>
-                <th style="padding:12px 14px; font-weight:600; max-width:280px; cursor:pointer;" onclick="sortFilesTable('name')" title="Ordenar por Nombre">
+                <th style="padding:12px 14px 12px 20px; font-weight:600; max-width:320px; cursor:pointer;" onclick="sortFilesTable('name')" title="Ordenar por Nombre">
                   Nombre del Archivo <span id="sortIcon_name" style="font-size:0.75rem; color:#6b7280; margin-left:4px;">↕</span>
                 </th>
-                <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:90px; text-align:right; cursor:pointer;" onclick="sortFilesTable('size')" title="Ordenar por Tamaño">
+                <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:95px; text-align:right; cursor:pointer;" onclick="sortFilesTable('size')" title="Ordenar por Tamaño">
                   Tamaño <span id="sortIcon_size" style="font-size:0.75rem; color:#6b7280; margin-left:4px;">↕</span>
                 </th>
                 <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:135px; text-align:center; cursor:pointer;" onclick="sortFilesTable('date')" title="Ordenar por Fecha">
@@ -228,7 +220,7 @@ function renderFilesView({
                 <th style="padding:12px 14px; font-weight:600; white-space:nowrap; width:140px; text-align:center; cursor:pointer;" onclick="sortFilesTable('status')" title="Ordenar por Estado">
                   Estado <span id="sortIcon_status" style="font-size:0.75rem; color:#6b7280; margin-left:4px;">↕</span>
                 </th>
-                <th style="padding:12px 14px; font-weight:600; text-align:right; white-space:nowrap; width:175px;">Acción</th>
+                <th style="padding:12px 20px 12px 14px; font-weight:600; text-align:right; white-space:nowrap; width:175px;">Acción</th>
               </tr>
             </thead>
             <tbody id="filesTableBody">
@@ -247,10 +239,7 @@ function renderFilesView({
 
                 return `
                   <tr style="border-bottom:1px solid #1f2937;" data-file-path="${f.path}" data-file-name="${(f.name || '').toLowerCase()}" data-file-size="${f.size || 0}" data-file-date="${f.lastModified || 0}" data-file-status="${statusCode}" data-downloaded="${isDownloaded ? 'true' : 'false'}" data-file-type="${fileType}">
-                    <td style="padding:12px 10px 12px 20px; text-align:center; white-space:nowrap;" class="cb-cell">
-                      ${isDownloaded ? '' : `<input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:18px; height:18px; cursor:pointer;" />`}
-                    </td>
-                    <td style="padding:12px 14px; font-family:monospace; color:#f3f4f6; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" class="name-cell" title="${f.name}">
+                    <td style="padding:12px 14px 12px 20px; font-family:monospace; color:#f3f4f6; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" class="name-cell" title="${f.name}">
                       ${isDownloaded ? `
                         <a href="#" onclick="openMediaPreview(this); return false;" data-url="${fileContentUrl}" data-title="${encodeURIComponent(f.name)}" data-type="${fileType}" style="color:#38bdf8; text-decoration:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:8px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
                           <span style="flex-shrink:0;">${fileIcon}</span> <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
@@ -326,14 +315,9 @@ function renderFilesView({
                   </div>
                 </div>
 
-                <div style="display:flex; align-items:center;">
-                  <div class="cb-cell" style="display:${isDownloaded ? 'none' : 'flex'}; align-items:center; margin-right:10px;">
-                    <input type="checkbox" class="select-checkbox file-cb" data-path="${f.path}" onclick="updateSelectedCount();" style="width:20px; height:20px; cursor:pointer; flex-shrink:0;" />
-                  </div>
-                  <div style="display:flex; justify-content:space-between; align-items:center; flex:1; font-size:0.8rem; color:#9ca3af; background:#0b0f19; padding:8px 12px; border-radius:8px; border:1px solid #1f2937;">
-                    <span>Tamaño: <span style="margin-left:2px;">📦</span> <strong style="color:#e5e7eb; margin-left:4px;">${formattedSize}</strong></span>
-                    <span>Fecha: <strong style="color:#e5e7eb; margin-left:4px; font-family:monospace;">${formatCompactDate(f.lastModified)}</strong></span>
-                  </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:#9ca3af; background:#0b0f19; padding:8px 12px; border-radius:8px; border:1px solid #1f2937;">
+                  <span>Tamaño: <span style="margin-left:2px;">📦</span> <strong style="color:#e5e7eb; margin-left:4px;">${formattedSize}</strong></span>
+                  <span>Fecha: <strong style="color:#e5e7eb; margin-left:4px; font-family:monospace;">${formatCompactDate(f.lastModified)}</strong></span>
                 </div>
 
                 <div style="margin-top:2px;" class="action-cell">
@@ -352,16 +336,6 @@ function renderFilesView({
           }).join('')}
         </div>
       `}
-    </div>
-
-    <!-- Barra Flotante de Selección Masiva para Móvil -->
-    <div id="mobileStickyBar" style="position:fixed; bottom:16px; left:12px; right:12px; z-index:999; background:#111827; border:1px solid #10b981; border-radius:14px; padding:12px 16px; display:none; justify-content:space-between; align-items:center; box-shadow:0 10px 30px rgba(0,0,0,0.8);">
-      <span style="font-size:0.88rem; color:#e5e7eb; font-weight:600;">
-        Seleccionados: <strong id="mobileSelectedCount" style="color:#34d399;">0</strong>
-      </span>
-      <button type="button" onclick="requestSelectedSync('${deviceId}')" class="btn" style="background:#10b981; font-weight:700; font-size:0.85rem; padding:8px 16px;">
-        ⚡ Sincronizar Seleccionados
-      </button>
     </div>
   `;
 }

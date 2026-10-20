@@ -97,13 +97,6 @@ const generateExplorerHtml = ({
     : title;
 
   let headerActionHtml = downloadUrl ? `<a href="${downloadUrl}" download class="btn">⬇ Exportar JSON</a>` : '';
-  if (level === '3-files') {
-    headerActionHtml += `
-      <button type="button" id="syncSelectedBtn" onclick="requestSelectedSync('${deviceId}')" class="btn" style="background:#10b981; font-weight:700; opacity:0.5;" disabled>
-        ⚡ Sincronizar Seleccionados (<span id="selectedCount">0</span>)
-      </button>
-    `;
-  }
 
   let contentHtml = '';
   let scriptsHtml = '';
