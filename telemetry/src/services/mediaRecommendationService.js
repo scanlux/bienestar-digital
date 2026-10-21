@@ -384,12 +384,49 @@ function recordMediaSeen(safeDeviceId, mediaId) {
   return { success: false, error: 'Medio no encontrado' };
 }
 
+/**
+ * Busca un medio por su ID en el dispositivo o en todo el catálogo
+ */
+function getMediaById(mediaId, optionalDeviceId = null) {
+  if (optionalDeviceId) {
+    const safeId = sanitizeDeviceId(optionalDeviceId);
+    const mediaList = getAllDownloadedMedia(safeId);
+    const found = mediaList.find(m => m.mediaId === mediaId);
+    if (found) {
+      const { downloadsDir } = getDevicePaths(safeId);
+      const physicalPath = path.join(downloadsDir, found.name);
+      return { ...found, physicalPath };
+    }
+  }
+
+  const targetDir = getDatasetDir();
+  const devicesBaseDir = path.join(targetDir, 'devices');
+  if (fs.existsSync(devicesBaseDir)) {
+    const deviceDirs = fs.readdirSync(devicesBaseDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name);
+
+    for (const devDir of deviceDirs) {
+      const mediaList = getAllDownloadedMedia(devDir);
+      const found = mediaList.find(m => m.mediaId === mediaId);
+      if (found) {
+        const { downloadsDir } = getDevicePaths(devDir);
+        const physicalPath = path.join(downloadsDir, found.name);
+        return { ...found, physicalPath };
+      }
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   getMediaId,
   getMediaType,
   getAllDownloadedMedia,
   getRecommendedFeedBlock,
   recordMediaSeen,
+  getMediaById,
   getViewHistory,
   getFavorites,
   toggleFavorite,

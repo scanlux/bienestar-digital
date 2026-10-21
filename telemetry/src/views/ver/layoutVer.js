@@ -2,6 +2,7 @@
  * Shell maestro de presentación para Ver Media (/expl/ver)
  */
 const { getVerStyles } = require('./stylesVer');
+const { ICONS } = require('./icons');
 
 function renderVerLayout({
   title = 'Ver Media',
@@ -30,7 +31,7 @@ ${styles}
       <div class="brand-title">Ver Media</div>
       <div style="display:flex; align-items:center; gap:8px;">
         <span class="device-chip" title="Dispositivo: ${deviceId}">${deviceId}</span>
-        <a href="/expl/ver/logout" title="Cerrar Sesión" style="color:#ef4444; text-decoration:none; font-size:1.1rem; padding:4px;">🚪</a>
+        <a href="/expl/ver/logout" title="Cerrar Sesion" style="color:#ef4444; display:flex; align-items:center; text-decoration:none; padding:4px;">${ICONS.logout}</a>
       </div>
     </header>
 
@@ -42,25 +43,25 @@ ${styles}
     <!-- Barra de Navegación Fija Inferior -->
     <nav class="bottom-nav">
       <button type="button" class="nav-tab active" id="tabFeed" onclick="switchMainTab('feed')">
-        <span class="nav-tab-icon">🏠</span>
+        <span class="nav-tab-icon">${ICONS.home}</span>
         <span>Feed</span>
       </button>
       <button type="button" class="nav-tab" id="tabFavorites" onclick="switchMainTab('favorites')">
-        <span class="nav-tab-icon">⭐</span>
+        <span class="nav-tab-icon">${ICONS.starOutline}</span>
         <span>Favoritos</span>
       </button>
       <button type="button" class="nav-tab" id="tabExplore" onclick="switchMainTab('explore')">
-        <span class="nav-tab-icon">🏷️</span>
+        <span class="nav-tab-icon">${ICONS.tag}</span>
         <span>Etiquetas</span>
       </button>
     </nav>
 
-    <!-- Modal Táctil de Etiquetado y Catalogación -->
+    <!-- Modal Tactil de Etiquetado y Catalogacion -->
     <div id="tagModalOverlay" class="modal-overlay" onclick="if(event.target === this) closeTagModal()">
       <div class="modal-sheet">
         <div class="sheet-handle"></div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <h3 style="font-size:1rem; font-weight:700; color:#fff;">🏷️ Catalogar Contenido</h3>
+          <h3 style="font-size:1rem; font-weight:700; color:#fff;">Catalogar Contenido</h3>
           <button type="button" onclick="closeTagModal()" style="background:transparent; border:none; color:#9ca3af; font-size:1.2rem; cursor:pointer;">✕</button>
         </div>
         <p style="font-size:0.8rem; color:#9ca3af;" id="tagModalFilename">archivo.mp4</p>
@@ -74,13 +75,13 @@ ${styles}
 
         <div>
           <label style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:#9ca3af; display:block; margin-bottom:6px;">
-            Nota / Descripción
+            Nota / Descripcion
           </label>
-          <textarea id="notesInput" rows="3" placeholder="Añade una descripción o detalle para recordar..." style="width:100%; background:#0b0f19; border:1px solid #374151; border-radius:8px; padding:10px 12px; color:#fff; font-size:0.9rem; outline:none; resize:none;"></textarea>
+          <textarea id="notesInput" rows="3" placeholder="Anade una descripcion o detalle para recordar..." style="width:100%; background:#0b0f19; border:1px solid #374151; border-radius:8px; padding:10px 12px; color:#fff; font-size:0.9rem; outline:none; resize:none;"></textarea>
         </div>
 
         <button type="button" onclick="submitTagModal()" style="width:100%; background:linear-gradient(90deg, #ec4899, #8b5cf6); border:none; border-radius:8px; color:#fff; font-weight:700; font-size:0.9rem; padding:11px; cursor:pointer;">
-          Guardar Catalogación
+          Guardar Catalogacion
         </button>
       </div>
     </div>

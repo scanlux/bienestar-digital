@@ -122,6 +122,18 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         });
     }
 
+    const SVG_ICONS = {
+      video: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>',
+      image: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>',
+      audio: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>',
+      starOutline: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>',
+      starFilled: '<svg width="22" height="22" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>',
+      tag: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>',
+      comment: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
+      share: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>',
+      download: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>'
+    };
+
     function renderPostCardHtml(item) {
       const isFav = Boolean(item.isFavorite);
       const tagsList = Array.isArray(item.tags) ? item.tags : [];
@@ -138,34 +150,36 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         mediaHtml = '<img class="post-img" loading="lazy" src="' + item.contentUrl + '" alt="' + item.name + '" onclick="markMediaSeen(\\'' + item.mediaId + '\\')" />';
       } else if (item.type === 'audio') {
         mediaHtml = '<div class="post-audio-container">' +
-          '<div class="audio-icon-box">🎵</div>' +
+          '<div class="audio-icon-box" style="display:flex; justify-content:center; align-items:center;">' + SVG_ICONS.audio + '</div>' +
           '<audio class="post-audio" controls src="' + item.contentUrl + '" onplay="markMediaSeen(\\'' + item.mediaId + '\\')"></audio>' +
         '</div>';
       }
 
+      const typeIcon = item.type === 'video' ? SVG_ICONS.video : item.type === 'image' ? SVG_ICONS.image : SVG_ICONS.audio;
+
       return '<article class="post-card" id="post_' + item.mediaId + '" data-media-id="' + item.mediaId + '">' +
         '<div class="post-header">' +
           '<div class="post-author">' +
-            '<div class="author-avatar">' + (item.type === 'video' ? '🎬' : item.type === 'image' ? '🖼️' : '🎵') + '</div>' +
+            '<div class="author-avatar">' + typeIcon + '</div>' +
             '<div class="author-meta">' +
               '<span class="author-name">' + item.name + '</span>' +
               '<span class="post-date">' + formattedDate + '</span>' +
             '</div>' +
           '</div>' +
-          '<button type="button" class="btn-action" onclick="openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Catalogar y Etiquetar">🏷️</button>' +
+          '<button type="button" class="btn-action" onclick="openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Catalogar y Etiquetar" style="display:flex; align-items:center;">' + SVG_ICONS.tag + '</button>' +
         '</div>' +
 
         '<div class="post-media-container">' + mediaHtml + '</div>' +
 
         '<div class="post-actions">' +
           '<div class="action-group-left">' +
-            '<button type="button" class="btn-action btn-star ' + (isFav ? 'favorited' : '') + '" id="star_' + item.mediaId + '" onclick="toggleFav(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + item.type + '\\')">' +
-              (isFav ? '★' : '☆') +
+            '<button type="button" class="btn-action btn-star ' + (isFav ? 'favorited' : '') + '" id="star_' + item.mediaId + '" onclick="toggleFav(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + item.type + '\\')" style="display:flex; align-items:center;">' +
+              (isFav ? SVG_ICONS.starFilled : SVG_ICONS.starOutline) +
             '</button>' +
-            '<button type="button" class="btn-action" onclick="openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Añadir Nota o Etiqueta">💬</button>' +
-            '<button type="button" class="btn-action btn-whatsapp" onclick="shareWhatsApp(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Compartir por WhatsApp">📱</button>' +
+            '<button type="button" class="btn-action" onclick="openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Anadir Nota o Etiqueta" style="display:flex; align-items:center;">' + SVG_ICONS.comment + '</button>' +
+            '<button type="button" class="btn-action btn-whatsapp" onclick="shareWhatsApp(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + (item.deviceId || '') + '\\')" title="Compartir por WhatsApp" style="display:flex; align-items:center;">' + SVG_ICONS.share + '</button>' +
           '</div>' +
-          '<a href="' + item.contentUrl + '" download="' + item.name + '" class="btn-action" title="Descargar original" style="font-size:1.1rem; color:#9ca3af; text-decoration:none;">⬇</a>' +
+          '<a href="' + item.contentUrl + '" download="' + item.name + '" class="btn-action" title="Descargar original" style="color:#9ca3af; text-decoration:none; display:flex; align-items:center;">' + SVG_ICONS.download + '</a>' +
         '</div>' +
 
         '<div class="post-details">' +
@@ -188,7 +202,6 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
     function toggleFav(mediaId, nameEnc, type) {
       const btn = document.getElementById('star_' + mediaId);
-      const currentFav = btn ? btn.classList.contains('favorited') : false;
 
       fetch('/api/ver/favorite', {
         method: 'POST',
@@ -204,11 +217,11 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         if (data.success && btn) {
           if (data.isFavorite) {
             btn.classList.add('favorited');
-            btn.textContent = '★';
-            showToast('Añadido a Favoritos ⭐');
+            btn.innerHTML = SVG_ICONS.starFilled;
+            showToast('Anadido a Favoritos');
           } else {
             btn.classList.remove('favorited');
-            btn.textContent = '☆';
+            btn.innerHTML = SVG_ICONS.starOutline;
             showToast('Eliminado de Favoritos');
           }
         }
@@ -216,19 +229,19 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       .catch(() => showToast('Error al actualizar favorito'));
     }
 
-    function shareWhatsApp(mediaId, nameEnc) {
+    function shareWhatsApp(mediaId, nameEnc, deviceId) {
       const name = decodeURIComponent(nameEnc);
-      const postUrl = window.location.origin + '/expl/ver/share/' + mediaId;
-      const text = encodeURIComponent('🎬 Mira este contenido: ' + name + '\\n' + postUrl);
+      const postUrl = window.location.origin + '/expl/ver/post/' + mediaId + (deviceId ? ('?d=' + encodeURIComponent(deviceId)) : '');
+      const text = encodeURIComponent('Mira este contenido: ' + name + '\\n' + postUrl);
       const waUrl = 'https://api.whatsapp.com/send?text=' + text;
 
       // Intentar abrir WhatsApp
       window.open(waUrl, '_blank');
 
-      // Copiar también al portapapeles
+      // Copiar tambien al portapapeles
       if (navigator.clipboard) {
         navigator.clipboard.writeText(postUrl).then(() => {
-          showToast('Enlace de WhatsApp preparado y copiado 📋');
+          showToast('Enlace de WhatsApp preparado y copiado');
         }).catch(() => {});
       }
     }
@@ -306,14 +319,14 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             }
           }
           closeTagModal();
-          showToast('Etiquetas y notas actualizadas ✓');
+          showToast('Etiquetas y notas actualizadas');
         }
       })
       .catch(() => showToast('Error al guardar etiquetas'));
     }
 
     function renderFavoritesTab(container) {
-      container.innerHTML = '<div style="padding:16px;"><h2 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">⭐ Medios Favoritos</h2><div id="favList">Cargando favoritos...</div></div>';
+      container.innerHTML = '<div style="padding:16px;"><h2 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Medios Favoritos</h2><div id="favList">Cargando favoritos...</div></div>';
 
       fetch('/api/ver/favorites')
         .then(res => res.json())
@@ -322,7 +335,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
           if (!listDiv) return;
 
           if (!data.success || !Array.isArray(data.favorites) || data.favorites.length === 0) {
-            listDiv.innerHTML = '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:20px 0; text-align:center;">Aún no tienes medios guardados en favoritos. Pulsa la estrella en cualquier post para guardarlo aquí.</p>';
+            listDiv.innerHTML = '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:20px 0; text-align:center;">Aun no tienes medios guardados en favoritos. Pulsa la estrella en cualquier post para guardarlo aqui.</p>';
             return;
           }
 
@@ -346,7 +359,31 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     }
 
     function renderExploreTagsTab(container) {
-      container.innerHTML = '<div style="padding:16px;"><h2 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">🏷️ Explorar por Etiquetas</h2><div id="tagsList">Cargando catálogo de etiquetas...</div><div id="tagResults" style="margin-top:18px;"></div></div>';
+      container.innerHTML = '<div style="padding:16px;"><h2 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Explorar por Etiquetas</h2><div id="tagsList">Cargando catalogo de etiquetas...</div><div id="tagResults" style="margin-top:18px;"></div></div>';
+
+      fetch('/api/ver/tags')
+        .then(res => res.json())
+        .then(data => {
+          const listDiv = document.getElementById('tagsList');
+          if (!listDiv) return;
+
+          const tags = data.tags || {};
+          const keys = Object.keys(tags);
+
+          if (keys.length === 0) {
+            listDiv.innerHTML = '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:20px 0; text-align:center;">Aun no hay etiquetas asignadas. En el feed puedes pulsar el icono de etiqueta para catalogar fotos o videos.</p>';
+            return;
+          }
+
+          listDiv.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">' +
+            keys.map(k => '<button type="button" onclick="filterByTag(\\'' + k + '\\')" style="background:#1e293b; border:1px solid #374151; color:#38bdf8; font-size:0.82rem; font-weight:600; padding:6px 12px; border-radius:999px; cursor:pointer;">#' + k + ' (' + tags[k] + ')</button>').join('') +
+          '</div>';
+        })
+        .catch(() => {
+          const listDiv = document.getElementById('tagsList');
+          if (listDiv) listDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem;">Error al cargar etiquetas.</p>';
+        });
+    }
 
       fetch('/api/ver/tags')
         .then(res => res.json())

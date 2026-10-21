@@ -12,13 +12,16 @@ const {
   toggleFavorite,
   getTags,
   saveMediaTags,
-  getAllDownloadedMedia
+  getAllDownloadedMedia,
+  getMediaById
 } = require('../services/mediaRecommendationService');
 const { verAuthMiddleware } = require('../middleware/verAuth');
 const { renderVerLoginView } = require('../views/ver/loginView');
 const { renderVerLayout } = require('../views/ver/layoutVer');
 const { renderVerFeedView } = require('../views/ver/feedView');
+const { renderVerShareView } = require('../views/ver/shareView');
 const { getVerClientScript } = require('../views/ver/scriptsVer');
+const fs = require('fs');
 
 const verLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -65,6 +68,46 @@ router.get('/expl/ver/logout', (req, res) => {
   ]);
   return res.redirect('/expl/ver/login');
 });
+
+// =========================================================================
+// Rutas Públicas de Compartir (OpenGraph WhatsApp & Streaming de Medios)
+// Deben estar antes de verAuthMiddleware para permitir acceso del crawler
+// =========================================================================
+
+// GET /expl/ver/raw/:mediaId - Streaming directo de medio para WhatsApp crawler y reproductor
+router.get('/expl/ver/raw/:mediaId', (req, res) => {
+  const { mediaId } = req.params;
+  const deviceHint = req.query.d || null;
+  const item = getMediaById(mediaId, deviceHint);
+
+  if (!item || !item.physicalPath || !fs.existsSync(item.physicalPath)) {
+    return res.status(404).send('Archivo multimedia no encontrado o no disponible.');
+  }
+
+  return res.sendFile(item.physicalPath, {
+    acceptRanges: true,
+    cacheControl: true,
+    maxAge: '7d'
+  });
+});
+
+// GET /expl/ver/post/:mediaId - Vista individual con metaetiquetas OpenGraph para WhatsApp
+const handleSharedPost = (req, res) => {
+  const { mediaId } = req.params;
+  const deviceHint = req.query.d || null;
+  const item = getMediaById(mediaId, deviceHint);
+
+  if (!item) {
+    return res.status(404).send('Contenido multimedia no encontrado o aun no sincronizado en el servidor.');
+  }
+
+  const hostUrl = `${req.protocol}://${req.get('host')}`;
+  const html = renderVerShareView({ item, hostUrl });
+  return res.send(html);
+};
+
+router.get('/expl/ver/post/:mediaId', handleSharedPost);
+router.get('/expl/ver/share/:mediaId', handleSharedPost);
 
 // Proteger todas las rutas subsiguientes bajo /expl/ver y /api/ver con el middleware de autenticación
 router.use('/expl/ver', verAuthMiddleware);
