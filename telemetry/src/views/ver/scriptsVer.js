@@ -80,25 +80,33 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (tab === 'explore') document.getElementById('tabExplore').classList.add('active');
 
       const searchContainer = document.getElementById('topSearchContainer');
+      const contactsSearchContainer = document.getElementById('topSearchContactsContainer');
       const nlpSearchContainer = document.getElementById('topSearchNlpContainer');
       const barTitle = document.getElementById('topBarTitle');
 
       if (tab === 'feed' || tab === 'favorites') {
         if (searchContainer) searchContainer.style.display = 'flex';
+        if (contactsSearchContainer) contactsSearchContainer.style.display = 'none';
+        if (nlpSearchContainer) nlpSearchContainer.style.display = 'none';
+        if (barTitle) barTitle.style.display = 'none';
+      } else if (tab === 'contacts') {
+        if (searchContainer) searchContainer.style.display = 'none';
+        if (contactsSearchContainer) contactsSearchContainer.style.display = 'flex';
         if (nlpSearchContainer) nlpSearchContainer.style.display = 'none';
         if (barTitle) barTitle.style.display = 'none';
       } else if (tab === 'nlp') {
         if (searchContainer) searchContainer.style.display = 'none';
+        if (contactsSearchContainer) contactsSearchContainer.style.display = 'none';
         if (nlpSearchContainer) nlpSearchContainer.style.display = 'flex';
         if (barTitle) barTitle.style.display = 'none';
         updateNlpTopSearchPlaceholder();
       } else {
         if (searchContainer) searchContainer.style.display = 'none';
+        if (contactsSearchContainer) contactsSearchContainer.style.display = 'none';
         if (nlpSearchContainer) nlpSearchContainer.style.display = 'none';
         if (barTitle) {
           barTitle.style.display = 'block';
-          if (tab === 'contacts') barTitle.textContent = 'Contactos';
-          else if (tab === 'explore') barTitle.textContent = 'Explorar Etiquetas';
+          if (tab === 'explore') barTitle.textContent = 'Explorar Etiquetas';
         }
       }
 
@@ -128,6 +136,28 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     }
 
     let cachedContactsData = null;
+
+    function executeContactsSearch() {
+      const input = document.getElementById('contactsTopSearchInput');
+      const q = input ? input.value : '';
+      const clearBtn = document.getElementById('btnClearContactsSearch');
+      if (clearBtn) clearBtn.style.display = q.trim() ? 'block' : 'none';
+      handleContactSearch(q);
+    }
+
+    function onContactsTopSearchInput(val) {
+      const clearBtn = document.getElementById('btnClearContactsSearch');
+      if (clearBtn) clearBtn.style.display = (val || '').trim() ? 'block' : 'none';
+      handleContactSearch(val);
+    }
+
+    function clearContactsTopSearch() {
+      const input = document.getElementById('contactsTopSearchInput');
+      if (input) input.value = '';
+      const clearBtn = document.getElementById('btnClearContactsSearch');
+      if (clearBtn) clearBtn.style.display = 'none';
+      handleContactSearch('');
+    }
 
     function getAvatarGradient(name) {
       const gradients = [
@@ -189,8 +219,6 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       const contacts = data.contacts || [];
 
       let html = '<div class="contacts-container">';
-      html += '<input type="text" id="contactSearchInput" class="contacts-search-input" placeholder="Buscar contacto por nombre o numero..." oninput="handleContactSearch(this.value)" />';
-
       html += '<div class="contacts-kpi-grid">' +
         '<div class="contacts-kpi-card"><span class="contacts-kpi-num" style="color:#c084fc;">' + (meta.totalContacts || 0) + '</span><span class="contacts-kpi-label">Contactos</span></div>' +
         '<div class="contacts-kpi-card"><span class="contacts-kpi-num" style="color:#38bdf8;">' + (meta.totalCalls || 0) + '</span><span class="contacts-kpi-label">Llamadas</span></div>' +

@@ -44,13 +44,24 @@ ${styles}
         </div>
         <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
       </div>
+      <!-- Barra de Busqueda Superior para Contactos con Boton de Envio -->
+      <div class="top-search-container" id="topSearchContactsContainer" style="display:none;">
+        <div class="top-search-group">
+          <input type="text" id="contactsTopSearchInput" class="top-search-input" placeholder="Buscar contacto por nombre o numero..." oninput="onContactsTopSearchInput(this.value)" onkeydown="if(event.key==='Enter') executeContactsSearch()" />
+        </div>
+        <button type="button" id="btnClearContactsSearch" class="btn-clear-search" onclick="clearContactsTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
+        <button type="button" class="btn-top-search-submit" onclick="executeContactsSearch()" title="Enviar busqueda">
+          ${ICONS.search}
+          <span>Buscar</span>
+        </button>
+      </div>
       <!-- Barra de Busqueda Superior para NLP con Boton de Envio -->
       <div class="top-search-container" id="topSearchNlpContainer" style="display:none;">
         <div class="top-search-group">
           <input type="text" id="nlpTopSearchInput" class="top-search-input" placeholder="Buscar aplicacion o paquete..." oninput="onNlpTopSearchInput(this.value)" onkeydown="if(event.key==='Enter') executeNlpSearch()" />
         </div>
         <button type="button" id="btnClearNlpSearch" class="btn-clear-search" onclick="clearNlpTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
-        <button type="button" class="btn-nlp-search-submit" onclick="executeNlpSearch()" title="Enviar busqueda">
+        <button type="button" class="btn-top-search-submit" onclick="executeNlpSearch()" title="Enviar busqueda">
           ${ICONS.search}
           <span>Buscar</span>
         </button>

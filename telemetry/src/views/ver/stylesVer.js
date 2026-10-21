@@ -188,6 +188,7 @@ function getVerStyles() {
       flex-shrink: 0;
     }
 
+    .btn-top-search-submit,
     .btn-nlp-search-submit {
       background: #2563eb;
       color: #ffffff;
@@ -204,15 +205,18 @@ function getVerStyles() {
       transition: background 0.15s, transform 0.1s;
     }
 
+    .btn-top-search-submit:hover,
     .btn-nlp-search-submit:hover {
       background: #1d4ed8;
     }
 
+    .btn-top-search-submit:active,
     .btn-nlp-search-submit:active {
       transform: scale(0.92);
       background: #1e40af;
     }
 
+    .btn-top-search-submit svg,
     .btn-nlp-search-submit svg {
       width: 14px;
       height: 14px;
