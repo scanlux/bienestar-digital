@@ -52,20 +52,30 @@ function getVerStyles() {
       z-index: 50;
     }
 
+    .top-search-section,
     .top-search-container {
       flex: 1;
       min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .top-search-bar {
+      flex: 1;
+      min-width: 0;
+      height: 38px;
       display: flex;
       align-items: center;
       gap: 6px;
       background: #0f172a;
       border: 1px solid #334155;
       border-radius: 999px;
-      padding: 4px 8px;
+      padding: 0 12px;
       transition: border-color 0.15s;
     }
 
-    .top-search-container:focus-within {
+    .top-search-bar:focus-within {
       border-color: #38bdf8;
     }
 
@@ -78,21 +88,33 @@ function getVerStyles() {
     }
 
     .btn-search-trigger {
-      background: transparent;
+      background: #2563eb;
       border: none;
-      color: #38bdf8;
+      color: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      padding: 2px 4px;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
       flex-shrink: 0;
-      transition: transform 0.15s ease, color 0.15s ease;
+      transition: transform 0.15s ease, background 0.15s ease;
+      padding: 0;
+    }
+
+    .btn-search-trigger:hover {
+      background: #1d4ed8;
     }
 
     .btn-search-trigger:active {
-      transform: scale(0.88);
-      color: #7dd3fc;
+      transform: scale(0.9);
+      background: #1e40af;
+    }
+
+    .btn-search-trigger svg {
+      width: 17px;
+      height: 17px;
     }
 
     .top-search-input {
@@ -154,23 +176,33 @@ function getVerStyles() {
     .btn-calendar-trigger {
       background: #1e293b;
       border: 1px solid #334155;
-      border-radius: 999px;
+      border-radius: 50%;
       color: #94a3b8;
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 30px;
-      height: 30px;
+      width: 38px;
+      height: 38px;
       cursor: pointer;
       flex-shrink: 0;
-      transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+      transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
       padding: 0;
+    }
+
+    .btn-calendar-trigger:hover {
+      color: #38bdf8;
+      border-color: #475569;
     }
 
     .btn-calendar-trigger:active {
       transform: scale(0.9);
       background: #334155;
       color: #38bdf8;
+    }
+
+    .btn-calendar-trigger svg {
+      width: 17px;
+      height: 17px;
     }
 
     .btn-clear-search {
@@ -194,8 +226,9 @@ function getVerStyles() {
       color: #ffffff;
       border: none;
       border-radius: 999px;
-      padding: 5px 12px;
-      font-size: 0.74rem;
+      padding: 0 14px;
+      height: 38px;
+      font-size: 0.78rem;
       font-weight: 700;
       display: inline-flex;
       align-items: center;

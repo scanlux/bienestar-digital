@@ -19,7 +19,8 @@ function renderVerLayout({
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>${title}</title>
-  <link rel="icon" href="https://trendy.sytes.net/favicon.ico" type="image/x-icon">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0f19'/%3E%3Cpath d='M3 16s5.5-9 13-9 13 9 13 9-5.5 9-13 9S3 16 3 16z' fill='none' stroke='%2338bdf8' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='4.5' fill='%2338bdf8'/%3E%3Ccircle cx='17.5' cy='14.5' r='1.5' fill='%23ffffff'/%3E%3C/svg%3E">
+  <link rel="alternate icon" href="https://trendy.sytes.net/favicon.ico">
   <style>
 ${styles}
   </style>
@@ -28,39 +29,39 @@ ${styles}
   <div class="app-viewport">
     <!-- Top Bar Sticky con Buscador por Fecha y Tag -->
     <header class="top-bar">
-      <div class="top-search-container" id="topSearchContainer">
-        <button type="button" class="btn-search-trigger" onclick="executeTopSearch()" title="Iniciar busqueda">
-          ${ICONS.search}
-        </button>
-        <div class="top-search-group">
+      <div class="top-search-section" id="topSearchContainer">
+        <div class="top-search-bar">
           <input type="text" id="topSearchTag" class="top-search-input" placeholder="Buscar por tag o texto..." onkeydown="if(event.key==='Enter') executeTopSearch()" />
+          <div id="activeDateBadgeContainer" style="display:none;"></div>
+          <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
         </div>
-        <div id="activeDateBadgeContainer" style="display:none;"></div>
         <div class="top-date-group">
           <input type="date" id="topSearchDate" class="top-date-hidden" onchange="onDateSelected(this.value)" />
           <button type="button" class="btn-calendar-trigger" onclick="openCalendarPicker()" title="Buscar por calendario">
             ${ICONS.calendar}
           </button>
         </div>
-        <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
+        <button type="button" class="btn-search-trigger" onclick="executeTopSearch()" title="Iniciar busqueda">
+          ${ICONS.search}
+        </button>
       </div>
-      <!-- Barra de Busqueda Superior para Contactos con Boton de Envio -->
-      <div class="top-search-container" id="topSearchContactsContainer" style="display:none;">
-        <div class="top-search-group">
+      <!-- Barra de Busqueda Superior para Contactos con Boton de Envio al Lado -->
+      <div class="top-search-section" id="topSearchContactsContainer" style="display:none;">
+        <div class="top-search-bar">
           <input type="text" id="contactsTopSearchInput" class="top-search-input" placeholder="Buscar contacto por nombre o numero..." oninput="onContactsTopSearchInput(this.value)" onkeydown="if(event.key==='Enter') executeContactsSearch()" />
+          <button type="button" id="btnClearContactsSearch" class="btn-clear-search" onclick="clearContactsTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
         </div>
-        <button type="button" id="btnClearContactsSearch" class="btn-clear-search" onclick="clearContactsTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
         <button type="button" class="btn-top-search-submit" onclick="executeContactsSearch()" title="Enviar busqueda">
           ${ICONS.search}
           <span>Buscar</span>
         </button>
       </div>
-      <!-- Barra de Busqueda Superior para NLP con Boton de Envio -->
-      <div class="top-search-container" id="topSearchNlpContainer" style="display:none;">
-        <div class="top-search-group">
+      <!-- Barra de Busqueda Superior para NLP con Boton de Envio al Lado -->
+      <div class="top-search-section" id="topSearchNlpContainer" style="display:none;">
+        <div class="top-search-bar">
           <input type="text" id="nlpTopSearchInput" class="top-search-input" placeholder="Buscar aplicacion o paquete..." oninput="onNlpTopSearchInput(this.value)" onkeydown="if(event.key==='Enter') executeNlpSearch()" />
+          <button type="button" id="btnClearNlpSearch" class="btn-clear-search" onclick="clearNlpTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
         </div>
-        <button type="button" id="btnClearNlpSearch" class="btn-clear-search" onclick="clearNlpTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
         <button type="button" class="btn-top-search-submit" onclick="executeNlpSearch()" title="Enviar busqueda">
           ${ICONS.search}
           <span>Buscar</span>
