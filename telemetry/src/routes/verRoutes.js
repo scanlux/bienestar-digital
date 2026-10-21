@@ -45,9 +45,9 @@ router.post('/expl/ver/login', verLoginLimiter, (req, res) => {
   const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
 
   res.setHeader('Set-Cookie', [
-    `ver_session=${sessionToken}; Path=/expl/ver; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`, // 30 días
-    `ver_device=${encodeURIComponent(user.deviceId)}; Path=/expl/ver; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`,
-    `ver_user=${encodeURIComponent(user.username)}; Path=/expl/ver; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`
+    `ver_session=${sessionToken}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`, // 30 días
+    `ver_device=${encodeURIComponent(user.deviceId)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`,
+    `ver_user=${encodeURIComponent(user.username)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`
   ]);
 
   return res.redirect(303, '/expl/ver');
@@ -56,9 +56,9 @@ router.post('/expl/ver/login', verLoginLimiter, (req, res) => {
 // GET /expl/ver/logout
 router.get('/expl/ver/logout', (req, res) => {
   res.setHeader('Set-Cookie', [
-    'ver_session=; Path=/expl/ver; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
-    'ver_device=; Path=/expl/ver; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
-    'ver_user=; Path=/expl/ver; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+    'ver_session=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    'ver_device=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    'ver_user=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
   ]);
   return res.redirect('/expl/ver/login');
 });
