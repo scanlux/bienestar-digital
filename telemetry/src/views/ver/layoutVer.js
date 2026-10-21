@@ -86,6 +86,25 @@ ${styles}
       </div>
     </div>
 
+    <!-- Popup Modal de Visualizacion Multimedia para Favoritos -->
+    <div id="mediaPopupModal" class="media-popup-overlay" onclick="if(event.target === this) closeMediaPopup()">
+      <div class="media-popup-container">
+        <div class="media-popup-header">
+          <div class="media-popup-meta">
+            <span class="media-popup-title" id="popupMediaTitle">Contenido</span>
+            <span class="app-source-badge" id="popupMediaSource" style="position:static;">Dispositivo</span>
+          </div>
+          <button type="button" class="btn-close-popup" onclick="closeMediaPopup()" title="Cerrar visor">✕</button>
+        </div>
+        <div class="media-popup-body" id="popupMediaBody"></div>
+        <div class="media-popup-footer">
+          <div class="media-popup-actions" id="popupMediaActions"></div>
+          <div id="popupMediaNotes" class="post-notes" style="display:none; margin-top:8px;"></div>
+          <div id="popupMediaTags" class="post-tags-container" style="margin-top:6px;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="appToast" class="toast">Enlace copiado al portapapeles</div>
   </div>

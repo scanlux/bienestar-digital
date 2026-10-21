@@ -11,6 +11,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     let intersectionObserver = null;
     let videoObserver = null;
     let currentlyPlayingVideo = null;
+    let favoritesCache = new Map();
+    let activePopupMedia = null;
 
     // Inicializar IDs precargados
     const initialList = ${JSON.stringify(initialItems)};
@@ -33,7 +35,21 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       };
       document.addEventListener('touchstart', unlockAutoplay, { passive: true, once: true });
       document.addEventListener('click', unlockAutoplay, { once: true });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeMediaPopup();
+          closeTagModal();
+        }
+      });
     });
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes <= 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
 
     function showToast(msg) {
       const toast = document.getElementById('appToast');
@@ -420,15 +436,19 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     }
 
     function toggleFav(mediaId, nameEnc, type) {
-      const btn = document.getElementById('star_' + mediaId);
+      const feedBtn = document.getElementById('star_' + mediaId);
+      const favBtn = document.getElementById('favStar_' + mediaId);
+      const popupBtn = document.getElementById('popupFav_' + mediaId);
       const postEl = document.getElementById('post_' + mediaId);
+      const favRowEl = document.getElementById('favRow_' + mediaId);
 
-      let path = '';
-      let name = nameEnc ? decodeURIComponent(nameEnc) : '';
-      let mediaType = type || 'other';
-      let size = 0;
-      let lastModified = 0;
-      let appSource = '';
+      let cached = favoritesCache.get(mediaId) || {};
+      let path = cached.path || '';
+      let name = nameEnc ? decodeURIComponent(nameEnc) : (cached.name || '');
+      let mediaType = type || cached.type || 'other';
+      let size = cached.size || 0;
+      let lastModified = cached.lastModified || 0;
+      let appSource = cached.appSource || '';
 
       if (postEl && postEl.dataset) {
         if (postEl.dataset.path) path = decodeURIComponent(postEl.dataset.path);
@@ -454,26 +474,52 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       })
       .then(res => res.json())
       .then(data => {
-        if (data.success && btn) {
-          if (data.isFavorite) {
-            btn.classList.add('favorited');
-            btn.innerHTML = SVG_ICONS.starFilled;
+        if (data.success) {
+          const isFav = Boolean(data.isFavorite);
+          if (isFav) {
+            if (feedBtn) {
+              feedBtn.classList.add('favorited');
+              feedBtn.innerHTML = SVG_ICONS.starFilled;
+            }
+            if (favBtn) {
+              favBtn.classList.add('favorited');
+              favBtn.innerHTML = SVG_ICONS.starFilled;
+            }
+            if (popupBtn) {
+              popupBtn.classList.add('favorited');
+              popupBtn.innerHTML = SVG_ICONS.starFilled + '<span>Favorito</span>';
+            }
             showToast('Anadido a Favoritos');
           } else {
-            btn.classList.remove('favorited');
-            btn.innerHTML = SVG_ICONS.starOutline;
+            if (feedBtn) {
+              feedBtn.classList.remove('favorited');
+              feedBtn.innerHTML = SVG_ICONS.starOutline;
+            }
+            if (favBtn) {
+              favBtn.classList.remove('favorited');
+              favBtn.innerHTML = SVG_ICONS.starOutline;
+            }
+            if (popupBtn) {
+              popupBtn.classList.remove('favorited');
+              popupBtn.innerHTML = SVG_ICONS.starOutline + '<span>Favorito</span>';
+            }
             showToast('Eliminado de Favoritos');
-            if (currentMainTab === 'favorites' && postEl) {
-              postEl.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-              postEl.style.opacity = '0';
-              postEl.style.transform = 'scale(0.95)';
-              setTimeout(() => {
-                postEl.remove();
-                const favList = document.getElementById('favList');
-                if (favList && favList.children.length === 0) {
-                  renderFavoritesTab(document.getElementById('mainContent'));
-                }
-              }, 300);
+            favoritesCache.delete(mediaId);
+
+            if (currentMainTab === 'favorites') {
+              const targetRow = favRowEl || postEl;
+              if (targetRow) {
+                targetRow.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+                targetRow.style.opacity = '0';
+                targetRow.style.transform = 'scale(0.92)';
+                setTimeout(() => {
+                  targetRow.remove();
+                  const favList = document.getElementById('favList');
+                  if (favList && favList.querySelectorAll('.fav-row-card').length === 0) {
+                    renderFavoritesTab(document.getElementById('mainContent'));
+                  }
+                }, 250);
+              }
             }
           }
         }
@@ -621,13 +667,143 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             return;
           }
 
-          const cardsHtml = data.favorites.map(item => renderPostCardHtml(item)).join('');
-          container.innerHTML = '<div id="favList">' + cardsHtml + '</div>';
-          setupVideoAutoplayObserver();
+          favoritesCache.clear();
+          const rowsHtml = data.favorites.map(item => {
+            favoritesCache.set(item.mediaId, item);
+            return renderFavRowCardHtml(item);
+          }).join('');
+
+          container.innerHTML = '<div id="favList">' + rowsHtml + '</div>';
         })
         .catch(() => {
           container.innerHTML = '<div style="padding:40px 20px; text-align:center; color:#ef4444; font-size:0.85rem;">Error al cargar favoritos.</div>';
         });
+    }
+
+    function renderFavRowCardHtml(item) {
+      const tagsList = Array.isArray(item.tags) ? item.tags : [];
+      const appSource = item.appSource || (item.path ? getClientReadableSource(item.path) : 'Dispositivo');
+      const formattedDate = new Date(item.lastModified || Date.now()).toLocaleDateString('es-CO', {
+        day: '2-digit', month: 'short'
+      });
+      const formattedSize = formatBytes(item.size || 0);
+
+      let thumbHtml = '';
+      if (item.type === 'video') {
+        thumbHtml = '<video class="fav-thumb-video" src="' + item.contentUrl + '#t=0.5" preload="metadata" muted playsinline></video>' +
+          '<div class="fav-play-badge">' + SVG_ICONS.video + '</div>';
+      } else if (item.type === 'image') {
+        thumbHtml = '<img class="fav-thumb-img" loading="lazy" src="' + item.contentUrl + '" alt="' + item.name + '" />';
+      } else {
+        thumbHtml = '<div class="fav-audio-icon">' + SVG_ICONS.audio + '</div>';
+      }
+
+      return '<div class="fav-row-card" id="favRow_' + item.mediaId + '" onclick="openMediaPopup(\\'' + item.mediaId + '\\')">' +
+        '<div class="fav-thumb-box">' + thumbHtml + '</div>' +
+        '<div class="fav-info">' +
+          '<span class="fav-title" title="' + item.name + '">' + item.name + '</span>' +
+          '<div class="fav-meta-row">' +
+            '<span class="app-source-badge" style="position:static; padding:2px 7px; font-size:0.68rem;">' + appSource + '</span>' +
+            '<span class="fav-date">' + formattedDate + '</span>' +
+            '<span class="fav-size">' + formattedSize + '</span>' +
+          '</div>' +
+          (tagsList.length > 0 ? (
+            '<div class="fav-tags-row">' +
+              tagsList.map(t => '<span class="tag-badge" style="font-size:0.66rem; padding:1px 6px;">#' + t + '</span>').join('') +
+            '</div>'
+          ) : '') +
+        '</div>' +
+        '<button type="button" class="fav-star-btn favorited" id="favStar_' + item.mediaId + '" onclick="event.stopPropagation(); toggleFav(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + item.type + '\\')" title="Quitar de favoritos">' +
+          SVG_ICONS.starFilled +
+        '</button>' +
+      '</div>';
+    }
+
+    function openMediaPopup(mediaId) {
+      const item = favoritesCache.get(mediaId);
+      if (!item) return;
+      activePopupMedia = item;
+
+      if (currentlyPlayingVideo) {
+        currentlyPlayingVideo.pause();
+      }
+
+      const modal = document.getElementById('mediaPopupModal');
+      const titleEl = document.getElementById('popupMediaTitle');
+      const sourceEl = document.getElementById('popupMediaSource');
+      const bodyEl = document.getElementById('popupMediaBody');
+      const actionsEl = document.getElementById('popupMediaActions');
+      const notesEl = document.getElementById('popupMediaNotes');
+      const tagsEl = document.getElementById('popupMediaTags');
+
+      if (!modal || !bodyEl) return;
+
+      if (titleEl) titleEl.textContent = item.name;
+      if (sourceEl) sourceEl.textContent = item.appSource || (item.path ? getClientReadableSource(item.path) : 'Dispositivo');
+
+      if (item.type === 'video') {
+        bodyEl.innerHTML = '<video controls autoplay playsinline loop src="' + item.contentUrl + '"></video>';
+      } else if (item.type === 'image') {
+        bodyEl.innerHTML = '<img src="' + item.contentUrl + '" alt="' + item.name + '" />';
+      } else if (item.type === 'audio') {
+        bodyEl.innerHTML = '<div class="post-audio-container" style="width:100%; padding:24px 16px;">' +
+          '<div class="audio-icon-box" style="margin-bottom:12px;">' + SVG_ICONS.audio + '</div>' +
+          '<audio controls autoplay src="' + item.contentUrl + '" style="width:100%; max-width:340px;"></audio>' +
+        '</div>';
+      }
+
+      const isFav = Boolean(item.isFavorite !== false);
+      if (actionsEl) {
+        actionsEl.innerHTML = '<button type="button" class="popup-action-btn btn-wa" onclick="shareWhatsApp(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + (item.deviceId || '') + '\\')">' +
+            SVG_ICONS.whatsapp + '<span>WhatsApp</span>' +
+          '</button>' +
+          '<a href="' + item.contentUrl + '" download="' + item.name + '" class="popup-action-btn">' +
+            SVG_ICONS.download + '<span>Descargar</span>' +
+          '</a>' +
+          '<button type="button" class="popup-action-btn" onclick="openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')">' +
+            SVG_ICONS.tag + '<span>Etiquetar</span>' +
+          '</button>' +
+          '<button type="button" class="popup-action-btn btn-fav ' + (isFav ? 'favorited' : '') + '" id="popupFav_' + item.mediaId + '" onclick="toggleFav(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + item.type + '\\')">' +
+            (isFav ? SVG_ICONS.starFilled : SVG_ICONS.starOutline) + '<span>Favorito</span>' +
+          '</button>';
+      }
+
+      if (notesEl) {
+        if (item.notes) {
+          notesEl.textContent = item.notes;
+          notesEl.style.display = 'block';
+        } else {
+          notesEl.textContent = '';
+          notesEl.style.display = 'none';
+        }
+      }
+
+      if (tagsEl) {
+        const tags = Array.isArray(item.tags) ? item.tags : [];
+        if (tags.length > 0) {
+          tagsEl.innerHTML = tags.map(t => '<span class="tag-badge">#' + t + '</span>').join('');
+          tagsEl.style.display = 'flex';
+        } else {
+          tagsEl.innerHTML = '';
+          tagsEl.style.display = 'none';
+        }
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeMediaPopup() {
+      const modal = document.getElementById('mediaPopupModal');
+      const bodyEl = document.getElementById('popupMediaBody');
+      if (bodyEl) {
+        const v = bodyEl.querySelector('video');
+        if (v) v.pause();
+        const a = bodyEl.querySelector('audio');
+        if (a) a.pause();
+        bodyEl.innerHTML = '';
+      }
+      if (modal) modal.classList.remove('active');
+      activePopupMedia = null;
     }
 
     function renderExploreTagsTab(container) {
