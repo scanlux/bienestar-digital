@@ -23,6 +23,95 @@ const { renderVerFeedView } = require('../views/ver/feedView');
 const { renderVerShareView } = require('../views/ver/shareView');
 const { getVerClientScript } = require('../views/ver/scriptsVer');
 const fs = require('fs');
+const sharp = require('sharp');
+
+const posterMemoryCache = new Map();
+
+function escapeXml(unsafe) {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+async function generateMediaPosterPng(item) {
+  const isVideo = item.type === 'video';
+  const isAudio = item.type === 'audio';
+  const appSource = item.appSource || getHumanReadableSource(item.path);
+
+  const cleanName = (item.name || 'Archivo multimedia').length > 40
+    ? (item.name.substring(0, 37) + '...')
+    : (item.name || 'Archivo multimedia');
+
+  const escapedTitle = escapeXml(cleanName);
+  const escapedSource = escapeXml(appSource.toUpperCase());
+  const badgeWidth = Math.max(120, escapedSource.length * 11 + 36);
+
+  let centerGraphics = '';
+  if (isVideo) {
+    centerGraphics = `
+      <circle cx="600" cy="275" r="72" fill="url(#brandGrad)" filter="url(#dropGlow)" />
+      <polygon points="585,240 635,275 585,310" fill="#ffffff" />
+    `;
+  } else if (isAudio) {
+    centerGraphics = `
+      <circle cx="600" cy="275" r="72" fill="#059669" filter="url(#dropGlow)" />
+      <path d="M580 295V250l35-8v53" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none"/>
+      <circle cx="572" cy="295" r="10" fill="#ffffff"/>
+      <circle cx="607" cy="287" r="10" fill="#ffffff"/>
+    `;
+  } else {
+    centerGraphics = `
+      <circle cx="600" cy="275" r="72" fill="#3b82f6" filter="url(#dropGlow)" />
+      <rect x="575" y="250" width="50" height="50" rx="8" fill="none" stroke="#ffffff" stroke-width="4"/>
+      <circle cx="590" cy="265" r="5" fill="#ffffff"/>
+      <polygon points="580,295 620,295 605,275" fill="#ffffff"/>
+    `;
+  }
+
+  const svg = `
+  <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0b0f19"/>
+        <stop offset="60%" stop-color="#020617"/>
+        <stop offset="100%" stop-color="#0f172a"/>
+      </linearGradient>
+      <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#ec4899"/>
+        <stop offset="100%" stop-color="#8b5cf6"/>
+      </linearGradient>
+      <filter id="dropGlow" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#ec4899" flood-opacity="0.45"/>
+      </filter>
+      <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+        <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.8"/>
+      </filter>
+    </defs>
+
+    <rect width="1200" height="630" fill="url(#bgGrad)"/>
+    <rect x="70" y="45" width="1060" height="540" rx="28" fill="#111827" stroke="#1f2937" stroke-width="3" filter="url(#cardShadow)"/>
+
+    <text x="120" y="115" fill="#f43f5e" font-family="system-ui, -apple-system, sans-serif" font-size="26" font-weight="900" letter-spacing="2">VER MEDIA</text>
+
+    <rect x="120" y="135" width="${badgeWidth}" height="32" rx="16" fill="#1e293b" stroke="#374151" stroke-width="1.5"/>
+    <text x="${120 + badgeWidth / 2}" y="156" text-anchor="middle" fill="#38bdf8" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="800" letter-spacing="1">${escapedSource}</text>
+
+    ${centerGraphics}
+
+    <text x="600" y="440" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="800">${escapedTitle}</text>
+
+    <rect x="420" y="475" width="360" height="46" rx="23" fill="#1f2937" stroke="#374151" stroke-width="1.5"/>
+    <text x="600" y="504" text-anchor="middle" fill="#9ca3af" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="600">
+      ${isVideo ? 'Toca para reproducir video' : isAudio ? 'Toca para escuchar audio' : 'Toca para ver en pantalla completa'}
+    </text>
+  </svg>`;
+
+  return await sharp(Buffer.from(svg)).png().toBuffer();
+}
 
 const verLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -90,6 +179,45 @@ router.get('/expl/ver/raw/:mediaId', (req, res) => {
     cacheControl: true,
     maxAge: '7d'
   });
+});
+
+// GET /expl/ver/poster/:mediaId - Miniatura de imagen para WhatsApp OpenGraph (rasterizada con sharp)
+router.get('/expl/ver/poster/:mediaId', async (req, res) => {
+  const { mediaId } = req.params;
+  const deviceHint = req.query.d || null;
+  const item = getMediaById(mediaId, deviceHint);
+
+  if (!item) {
+    return res.status(404).send('No encontrado');
+  }
+
+  // Si es una imagen y existe en disco, servirla directamente
+  if (item.type === 'image' && item.physicalPath && fs.existsSync(item.physicalPath)) {
+    return res.sendFile(item.physicalPath, {
+      maxAge: '7d'
+    });
+  }
+
+  try {
+    if (posterMemoryCache.has(mediaId)) {
+      res.set('Content-Type', 'image/png');
+      res.set('Cache-Control', 'public, max-age=604800');
+      return res.send(posterMemoryCache.get(mediaId));
+    }
+
+    const pngBuffer = await generateMediaPosterPng(item);
+    if (posterMemoryCache.size > 200) {
+      const firstKey = posterMemoryCache.keys().next().value;
+      posterMemoryCache.delete(firstKey);
+    }
+    posterMemoryCache.set(mediaId, pngBuffer);
+
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'public, max-age=604800');
+    return res.send(pngBuffer);
+  } catch (err) {
+    return res.status(500).send('Error generando poster');
+  }
 });
 
 // GET /expl/ver/post/:mediaId - Vista individual con metaetiquetas OpenGraph para WhatsApp

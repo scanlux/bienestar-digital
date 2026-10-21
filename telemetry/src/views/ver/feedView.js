@@ -73,7 +73,7 @@ function renderVerFeedView({ items = [] }) {
               ${isFav ? ICONS.starFilled : ICONS.starOutline}
             </button>
             <button type="button" class="btn-action" onclick="openTagModal('${item.mediaId}', '${encodeURIComponent(item.name)}')" title="Anadir Nota o Etiqueta" style="display:flex; align-items:center;">${ICONS.comment}</button>
-            <button type="button" class="btn-action btn-whatsapp" onclick="shareWhatsApp('${item.mediaId}', '${encodeURIComponent(item.name)}', '${item.deviceId || ''}')" title="Compartir por WhatsApp" style="display:flex; align-items:center;">${ICONS.share}</button>
+            <button type="button" class="btn-action btn-whatsapp" onclick="shareWhatsApp('${item.mediaId}', '${encodeURIComponent(item.name)}', '${item.deviceId || ''}')" title="Compartir por WhatsApp" style="display:flex; align-items:center;">${ICONS.whatsapp}</button>
           </div>
           <a href="${item.contentUrl}" download="${item.name}" class="btn-action" title="Descargar original" style="color:#9ca3af; text-decoration:none; display:flex; align-items:center;">${ICONS.download}</a>
         </div>

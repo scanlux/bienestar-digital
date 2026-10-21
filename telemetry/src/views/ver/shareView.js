@@ -17,6 +17,8 @@ function renderVerShareView({ item, hostUrl = 'https://trendy-telemetry.sytes.ne
   const isVideo = item.type === 'video';
   const isImage = item.type === 'image';
   const isAudio = item.type === 'audio';
+  const deviceParam = item.deviceId ? `?d=${encodeURIComponent(item.deviceId)}` : '';
+  const posterUrl = isImage ? rawMediaUrl : `${hostUrl}/expl/ver/poster/${item.mediaId}${deviceParam}`;
 
   // Metaetiquetas OpenGraph optimizadas para WhatsApp
   let ogMetaTags = `
@@ -34,9 +36,14 @@ function renderVerShareView({ item, hostUrl = 'https://trendy-telemetry.sytes.ne
   <meta property="og:video:type" content="video/mp4">
   <meta property="og:video:width" content="720">
   <meta property="og:video:height" content="1280">
-  <meta property="og:image" content="${rawMediaUrl}">
+  <meta property="og:image" content="${posterUrl}">
+  <meta property="og:image:secure_url" content="${posterUrl}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="player">
   <meta name="twitter:title" content="${item.name}">
+  <meta name="twitter:image" content="${posterUrl}">
   <meta name="twitter:player" content="${rawMediaUrl}">
   <meta name="twitter:player:width" content="720">
   <meta name="twitter:player:height" content="1280">
@@ -44,11 +51,11 @@ function renderVerShareView({ item, hostUrl = 'https://trendy-telemetry.sytes.ne
   } else if (isImage) {
     ogMetaTags += `
   <meta property="og:type" content="image">
-  <meta property="og:image" content="${rawMediaUrl}">
-  <meta property="og:image:secure_url" content="${rawMediaUrl}">
+  <meta property="og:image" content="${posterUrl}">
+  <meta property="og:image:secure_url" content="${posterUrl}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${item.name}">
-  <meta name="twitter:image" content="${rawMediaUrl}">
+  <meta name="twitter:image" content="${posterUrl}">
     `;
   } else if (isAudio) {
     ogMetaTags += `
@@ -56,13 +63,18 @@ function renderVerShareView({ item, hostUrl = 'https://trendy-telemetry.sytes.ne
   <meta property="og:audio" content="${rawMediaUrl}">
   <meta property="og:audio:secure_url" content="${rawMediaUrl}">
   <meta property="og:audio:type" content="audio/ogg">
+  <meta property="og:image" content="${posterUrl}">
+  <meta property="og:image:secure_url" content="${posterUrl}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
     `;
   }
 
   // Reproductor para el cuerpo de la página
   let playerHtml = '';
   if (isVideo) {
-    playerHtml = `<video class="post-video" controls playsinline autoplay muted preload="auto" src="${rawMediaUrl}"></video>`;
+    playerHtml = `<video class="post-video" controls playsinline autoplay muted preload="auto" poster="${posterUrl}" src="${rawMediaUrl}"></video>`;
   } else if (isImage) {
     playerHtml = `<img class="post-img" src="${rawMediaUrl}" alt="${item.name}" />`;
   } else if (isAudio) {
@@ -142,9 +154,9 @@ ${styles}
         </div>
 
         <div class="post-actions" style="padding: 14px;">
-          <a href="https://api.whatsapp.com/send?text=${encodeURIComponent('Mira este contenido: ' + item.name + '\n' + canonicalUrl)}" target="_blank" class="btn-wa-direct">
-            ${ICONS.share} Compartir en WhatsApp
-          </a>
+          <button type="button" onclick="sharePostWhatsApp()" class="btn-wa-direct" style="border:none; cursor:pointer;">
+            ${ICONS.whatsapp} Compartir en WhatsApp
+          </button>
           <a href="${rawMediaUrl}" download="${item.name}" class="btn-action" title="Descargar original" style="color:#9ca3af; text-decoration:none; display:flex; align-items:center;">
             ${ICONS.download}
           </a>
@@ -164,7 +176,63 @@ ${styles}
         </div>
       </article>
     </main>
+
+    <div id="appToast" class="toast">Enlace preparado</div>
   </div>
+
+  <script>
+    function showToast(msg) {
+      const toast = document.getElementById('appToast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.remove('show');
+      void toast.offsetWidth;
+      toast.classList.add('show');
+      setTimeout(() => { toast.classList.remove('show'); }, 2500);
+    }
+
+    function sharePostWhatsApp() {
+      const title = ${JSON.stringify(item.name || 'Contenido')};
+      const postUrl = ${JSON.stringify(canonicalUrl)};
+      const shareText = 'Mira este contenido: ' + title + '\\n' + postUrl;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(postUrl).catch(() => {});
+      }
+
+      if (navigator.share) {
+        navigator.share({
+          title: title,
+          text: 'Mira este contenido: ' + title,
+          url: postUrl
+        }).then(() => {
+          showToast('Enlace compartido con exito');
+        }).catch((err) => {
+          if (err && err.name === 'AbortError') return;
+          openWhatsAppDirect(shareText);
+        });
+      } else {
+        openWhatsAppDirect(shareText);
+      }
+    }
+
+    function openWhatsAppDirect(shareText) {
+      const encText = encodeURIComponent(shareText);
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        window.location.href = 'whatsapp://send?text=' + encText;
+        showToast('Abriendo WhatsApp...');
+        setTimeout(() => {
+          window.open('https://api.whatsapp.com/send?text=' + encText, '_blank');
+        }, 1200);
+      } else {
+        window.open('https://web.whatsapp.com/send?text=' + encText, '_blank') || 
+        window.open('https://api.whatsapp.com/send?text=' + encText, '_blank');
+        showToast('Abriendo WhatsApp...');
+      }
+    }
+  </script>
 </body>
 </html>`;
 }
