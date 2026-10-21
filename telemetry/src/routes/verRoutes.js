@@ -5,6 +5,15 @@ const {
   authenticateVerUser,
   createVerSessionToken
 } = require('../services/verAuthService');
+const {
+  getRecommendedFeedBlock,
+  recordMediaSeen,
+  getFavorites,
+  toggleFavorite,
+  getTags,
+  saveMediaTags,
+  getAllDownloadedMedia
+} = require('../services/mediaRecommendationService');
 const { verAuthMiddleware } = require('../middleware/verAuth');
 const { renderVerLoginView } = require('../views/ver/loginView');
 
@@ -54,8 +63,148 @@ router.get('/expl/ver/logout', (req, res) => {
   return res.redirect('/expl/ver/login');
 });
 
-// Proteger todas las rutas subsiguientes bajo /expl/ver con el middleware de autenticación
+// Proteger todas las rutas subsiguientes bajo /expl/ver y /api/ver con el middleware de autenticación
 router.use('/expl/ver', verAuthMiddleware);
+router.use('/api/ver', verAuthMiddleware);
+
+// ==========================================
+// API REST - Feed, Favoritos, Tags y Vistos
+// ==========================================
+
+// GET /api/ver/feed - Obtiene el siguiente bloque de 10 contenidos recomendados
+router.get('/api/ver/feed', (req, res) => {
+  const { deviceId } = req.verUser;
+  let excludeIds = [];
+
+  if (req.query.exclude) {
+    excludeIds = String(req.query.exclude).split(',').filter(Boolean);
+  }
+
+  const block = getRecommendedFeedBlock(deviceId, { excludeMediaIds: excludeIds });
+  return res.json({
+    success: true,
+    deviceId,
+    items: block.items,
+    totalAvailable: block.totalAvailable,
+    hasMore: block.hasMore
+  });
+});
+
+// POST /api/ver/seen - Marca un medio como visto explícitamente y actualiza el ancla de la Fila 2
+router.post('/api/ver/seen', (req, res) => {
+  const { deviceId } = req.verUser;
+  const { mediaId } = req.body || {};
+
+  if (!mediaId) {
+    return res.status(400).json({ error: 'Falta parametro mediaId' });
+  }
+
+  const result = recordMediaSeen(deviceId, mediaId);
+  return res.json(result);
+});
+
+// GET /api/ver/favorites - Consulta todos los medios favoritos del usuario
+router.get('/api/ver/favorites', (req, res) => {
+  const { deviceId } = req.verUser;
+  const favoritesMap = getFavorites(deviceId);
+  const favoritesList = Object.values(favoritesMap).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+
+  return res.json({
+    success: true,
+    deviceId,
+    total: favoritesList.length,
+    favorites: favoritesList
+  });
+});
+
+// POST /api/ver/favorite - Alterna favorito (toggle) para un medio
+router.post('/api/ver/favorite', (req, res) => {
+  const { deviceId } = req.verUser;
+  const { mediaId, path: mediaPath, name, type, size, lastModified } = req.body || {};
+
+  if (!mediaId) {
+    return res.status(400).json({ error: 'Falta parametro mediaId' });
+  }
+
+  const mediaItem = {
+    mediaId,
+    path: mediaPath || '',
+    name: name || '',
+    type: type || 'other',
+    size: size || 0,
+    lastModified: lastModified || 0
+  };
+
+  const result = toggleFavorite(deviceId, mediaItem);
+  return res.json({
+    success: true,
+    deviceId,
+    mediaId,
+    isFavorite: result.isFavorite
+  });
+});
+
+// GET /api/ver/tags - Obtiene todas las etiquetas registradas o filtra medios por tag
+router.get('/api/ver/tags', (req, res) => {
+  const { deviceId } = req.verUser;
+  const tagsMap = getTags(deviceId);
+  const tagFilter = req.query.tag ? String(req.query.tag).trim().toLowerCase() : null;
+
+  if (tagFilter) {
+    const allMedia = getAllDownloadedMedia(deviceId);
+    const mediaMap = new Map(allMedia.map(m => [m.mediaId, m]));
+
+    const matchingMedia = [];
+    Object.entries(tagsMap).forEach(([mId, meta]) => {
+      if (meta.tags && meta.tags.includes(tagFilter)) {
+        if (mediaMap.has(mId)) {
+          matchingMedia.push(mediaMap.get(mId));
+        }
+      }
+    });
+
+    return res.json({
+      success: true,
+      tag: tagFilter,
+      total: matchingMedia.length,
+      items: matchingMedia
+    });
+  }
+
+  // Si no se filtra por tag, retornar resumen de etiquetas disponibles con conteo
+  const tagCounts = {};
+  Object.values(tagsMap).forEach(meta => {
+    (meta.tags || []).forEach(t => {
+      tagCounts[t] = (tagCounts[t] || 0) + 1;
+    });
+  });
+
+  return res.json({
+    success: true,
+    deviceId,
+    tags: tagCounts
+  });
+});
+
+// POST /api/ver/tag - Guarda etiquetas y notas de catalogación para un medio
+router.post('/api/ver/tag', (req, res) => {
+  const { deviceId } = req.verUser;
+  const { mediaId, tags, notes } = req.body || {};
+
+  if (!mediaId) {
+    return res.status(400).json({ error: 'Falta parametro mediaId' });
+  }
+
+  const saved = saveMediaTags(deviceId, mediaId, tags, notes);
+  return res.json({
+    success: true,
+    deviceId,
+    mediaId,
+    tags: saved.tags,
+    notes: saved.notes,
+    updatedAt: saved.updatedAt
+  });
+});
 
 // GET /expl/ver - Placeholder de la vista del Feed que se conectará en Fases 2, 3 y 4
 router.get('/expl/ver', (req, res) => {
