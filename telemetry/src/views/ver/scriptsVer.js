@@ -18,28 +18,18 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (item && item.mediaId) loadedMediaIds.add(item.mediaId);
     });
 
+    let scrollCheckTimer = null;
+
     document.addEventListener('DOMContentLoaded', () => {
       setupIntersectionObserver();
       setupVideoAutoplayObserver();
+      checkVisibleVideos();
+      setTimeout(checkVisibleVideos, 200);
+      setTimeout(checkVisibleVideos, 600);
 
       // Desbloquear autoplay de video tras el primer toque en pantalla si el navegador lo restringe
       const unlockAutoplay = () => {
-        document.removeEventListener('touchstart', unlockAutoplay);
-        document.removeEventListener('click', unlockAutoplay);
-        if (currentlyPlayingVideo && currentlyPlayingVideo.paused) {
-          currentlyPlayingVideo.play().catch(() => {});
-        } else {
-          // Intentar reproducir el video actualmente visible en el viewport
-          const firstVisibleCard = document.querySelector('#feedList .post-card');
-          if (firstVisibleCard) {
-            const v = firstVisibleCard.querySelector('video');
-            if (v && v.paused) {
-              currentlyPlayingVideo = v;
-              v.muted = true;
-              v.play().catch(() => {});
-            }
-          }
-        }
+        checkVisibleVideos();
       };
       document.addEventListener('touchstart', unlockAutoplay, { passive: true, once: true });
       document.addEventListener('click', unlockAutoplay, { once: true });
@@ -73,7 +63,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (!container) return;
 
       if (tab === 'feed') {
-        container.innerHTML = '<div id="feedList"></div><div id="feedLoadingIndicator" style="text-align:center; padding:24px; color:#9ca3af; font-size:0.85rem;">Cargando feed...</div>';
+        container.innerHTML = '<div id="feedList"></div>';
         loadedMediaIds.clear();
         hasMoreContent = true;
         setupIntersectionObserver();
@@ -113,60 +103,105 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       }
     }
 
+    function tryPlayVideo(video) {
+      if (!video) return;
+      video.muted = true;
+      video.setAttribute('muted', '');
+      video.setAttribute('playsinline', '');
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          video.muted = true;
+          const onReady = () => {
+            video.removeEventListener('loadeddata', onReady);
+            video.removeEventListener('canplay', onReady);
+            if (currentlyPlayingVideo === video) {
+              video.muted = true;
+              video.play().catch(() => {});
+            }
+          };
+          video.addEventListener('loadeddata', onReady);
+          video.addEventListener('canplay', onReady);
+        });
+      }
+    }
+
+    function checkVisibleVideos() {
+      const cards = document.querySelectorAll('#feedList .post-card, #favList .post-card, #tagResults .post-card');
+      if (!cards.length) return;
+
+      const viewportCenterY = window.innerHeight / 2;
+      let activeCard = null;
+      let minDistance = Infinity;
+
+      cards.forEach(card => {
+        const rect = card.getBoundingClientRect();
+        if (rect.height > 0 && rect.bottom > 120 && rect.top < window.innerHeight - 120) {
+          const cardCenterY = rect.top + rect.height / 2;
+          const dist = Math.abs(viewportCenterY - cardCenterY);
+          if (dist < minDistance) {
+            minDistance = dist;
+            activeCard = card;
+          }
+        }
+      });
+
+      cards.forEach(card => {
+        const video = card.querySelector('video');
+        if (!video) return;
+
+        if (card === activeCard) {
+          if (currentlyPlayingVideo && currentlyPlayingVideo !== video) {
+            currentlyPlayingVideo.pause();
+          }
+          currentlyPlayingVideo = video;
+          if (video.paused) {
+            tryPlayVideo(video);
+          }
+          if (card.dataset && card.dataset.mediaId) {
+            markMediaSeen(card.dataset.mediaId);
+          }
+        } else {
+          if (!video.paused) {
+            video.pause();
+          }
+          if (currentlyPlayingVideo === video) {
+            currentlyPlayingVideo = null;
+          }
+        }
+      });
+    }
+
     function setupVideoAutoplayObserver() {
       if (videoObserver) videoObserver.disconnect();
 
       const scrollContainer = currentMainTab === 'favorites'
         ? document.getElementById('favList')
         : document.getElementById('feedList');
-      if (!scrollContainer) return;
 
-      const options = {
-        root: scrollContainer,
-        threshold: 0.35 // 35% de visibilidad para activacion fluida al deslizar
-      };
+      if (scrollContainer && !scrollContainer.dataset.scrollBound) {
+        scrollContainer.dataset.scrollBound = '1';
+        scrollContainer.addEventListener('scroll', () => {
+          if (scrollCheckTimer) clearTimeout(scrollCheckTimer);
+          scrollCheckTimer = setTimeout(checkVisibleVideos, 90);
+        }, { passive: true });
+      }
 
-      videoObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          const card = entry.target;
-          const video = card.querySelector('video');
-          if (!video) return;
-
-          if (entry.isIntersecting) {
-            // Pausar cualquier otro video activo previamente
-            if (currentlyPlayingVideo && currentlyPlayingVideo !== video) {
-              currentlyPlayingVideo.pause();
-            }
-
-            currentlyPlayingVideo = video;
-            video.muted = true;
-            const playPromise = video.play();
-            if (playPromise !== undefined) {
-              playPromise.catch(() => {
-                video.muted = true;
-                video.play().catch(() => {});
-              });
-            }
-            markMediaSeen(card.dataset.mediaId);
-          } else {
-            // Al salir del area visible, pausar inmediatamente
-            if (currentlyPlayingVideo === video) {
-              currentlyPlayingVideo = null;
-            }
-            video.pause();
-          }
-        });
-      }, options);
+      videoObserver = new IntersectionObserver(() => {
+        checkVisibleVideos();
+      }, {
+        root: null,
+        threshold: [0.25, 0.5, 0.75]
+      });
 
       observeAllFeedVideos();
+      setTimeout(checkVisibleVideos, 100);
     }
 
     function observeAllFeedVideos() {
       if (!videoObserver) return;
       document.querySelectorAll('#feedList .post-card, #favList .post-card').forEach(card => {
-        if (card.querySelector('video')) {
-          videoObserver.observe(card);
-        }
+        videoObserver.observe(card);
       });
     }
 
@@ -259,7 +294,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
     function getClientReadableSource(remotePath) {
       if (!remotePath) return 'Almacenamiento';
-      const p = remotePath.replace(/\\/g, '/');
+      const p = String(remotePath).split('\\\\').join('/');
       if (p.includes('com.whatsapp') || p.includes('WhatsApp')) {
         if (p.includes('Voice Notes')) return 'Nota de Voz WhatsApp';
         if (p.includes('WhatsApp Audio')) return 'Audio WhatsApp';
@@ -284,7 +319,6 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     function renderPostCardHtml(item) {
       const isFav = Boolean(item.isFavorite);
       const tagsList = Array.isArray(item.tags) ? item.tags : [];
-      const hasTags = tagsList.length > 0;
       const notes = item.notes || '';
       const appSource = item.appSource || (item.path ? getClientReadableSource(item.path) : 'Dispositivo');
       const formattedDate = new Date(item.lastModified || Date.now()).toLocaleDateString('es-CO', {
@@ -293,10 +327,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
       let mediaHtml = '';
       if (item.type === 'video') {
-        mediaHtml = '<video class="post-video" playsinline webkit-playsinline loop preload="auto" muted src="' + item.contentUrl + '" onclick="toggleVideoPlay(\\'' + item.mediaId + '\\')"></video>' +
-          '<button type="button" class="video-sound-badge" id="muteBtn_' + item.mediaId + '" onclick="toggleVideoSound(\\'' + item.mediaId + '\\')" title="Alternar sonido">' +
-            SVG_ICONS.soundMuted +
-          '</button>';
+        mediaHtml = '<video class="post-video" playsinline webkit-playsinline loop preload="auto" muted src="' + item.contentUrl + '" onclick="toggleVideoPlay(\\'' + item.mediaId + '\\')"></video>';
       } else if (item.type === 'image') {
         mediaHtml = '<img class="post-img" loading="lazy" src="' + item.contentUrl + '" alt="' + item.name + '" onclick="markMediaSeen(\\'' + item.mediaId + '\\')" />';
       } else if (item.type === 'audio') {
@@ -308,6 +339,26 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
       const typeIcon = item.type === 'video' ? SVG_ICONS.video : item.type === 'image' ? SVG_ICONS.image : SVG_ICONS.audio;
 
+      const sideActionsHtml = '<div class="post-side-actions">' +
+        '<button type="button" class="side-action-btn btn-star ' + (isFav ? 'favorited' : '') + '" id="star_' + item.mediaId + '" onclick="event.stopPropagation(); toggleFav(\\'' + item.mediaId + '\\')" title="Agregar a Favoritos">' +
+          (isFav ? SVG_ICONS.starFilled : SVG_ICONS.starOutline) +
+        '</button>' +
+        '<button type="button" class="side-action-btn btn-whatsapp" onclick="event.stopPropagation(); shareWhatsApp(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + (item.deviceId || '') + '\\')" title="Compartir con WhatsApp">' +
+          SVG_ICONS.whatsapp +
+        '</button>' +
+        '<button type="button" class="side-action-btn" onclick="event.stopPropagation(); openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Agregar Tags o Nota">' +
+          SVG_ICONS.tag +
+        '</button>' +
+        '<a href="' + item.contentUrl + '" download="' + item.name + '" class="side-action-btn" onclick="event.stopPropagation();" title="Descargar">' +
+          SVG_ICONS.download +
+        '</a>' +
+        (item.type === 'video' ? (
+          '<button type="button" class="side-action-btn" id="muteBtn_' + item.mediaId + '" onclick="event.stopPropagation(); toggleVideoSound(\\'' + item.mediaId + '\\')" title="Silencio / Activar sonido">' +
+            SVG_ICONS.soundMuted +
+          '</button>'
+        ) : '') +
+      '</div>';
+
       return '<article class="post-card" id="post_' + item.mediaId + '" data-media-id="' + item.mediaId + '" data-path="' + encodeURIComponent(item.path || '') + '" data-name="' + encodeURIComponent(item.name || '') + '" data-type="' + (item.type || 'other') + '" data-size="' + (item.size || 0) + '" data-mtime="' + (item.lastModified || 0) + '" data-source="' + encodeURIComponent(appSource) + '">' +
         '<div class="post-header">' +
           '<div class="post-author">' +
@@ -317,27 +368,12 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
               '<span class="post-date">' + formattedDate + '</span>' +
             '</div>' +
           '</div>' +
-          '<button type="button" class="btn-action" onclick="openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Catalogar y Etiquetar" style="display:flex; align-items:center;">' + SVG_ICONS.tag + '</button>' +
+          '<span class="app-source-badge">' + appSource + '</span>' +
         '</div>' +
 
-        '<div class="post-media-container">' + mediaHtml + '</div>' +
-
-        '<div class="post-actions">' +
-          '<div class="action-group-left">' +
-            '<button type="button" class="btn-action btn-star ' + (isFav ? 'favorited' : '') + '" id="star_' + item.mediaId + '" onclick="toggleFav(\\'' + item.mediaId + '\\')" style="display:flex; align-items:center;">' +
-              (isFav ? SVG_ICONS.starFilled : SVG_ICONS.starOutline) +
-            '</button>' +
-            '<button type="button" class="btn-action" onclick="openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Anadir Nota o Etiqueta" style="display:flex; align-items:center;">' + SVG_ICONS.comment + '</button>' +
-            '<button type="button" class="btn-action btn-whatsapp" onclick="shareWhatsApp(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + (item.deviceId || '') + '\\')" title="Compartir por WhatsApp" style="display:flex; align-items:center;">' + SVG_ICONS.whatsapp + '</button>' +
-          '</div>' +
-          '<a href="' + item.contentUrl + '" download="' + item.name + '" class="btn-action" title="Descargar original" style="color:#9ca3af; text-decoration:none; display:flex; align-items:center;">' + SVG_ICONS.download + '</a>' +
-        '</div>' +
+        '<div class="post-media-container">' + mediaHtml + sideActionsHtml + '</div>' +
 
         '<div class="post-details">' +
-          '<div style="display:flex; align-items:center; gap:8px;">' +
-            '<span class="app-source-badge">' + appSource + '</span>' +
-            '<span style="font-size:0.75rem; color:#9ca3af; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + item.name + '</span>' +
-          '</div>' +
           (notes ? '<div class="post-notes" id="notes_' + item.mediaId + '">' + notes + '</div>' : '<div class="post-notes" id="notes_' + item.mediaId + '" style="display:none;"></div>') +
           '<div class="post-tags-container" id="tags_' + item.mediaId + '">' +
             tagsList.map(t => '<span class="tag-badge">#' + t + '</span>').join('') +
@@ -419,7 +455,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     function shareWhatsApp(mediaId, nameEnc, deviceId) {
       const name = decodeURIComponent(nameEnc || 'Contenido');
       const postUrl = window.location.origin + '/expl/ver/post/' + mediaId + (deviceId ? ('?d=' + encodeURIComponent(deviceId)) : '');
-      const shareText = 'Mira este contenido: ' + name + '\n' + postUrl;
+      const shareText = 'Mira este contenido: ' + name + '\\n' + postUrl;
 
       // Copiar enlace al portapapeles preventivamente
       if (navigator.clipboard && navigator.clipboard.writeText) {

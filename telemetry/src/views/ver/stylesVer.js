@@ -247,7 +247,53 @@ function getVerStyles() {
       border-radius: 8px;
     }
 
-    /* Acciones del Post */
+    /* Barra vertical flotante de acciones a la derecha del contenido */
+    .post-side-actions {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      z-index: 25;
+    }
+
+    .side-action-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+      padding: 0;
+    }
+
+    .side-action-btn:active {
+      transform: scale(0.88);
+      background: rgba(30, 41, 59, 0.92);
+    }
+
+    .side-action-btn.favorited {
+      color: #fbbf24;
+      border-color: rgba(251, 191, 36, 0.65);
+    }
+
+    .side-action-btn.btn-whatsapp {
+      border-color: rgba(37, 211, 102, 0.45);
+    }
+
+    /* Acciones del Post (Vista compartida) */
     .post-actions {
       flex-shrink: 0;
       display: flex;

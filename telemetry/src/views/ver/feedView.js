@@ -29,10 +29,7 @@ function renderVerFeedView({ items = [] }) {
     let mediaHtml = '';
     if (item.type === 'video') {
       mediaHtml = `
-        <video class="post-video" playsinline webkit-playsinline loop preload="auto" muted src="${item.contentUrl}" onclick="toggleVideoPlay('${item.mediaId}')"></video>
-        <button type="button" class="video-sound-badge" id="muteBtn_${item.mediaId}" onclick="toggleVideoSound('${item.mediaId}')" title="Alternar sonido">
-          ${ICONS.soundMuted}
-        </button>
+        <video class="post-video" ${idx === 0 ? 'autoplay' : ''} playsinline webkit-playsinline loop preload="auto" muted src="${item.contentUrl}" onclick="toggleVideoPlay('${item.mediaId}')"></video>
       `;
     } else if (item.type === 'image') {
       mediaHtml = `<img class="post-img" loading="lazy" src="${item.contentUrl}" alt="${item.name}" onclick="markMediaSeen('${item.mediaId}')" />`;
@@ -60,29 +57,33 @@ function renderVerFeedView({ items = [] }) {
               <span class="post-date">${formattedDate}</span>
             </div>
           </div>
-          <button type="button" class="btn-action" onclick="openTagModal('${item.mediaId}', '${encodeURIComponent(item.name)}')" title="Catalogar y Etiquetar" style="display:flex; align-items:center;">${ICONS.tag}</button>
+          <span class="app-source-badge">${appSource}</span>
         </div>
 
         <div class="post-media-container">
           ${mediaHtml}
-        </div>
-
-        <div class="post-actions">
-          <div class="action-group-left">
-            <button type="button" class="btn-action btn-star ${isFav ? 'favorited' : ''}" id="star_${item.mediaId}" onclick="toggleFav('${item.mediaId}')" style="display:flex; align-items:center;">
+          <div class="post-side-actions">
+            <button type="button" class="side-action-btn btn-star ${isFav ? 'favorited' : ''}" id="star_${item.mediaId}" onclick="event.stopPropagation(); toggleFav('${item.mediaId}')" title="Agregar a Favoritos">
               ${isFav ? ICONS.starFilled : ICONS.starOutline}
             </button>
-            <button type="button" class="btn-action" onclick="openTagModal('${item.mediaId}', '${encodeURIComponent(item.name)}')" title="Anadir Nota o Etiqueta" style="display:flex; align-items:center;">${ICONS.comment}</button>
-            <button type="button" class="btn-action btn-whatsapp" onclick="shareWhatsApp('${item.mediaId}', '${encodeURIComponent(item.name)}', '${item.deviceId || ''}')" title="Compartir por WhatsApp" style="display:flex; align-items:center;">${ICONS.whatsapp}</button>
+            <button type="button" class="side-action-btn btn-whatsapp" onclick="event.stopPropagation(); shareWhatsApp('${item.mediaId}', '${encodeURIComponent(item.name)}', '${item.deviceId || ''}')" title="Compartir con WhatsApp">
+              ${ICONS.whatsapp}
+            </button>
+            <button type="button" class="side-action-btn" onclick="event.stopPropagation(); openTagModal('${item.mediaId}', '${encodeURIComponent(item.name)}')" title="Agregar Tags o Nota">
+              ${ICONS.tag}
+            </button>
+            <a href="${item.contentUrl}" download="${item.name}" class="side-action-btn" onclick="event.stopPropagation();" title="Descargar">
+              ${ICONS.download}
+            </a>
+            ${item.type === 'video' ? `
+              <button type="button" class="side-action-btn" id="muteBtn_${item.mediaId}" onclick="event.stopPropagation(); toggleVideoSound('${item.mediaId}')" title="Silencio / Activar sonido">
+                ${ICONS.soundMuted}
+              </button>
+            ` : ''}
           </div>
-          <a href="${item.contentUrl}" download="${item.name}" class="btn-action" title="Descargar original" style="color:#9ca3af; text-decoration:none; display:flex; align-items:center;">${ICONS.download}</a>
         </div>
 
         <div class="post-details">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span class="app-source-badge">${appSource}</span>
-            <span style="font-size:0.75rem; color:#9ca3af; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</span>
-          </div>
           ${notes ? `<div class="post-notes" id="notes_${item.mediaId}">${notes}</div>` : `<div class="post-notes" id="notes_${item.mediaId}" style="display:none;"></div>`}
           <div class="post-tags-container" id="tags_${item.mediaId}">
             ${tagsList.map(t => `<span class="tag-badge">#${t}</span>`).join('')}
