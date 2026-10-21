@@ -396,6 +396,58 @@ router.get('/api/ver/tags', (req, res) => {
   });
 });
 
+// GET /api/ver/search - Busca contenidos por tag, nombre o fecha
+router.get('/api/ver/search', (req, res) => {
+  const { deviceId } = req.verUser;
+  const tagQuery = req.query.tag ? String(req.query.tag).trim().toLowerCase() : '';
+  const dateQuery = req.query.date ? String(req.query.date).trim() : '';
+
+  const allMedia = getAllDownloadedMedia(deviceId);
+
+  const filtered = allMedia.filter(item => {
+    // 1. Filtro por tag o texto
+    if (tagQuery) {
+      const cleanTag = tagQuery.startsWith('#') ? tagQuery.substring(1) : tagQuery;
+      const mTags = (item.tags || []).map(t => String(t).toLowerCase());
+      const hasTag = mTags.some(t => t.includes(cleanTag));
+      const hasName = String(item.name || '').toLowerCase().includes(cleanTag);
+      const hasSource = String(item.appSource || '').toLowerCase().includes(cleanTag);
+      const hasNotes = String(item.notes || '').toLowerCase().includes(cleanTag);
+      if (!hasTag && !hasName && !hasSource && !hasNotes) {
+        return false;
+      }
+    }
+
+    // 2. Filtro por fecha (YYYY-MM-DD)
+    if (dateQuery) {
+      const mtime = item.lastModified || 0;
+      if (!mtime) return false;
+      const fileDate = new Date(mtime);
+      const fileDateStr = fileDate.toISOString().split('T')[0];
+      const d = new Date(mtime);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const localDateStr = `${year}-${month}-${day}`;
+
+      if (dateQuery !== fileDateStr && dateQuery !== localDateStr) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  return res.json({
+    success: true,
+    deviceId,
+    tag: tagQuery,
+    date: dateQuery,
+    total: filtered.length,
+    items: filtered
+  });
+});
+
 // POST /api/ver/tag - Guarda etiquetas y notas de catalogación para un medio
 router.post('/api/ver/tag', (req, res) => {
   const { deviceId } = req.verUser;

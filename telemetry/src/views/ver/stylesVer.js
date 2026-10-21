@@ -37,39 +37,119 @@ function getVerStyles() {
       overflow: hidden;
     }
 
-    /* Top Bar */
+    /* Top Bar con Buscador */
     .top-bar {
       flex-shrink: 0;
-      height: 52px;
-      background: rgba(0, 0, 0, 0.92);
+      min-height: 54px;
+      background: rgba(0, 0, 0, 0.94);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid #1f2937;
-      padding: 0 16px;
+      padding: 8px 10px;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      gap: 8px;
       z-index: 50;
     }
 
-    .brand-title {
-      font-size: 1.25rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      background: linear-gradient(90deg, #ec4899, #8b5cf6, #3b82f6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    .top-search-container {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 999px;
+      padding: 4px 8px;
+      transition: border-color 0.15s;
+    }
+
+    .top-search-container:focus-within {
+      border-color: #38bdf8;
+    }
+
+    .top-search-group {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .search-icon {
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .top-search-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: #f8fafc;
+      font-size: 0.8rem;
+      outline: none;
+      padding: 2px 0;
+    }
+
+    .top-search-input::placeholder {
+      color: #64748b;
+      font-size: 0.78rem;
+    }
+
+    .top-date-group {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .top-date-input {
+      background: #1e293b;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.72rem;
+      padding: 2px 4px;
+      outline: none;
+      cursor: pointer;
+      max-width: 95px;
+      color-scheme: dark;
+    }
+
+    .btn-clear-search {
+      background: #334155;
+      border: none;
+      color: #f1f5f9;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
     }
 
     .device-chip {
-      font-size: 0.75rem;
-      color: #9ca3af;
-      background: #111827;
-      padding: 4px 10px;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      background: #0f172a;
+      padding: 4px 8px;
       border-radius: 999px;
-      border: 1px solid #1f2937;
+      border: 1px solid #1e293b;
       font-family: monospace;
-      max-width: 160px;
+      max-width: 70px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;

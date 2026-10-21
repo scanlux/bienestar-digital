@@ -13,6 +13,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     let currentlyPlayingVideo = null;
     let favoritesCache = new Map();
     let activePopupMedia = null;
+    let topSearchDebounce = null;
+    let isSearchActive = false;
 
     // Inicializar IDs precargados
     const initialList = ${JSON.stringify(initialItems)};
@@ -79,16 +81,156 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (!container) return;
 
       if (tab === 'feed') {
-        container.innerHTML = '<div id="feedList"></div>';
-        loadedMediaIds.clear();
-        hasMoreContent = true;
-        setupIntersectionObserver();
-        setupVideoAutoplayObserver();
-        fetchNextFeedBlock();
+        if (isSearchActive) {
+          executeTopSearch();
+        } else {
+          container.innerHTML = '<div id="feedList"></div>';
+          loadedMediaIds.clear();
+          hasMoreContent = true;
+          setupIntersectionObserver();
+          setupVideoAutoplayObserver();
+          fetchNextFeedBlock();
+        }
       } else if (tab === 'favorites') {
         renderFavoritesTab(container);
       } else if (tab === 'explore') {
         renderExploreTagsTab(container);
+      }
+    }
+
+    function handleTopSearchInput() {
+      if (topSearchDebounce) clearTimeout(topSearchDebounce);
+      topSearchDebounce = setTimeout(executeTopSearch, 300);
+    }
+
+    function executeTopSearch() {
+      const tagVal = document.getElementById('topSearchTag') ? document.getElementById('topSearchTag').value.trim() : '';
+      const dateVal = document.getElementById('topSearchDate') ? document.getElementById('topSearchDate').value : '';
+      const clearBtn = document.getElementById('btnClearTopSearch');
+
+      if (!tagVal && !dateVal) {
+        if (clearBtn) clearBtn.style.display = 'none';
+        if (isSearchActive) {
+          isSearchActive = false;
+          if (currentMainTab === 'feed') {
+            const container = document.getElementById('mainContent');
+            if (container) {
+              container.innerHTML = '<div id="feedList"></div>';
+              loadedMediaIds.clear();
+              hasMoreContent = true;
+              setupIntersectionObserver();
+              setupVideoAutoplayObserver();
+              fetchNextFeedBlock();
+            }
+          } else if (currentMainTab === 'favorites') {
+            renderFavoritesTab(document.getElementById('mainContent'));
+          }
+        }
+        return;
+      }
+
+      if (clearBtn) clearBtn.style.display = 'flex';
+      isSearchActive = true;
+
+      if (currentlyPlayingVideo) {
+        currentlyPlayingVideo.pause();
+        currentlyPlayingVideo = null;
+      }
+
+      const container = document.getElementById('mainContent');
+      if (!container) return;
+
+      if (currentMainTab === 'favorites') {
+        // Filtrar favoritos en la pantalla activa
+        const favList = document.getElementById('favList');
+        if (!favList) return;
+        let count = 0;
+        favoritesCache.forEach((item, mId) => {
+          const rowEl = document.getElementById('favRow_' + mId);
+          if (!rowEl) return;
+          let match = true;
+          if (tagVal) {
+            const cleanTag = tagVal.toLowerCase().replace(/^#/, '');
+            const tags = (item.tags || []).map(t => String(t).toLowerCase());
+            const hasTag = tags.some(t => t.includes(cleanTag));
+            const hasName = String(item.name || '').toLowerCase().includes(cleanTag);
+            const hasSource = String(item.appSource || '').toLowerCase().includes(cleanTag);
+            if (!hasTag && !hasName && !hasSource) match = false;
+          }
+          if (dateVal && match) {
+            const d = new Date(item.lastModified || 0);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const localDateStr = year + '-' + month + '-' + day;
+            if (localDateStr !== dateVal) match = false;
+          }
+          if (match) {
+            rowEl.style.display = 'flex';
+            count++;
+          } else {
+            rowEl.style.display = 'none';
+          }
+        });
+
+        let noResEl = document.getElementById('favSearchNoResults');
+        if (count === 0) {
+          if (!noResEl) {
+            favList.insertAdjacentHTML('beforeend', '<div id="favSearchNoResults" style="padding:40px 16px; text-align:center; color:#9ca3af; font-size:0.85rem;">No se encontraron favoritos con los filtros seleccionados.<br><button type="button" onclick="clearTopSearch()" style="margin-top:10px; background:#1e293b; border:1px solid #374151; color:#38bdf8; padding:6px 14px; border-radius:999px; cursor:pointer;">Limpiar busqueda</button></div>');
+          }
+        } else if (noResEl) {
+          noResEl.remove();
+        }
+      } else {
+        // Feed principal: consultar /api/ver/search
+        container.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:#9ca3af; font-size:0.9rem;">Buscando contenidos...</div>';
+
+        const url = '/api/ver/search?tag=' + encodeURIComponent(tagVal) + '&date=' + encodeURIComponent(dateVal);
+        fetch(url)
+          .then(res => res.json())
+          .then(data => {
+            if (!data.success || !Array.isArray(data.items) || data.items.length === 0) {
+              container.innerHTML = '<div style="padding:40px 20px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1;">' +
+                '<div style="font-size:2.5rem; color:#6b7280; margin-bottom:12px; display:flex; justify-content:center;">' + SVG_ICONS.tag + '</div>' +
+                '<h3 style="font-size:1.05rem; font-weight:700; color:#f3f4f6; margin-bottom:6px;">Sin resultados de busqueda</h3>' +
+                '<p style="font-size:0.85rem; color:#9ca3af; max-width:280px; line-height:1.4; margin-bottom:14px;">No se encontraron contenidos que coincidan con la etiqueta o fecha indicada.</p>' +
+                '<button type="button" onclick="clearTopSearch()" style="background:#1e293b; border:1px solid #374151; color:#38bdf8; font-size:0.85rem; font-weight:600; padding:8px 18px; border-radius:999px; cursor:pointer;">Restablecer Feed</button>' +
+              '</div>';
+              return;
+            }
+
+            const postsHtml = data.items.map(item => renderPostCardHtml(item)).join('');
+            container.innerHTML = '<div id="feedList">' + postsHtml + '</div>';
+            setupVideoAutoplayObserver();
+            setTimeout(checkVisibleVideos, 120);
+          })
+          .catch(() => {
+            container.innerHTML = '<div style="padding:40px 20px; text-align:center; color:#ef4444; font-size:0.85rem;">Error al buscar contenidos.</div>';
+          });
+      }
+    }
+
+    function clearTopSearch() {
+      const tagInput = document.getElementById('topSearchTag');
+      const dateInput = document.getElementById('topSearchDate');
+      const clearBtn = document.getElementById('btnClearTopSearch');
+      if (tagInput) tagInput.value = '';
+      if (dateInput) dateInput.value = '';
+      if (clearBtn) clearBtn.style.display = 'none';
+
+      isSearchActive = false;
+      if (currentMainTab === 'feed') {
+        const container = document.getElementById('mainContent');
+        if (container) {
+          container.innerHTML = '<div id="feedList"></div>';
+          loadedMediaIds.clear();
+          hasMoreContent = true;
+          setupIntersectionObserver();
+          setupVideoAutoplayObserver();
+          fetchNextFeedBlock();
+        }
+      } else if (currentMainTab === 'favorites') {
+        renderFavoritesTab(document.getElementById('mainContent'));
       }
     }
 
