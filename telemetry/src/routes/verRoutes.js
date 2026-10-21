@@ -13,7 +13,8 @@ const {
   getTags,
   saveMediaTags,
   getAllDownloadedMedia,
-  getMediaById
+  getMediaById,
+  getHumanReadableSource
 } = require('../services/mediaRecommendationService');
 const { verAuthMiddleware } = require('../middleware/verAuth');
 const { renderVerLoginView } = require('../views/ver/loginView');
@@ -153,7 +154,40 @@ router.post('/api/ver/seen', (req, res) => {
 router.get('/api/ver/favorites', (req, res) => {
   const { deviceId } = req.verUser;
   const favoritesMap = getFavorites(deviceId);
-  const favoritesList = Object.values(favoritesMap).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+  const tagsMap = getTags(deviceId);
+  const allMedia = getAllDownloadedMedia(deviceId);
+  const mediaMap = new Map(allMedia.map(m => [m.mediaId, m]));
+
+  const favoritesList = Object.values(favoritesMap)
+    .map(f => {
+      let full = { ...f };
+      if ((!full.path || full.path === '') && mediaMap.has(full.mediaId)) {
+        const found = mediaMap.get(full.mediaId);
+        full.path = found.path;
+        full.name = found.name;
+        full.type = found.type;
+        full.size = found.size;
+        full.lastModified = found.lastModified;
+        full.appSource = found.appSource;
+      }
+      const tagMeta = tagsMap[full.mediaId] || { tags: [], notes: '' };
+      return {
+        mediaId: full.mediaId,
+        deviceId,
+        path: full.path,
+        name: full.name,
+        type: full.type || 'other',
+        size: full.size || 0,
+        lastModified: full.lastModified || 0,
+        appSource: full.appSource || getHumanReadableSource(full.path),
+        contentUrl: `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(full.path || '')}`,
+        isFavorite: true,
+        tags: tagMeta.tags || [],
+        notes: tagMeta.notes || '',
+        savedAt: full.savedAt || new Date().toISOString()
+      };
+    })
+    .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
 
   return res.json({
     success: true,
@@ -166,7 +200,7 @@ router.get('/api/ver/favorites', (req, res) => {
 // POST /api/ver/favorite - Alterna favorito (toggle) para un medio
 router.post('/api/ver/favorite', (req, res) => {
   const { deviceId } = req.verUser;
-  const { mediaId, path: mediaPath, name, type, size, lastModified } = req.body || {};
+  const { mediaId, path: mediaPath, name, type, size, lastModified, appSource } = req.body || {};
 
   if (!mediaId) {
     return res.status(400).json({ error: 'Falta parametro mediaId' });
@@ -177,8 +211,9 @@ router.post('/api/ver/favorite', (req, res) => {
     path: mediaPath || '',
     name: name || '',
     type: type || 'other',
-    size: size || 0,
-    lastModified: lastModified || 0
+    size: Number(size) || 0,
+    lastModified: Number(lastModified) || 0,
+    appSource: appSource || ''
   };
 
   const result = toggleFavorite(deviceId, mediaItem);
@@ -186,7 +221,8 @@ router.post('/api/ver/favorite', (req, res) => {
     success: true,
     deviceId,
     mediaId,
-    isFavorite: result.isFavorite
+    isFavorite: result.isFavorite,
+    favorite: result.favorite || null
   });
 });
 

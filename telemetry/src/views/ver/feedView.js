@@ -51,7 +51,7 @@ function renderVerFeedView({ items = [] }) {
     const appSource = item.appSource || getHumanReadableSource(item.path);
 
     return `
-      <article class="post-card" id="post_${item.mediaId}" data-media-id="${item.mediaId}">
+      <article class="post-card" id="post_${item.mediaId}" data-media-id="${item.mediaId}" data-path="${encodeURIComponent(item.path || '')}" data-name="${encodeURIComponent(item.name || '')}" data-type="${item.type || 'other'}" data-size="${item.size || 0}" data-mtime="${item.lastModified || 0}" data-source="${encodeURIComponent(appSource)}">
         <div class="post-header">
           <div class="post-author">
             <div class="author-avatar">${typeIcon}</div>
@@ -69,7 +69,7 @@ function renderVerFeedView({ items = [] }) {
 
         <div class="post-actions">
           <div class="action-group-left">
-            <button type="button" class="btn-action btn-star ${isFav ? 'favorited' : ''}" id="star_${item.mediaId}" onclick="toggleFav('${item.mediaId}', '${encodeURIComponent(item.name)}', '${item.type}')" style="display:flex; align-items:center;">
+            <button type="button" class="btn-action btn-star ${isFav ? 'favorited' : ''}" id="star_${item.mediaId}" onclick="toggleFav('${item.mediaId}')" style="display:flex; align-items:center;">
               ${isFav ? ICONS.starFilled : ICONS.starOutline}
             </button>
             <button type="button" class="btn-action" onclick="openTagModal('${item.mediaId}', '${encodeURIComponent(item.name)}')" title="Anadir Nota o Etiqueta" style="display:flex; align-items:center;">${ICONS.comment}</button>

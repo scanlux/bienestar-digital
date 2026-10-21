@@ -138,17 +138,43 @@ function toggleFavorite(safeDeviceId, mediaItem) {
     safeWriteJson(favoritesPath, favs);
     return { isFavorite: false, mediaId: mId };
   } else {
+    let itemPath = mediaItem.path || '';
+    let itemName = mediaItem.name || '';
+    let itemType = mediaItem.type || 'other';
+    let itemSize = mediaItem.size || 0;
+    let itemMtime = mediaItem.lastModified || 0;
+    let itemAppSource = mediaItem.appSource || '';
+
+    // Si faltan metadatos, recuperarlos del catálogo completo del dispositivo
+    if (!itemPath) {
+      const allMedia = getAllDownloadedMedia(safeDeviceId);
+      const found = allMedia.find(m => m.mediaId === mId);
+      if (found) {
+        itemPath = found.path;
+        itemName = found.name;
+        itemType = found.type;
+        itemSize = found.size;
+        itemMtime = found.lastModified;
+        itemAppSource = found.appSource;
+      }
+    }
+
+    if (!itemAppSource && itemPath) {
+      itemAppSource = getHumanReadableSource(itemPath);
+    }
+
     favs[mId] = {
       mediaId: mId,
-      path: mediaItem.path,
-      name: mediaItem.name,
-      type: mediaItem.type,
-      size: mediaItem.size,
-      lastModified: mediaItem.lastModified,
+      path: itemPath,
+      name: itemName,
+      type: itemType,
+      size: itemSize,
+      lastModified: itemMtime,
+      appSource: itemAppSource,
       savedAt: new Date().toISOString()
     };
     safeWriteJson(favoritesPath, favs);
-    return { isFavorite: true, mediaId: mId };
+    return { isFavorite: true, mediaId: mId, favorite: favs[mId] };
   }
 }
 

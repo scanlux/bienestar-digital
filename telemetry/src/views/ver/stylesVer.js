@@ -85,7 +85,7 @@ function getVerStyles() {
       position: relative;
     }
 
-    #feedList {
+    #feedList, #favList {
       flex: 1;
       min-height: 0;
       overflow-y: auto;

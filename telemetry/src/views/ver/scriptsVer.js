@@ -94,12 +94,14 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     function setupVideoAutoplayObserver() {
       if (videoObserver) videoObserver.disconnect();
 
-      const feedList = document.getElementById('feedList');
-      if (!feedList) return;
+      const scrollContainer = currentMainTab === 'favorites'
+        ? document.getElementById('favList')
+        : document.getElementById('feedList');
+      if (!scrollContainer) return;
 
       const options = {
-        root: feedList,
-        threshold: 0.6 // Debe estar al menos 60% visible en el área de scroll
+        root: scrollContainer,
+        threshold: 0.6 // Debe estar al menos 60% visible en el area de scroll
       };
 
       videoObserver = new IntersectionObserver((entries) => {
@@ -124,7 +126,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             }
             markMediaSeen(card.dataset.mediaId);
           } else {
-            // Al salir del área visible, pausar inmediatamente
+            // Al salir del area visible, pausar inmediatamente
             if (currentlyPlayingVideo === video) {
               currentlyPlayingVideo = null;
             }
@@ -138,7 +140,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
     function observeAllFeedVideos() {
       if (!videoObserver) return;
-      document.querySelectorAll('#feedList .post-card').forEach(card => {
+      document.querySelectorAll('#feedList .post-card, #favList .post-card').forEach(card => {
         if (card.querySelector('video')) {
           videoObserver.observe(card);
         }
@@ -282,7 +284,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
       const typeIcon = item.type === 'video' ? SVG_ICONS.video : item.type === 'image' ? SVG_ICONS.image : SVG_ICONS.audio;
 
-      return '<article class="post-card" id="post_' + item.mediaId + '" data-media-id="' + item.mediaId + '">' +
+      return '<article class="post-card" id="post_' + item.mediaId + '" data-media-id="' + item.mediaId + '" data-path="' + encodeURIComponent(item.path || '') + '" data-name="' + encodeURIComponent(item.name || '') + '" data-type="' + (item.type || 'other') + '" data-size="' + (item.size || 0) + '" data-mtime="' + (item.lastModified || 0) + '" data-source="' + encodeURIComponent(appSource) + '">' +
         '<div class="post-header">' +
           '<div class="post-author">' +
             '<div class="author-avatar">' + typeIcon + '</div>' +
@@ -298,7 +300,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
         '<div class="post-actions">' +
           '<div class="action-group-left">' +
-            '<button type="button" class="btn-action btn-star ' + (isFav ? 'favorited' : '') + '" id="star_' + item.mediaId + '" onclick="toggleFav(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + item.type + '\\')" style="display:flex; align-items:center;">' +
+            '<button type="button" class="btn-action btn-star ' + (isFav ? 'favorited' : '') + '" id="star_' + item.mediaId + '" onclick="toggleFav(\\'' + item.mediaId + '\\')" style="display:flex; align-items:center;">' +
               (isFav ? SVG_ICONS.starFilled : SVG_ICONS.starOutline) +
             '</button>' +
             '<button type="button" class="btn-action" onclick="openTagModal(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\')" title="Anadir Nota o Etiqueta" style="display:flex; align-items:center;">' + SVG_ICONS.comment + '</button>' +
@@ -330,14 +332,35 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
     function toggleFav(mediaId, nameEnc, type) {
       const btn = document.getElementById('star_' + mediaId);
+      const postEl = document.getElementById('post_' + mediaId);
+
+      let path = '';
+      let name = nameEnc ? decodeURIComponent(nameEnc) : '';
+      let mediaType = type || 'other';
+      let size = 0;
+      let lastModified = 0;
+      let appSource = '';
+
+      if (postEl && postEl.dataset) {
+        if (postEl.dataset.path) path = decodeURIComponent(postEl.dataset.path);
+        if (!name && postEl.dataset.name) name = decodeURIComponent(postEl.dataset.name);
+        if (postEl.dataset.type) mediaType = postEl.dataset.type;
+        if (postEl.dataset.size) size = Number(postEl.dataset.size) || 0;
+        if (postEl.dataset.mtime) lastModified = Number(postEl.dataset.mtime) || 0;
+        if (postEl.dataset.source) appSource = decodeURIComponent(postEl.dataset.source);
+      }
 
       fetch('/api/ver/favorite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mediaId,
-          name: decodeURIComponent(nameEnc),
-          type: type || 'other'
+          path,
+          name,
+          type: mediaType,
+          size,
+          lastModified,
+          appSource
         })
       })
       .then(res => res.json())
@@ -351,6 +374,18 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             btn.classList.remove('favorited');
             btn.innerHTML = SVG_ICONS.starOutline;
             showToast('Eliminado de Favoritos');
+            if (currentMainTab === 'favorites' && postEl) {
+              postEl.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+              postEl.style.opacity = '0';
+              postEl.style.transform = 'scale(0.95)';
+              setTimeout(() => {
+                postEl.remove();
+                const favList = document.getElementById('favList');
+                if (favList && favList.children.length === 0) {
+                  renderFavoritesTab(document.getElementById('mainContent'));
+                }
+              }, 300);
+            }
           }
         }
       })
@@ -454,35 +489,26 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     }
 
     function renderFavoritesTab(container) {
-      container.innerHTML = '<div style="padding:16px;"><h2 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Medios Favoritos</h2><div id="favList">Cargando favoritos...</div></div>';
+      container.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:#9ca3af; font-size:0.9rem;">Cargando favoritos...</div>';
 
       fetch('/api/ver/favorites')
         .then(res => res.json())
         .then(data => {
-          const listDiv = document.getElementById('favList');
-          if (!listDiv) return;
-
           if (!data.success || !Array.isArray(data.favorites) || data.favorites.length === 0) {
-            listDiv.innerHTML = '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:20px 0; text-align:center;">Aun no tienes medios guardados en favoritos. Pulsa la estrella en cualquier post para guardarlo aqui.</p>';
+            container.innerHTML = '<div style="padding:40px 20px; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1;">' +
+              '<div style="font-size:2.5rem; color:#6b7280; margin-bottom:12px; display:flex; justify-content:center;">' + SVG_ICONS.starOutline + '</div>' +
+              '<h3 style="font-size:1.05rem; font-weight:700; color:#f3f4f6; margin-bottom:6px;">Sin favoritos guardados</h3>' +
+              '<p style="font-size:0.85rem; color:#9ca3af; max-width:280px; line-height:1.4; margin:0;">Marca cualquier foto o video con la estrella en el feed para guardarlo en esta seccion.</p>' +
+            '</div>';
             return;
           }
 
-          listDiv.innerHTML = data.favorites.map(f => {
-            const contentUrl = '/api/telemetry/file-content?deviceId=' + encodeURIComponent('${deviceId}') + '&path=' + encodeURIComponent(f.path);
-            return '<div style="background:#111827; border:1px solid #1f2937; border-radius:12px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:10px;">' +
-              '<div style="min-width:0; flex:1;">' +
-                '<div style="font-weight:700; font-size:0.88rem; color:#f3f4f6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</div>' +
-                '<div style="font-size:0.75rem; color:#9ca3af; font-family:monospace;">' + f.path + '</div>' +
-              '</div>' +
-              '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
-                '<a href="' + contentUrl + '" target="_blank" style="background:#059669; color:#fff; font-size:0.75rem; padding:6px 10px; border-radius:6px; text-decoration:none; font-weight:600;">Abrir</a>' +
-              '</div>' +
-            '</div>';
-          }).join('');
+          const cardsHtml = data.favorites.map(item => renderPostCardHtml(item)).join('');
+          container.innerHTML = '<div id="favList">' + cardsHtml + '</div>';
+          setupVideoAutoplayObserver();
         })
         .catch(() => {
-          const listDiv = document.getElementById('favList');
-          if (listDiv) listDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem;">Error al cargar favoritos.</p>';
+          container.innerHTML = '<div style="padding:40px 20px; text-align:center; color:#ef4444; font-size:0.85rem;">Error al cargar favoritos.</div>';
         });
     }
 
@@ -500,30 +526,6 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
           if (keys.length === 0) {
             listDiv.innerHTML = '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:20px 0; text-align:center;">Aun no hay etiquetas asignadas. En el feed puedes pulsar el icono de etiqueta para catalogar fotos o videos.</p>';
-            return;
-          }
-
-          listDiv.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">' +
-            keys.map(k => '<button type="button" onclick="filterByTag(\\'' + k + '\\')" style="background:#1e293b; border:1px solid #374151; color:#38bdf8; font-size:0.82rem; font-weight:600; padding:6px 12px; border-radius:999px; cursor:pointer;">#' + k + ' (' + tags[k] + ')</button>').join('') +
-          '</div>';
-        })
-        .catch(() => {
-          const listDiv = document.getElementById('tagsList');
-          if (listDiv) listDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem;">Error al cargar etiquetas.</p>';
-        });
-    }
-
-      fetch('/api/ver/tags')
-        .then(res => res.json())
-        .then(data => {
-          const listDiv = document.getElementById('tagsList');
-          if (!listDiv) return;
-
-          const tags = data.tags || {};
-          const keys = Object.keys(tags);
-
-          if (keys.length === 0) {
-            listDiv.innerHTML = '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:20px 0; text-align:center;">Aún no hay etiquetas asignadas. En el feed puedes pulsar el icono de etiqueta para catalogar fotos o videos.</p>';
             return;
           }
 
