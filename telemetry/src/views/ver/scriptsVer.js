@@ -242,7 +242,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (container) {
         const parts = val.split('-');
         const formatted = parts.length === 3 ? (parts[2] + '/' + parts[1]) : val;
-        container.innerHTML = '<span class="active-date-badge">' + SVG_ICONS.calendar + ' ' + formatted + ' <span class="badge-remove" onclick="event.stopPropagation(); clearSelectedDate()">✕</span></span>';
+        container.innerHTML = '<span class="active-date-badge">' + SVG_ICONS.calendar + ' ' + formatted + ' <span class="badge-remove" onclick="event.stopPropagation(); clearSelectedDate()">&times;</span></span>';
         container.style.display = 'flex';
       }
       const clearBtn = document.getElementById('btnClearTopSearch');

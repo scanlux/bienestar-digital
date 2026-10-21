@@ -42,7 +42,7 @@ ${styles}
             ${ICONS.calendar}
           </button>
         </div>
-        <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">✕</button>
+        <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
       </div>
       <div class="top-bar-right">
         <a href="/expl/ver/logout" title="Cerrar Sesion" style="color:#ef4444; display:flex; align-items:center; text-decoration:none; padding:4px;">${ICONS.logout}</a>
@@ -76,7 +76,7 @@ ${styles}
         <div class="sheet-handle"></div>
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <h3 style="font-size:1rem; font-weight:700; color:#fff;">Catalogar Contenido</h3>
-          <button type="button" onclick="closeTagModal()" style="background:transparent; border:none; color:#9ca3af; font-size:1.2rem; cursor:pointer;">✕</button>
+          <button type="button" onclick="closeTagModal()" style="background:transparent; border:none; color:#9ca3af; font-size:1.2rem; cursor:pointer;">&times;</button>
         </div>
         <p style="font-size:0.8rem; color:#9ca3af;" id="tagModalFilename">archivo.mp4</p>
         
@@ -108,7 +108,7 @@ ${styles}
             <span class="media-popup-title" id="popupMediaTitle">Contenido</span>
             <span class="app-source-badge" id="popupMediaSource" style="position:static;">Dispositivo</span>
           </div>
-          <button type="button" class="btn-close-popup" onclick="closeMediaPopup()" title="Cerrar visor">✕</button>
+          <button type="button" class="btn-close-popup" onclick="closeMediaPopup()" title="Cerrar visor">&times;</button>
         </div>
         <div class="media-popup-body" id="popupMediaBody"></div>
         <div class="media-popup-footer">
