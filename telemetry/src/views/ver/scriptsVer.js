@@ -21,6 +21,28 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     document.addEventListener('DOMContentLoaded', () => {
       setupIntersectionObserver();
       setupVideoAutoplayObserver();
+
+      // Desbloquear autoplay de video tras el primer toque en pantalla si el navegador lo restringe
+      const unlockAutoplay = () => {
+        document.removeEventListener('touchstart', unlockAutoplay);
+        document.removeEventListener('click', unlockAutoplay);
+        if (currentlyPlayingVideo && currentlyPlayingVideo.paused) {
+          currentlyPlayingVideo.play().catch(() => {});
+        } else {
+          // Intentar reproducir el video actualmente visible en el viewport
+          const firstVisibleCard = document.querySelector('#feedList .post-card');
+          if (firstVisibleCard) {
+            const v = firstVisibleCard.querySelector('video');
+            if (v && v.paused) {
+              currentlyPlayingVideo = v;
+              v.muted = true;
+              v.play().catch(() => {});
+            }
+          }
+        }
+      };
+      document.addEventListener('touchstart', unlockAutoplay, { passive: true, once: true });
+      document.addEventListener('click', unlockAutoplay, { once: true });
     });
 
     function showToast(msg) {
@@ -101,7 +123,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
       const options = {
         root: scrollContainer,
-        threshold: 0.6 // Debe estar al menos 60% visible en el area de scroll
+        threshold: 0.35 // 35% de visibilidad para activacion fluida al deslizar
       };
 
       videoObserver = new IntersectionObserver((entries) => {
@@ -117,6 +139,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             }
 
             currentlyPlayingVideo = video;
+            video.muted = true;
             const playPromise = video.play();
             if (playPromise !== undefined) {
               playPromise.catch(() => {
@@ -270,7 +293,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
       let mediaHtml = '';
       if (item.type === 'video') {
-        mediaHtml = '<video class="post-video" playsinline loop preload="metadata" muted src="' + item.contentUrl + '" onclick="toggleVideoPlay(\\'' + item.mediaId + '\\')"></video>' +
+        mediaHtml = '<video class="post-video" playsinline webkit-playsinline loop preload="auto" muted src="' + item.contentUrl + '" onclick="toggleVideoPlay(\\'' + item.mediaId + '\\')"></video>' +
           '<button type="button" class="video-sound-badge" id="muteBtn_' + item.mediaId + '" onclick="toggleVideoSound(\\'' + item.mediaId + '\\')" title="Alternar sonido">' +
             SVG_ICONS.soundMuted +
           '</button>';

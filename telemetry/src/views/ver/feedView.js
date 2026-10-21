@@ -29,7 +29,7 @@ function renderVerFeedView({ items = [] }) {
     let mediaHtml = '';
     if (item.type === 'video') {
       mediaHtml = `
-        <video class="post-video" playsinline loop preload="metadata" muted src="${item.contentUrl}" onclick="toggleVideoPlay('${item.mediaId}')"></video>
+        <video class="post-video" playsinline webkit-playsinline loop preload="auto" muted src="${item.contentUrl}" onclick="toggleVideoPlay('${item.mediaId}')"></video>
         <button type="button" class="video-sound-badge" id="muteBtn_${item.mediaId}" onclick="toggleVideoSound('${item.mediaId}')" title="Alternar sonido">
           ${ICONS.soundMuted}
         </button>
@@ -95,9 +95,6 @@ function renderVerFeedView({ items = [] }) {
   return `
     <div id="feedList">
       ${postsHtml}
-    </div>
-    <div id="feedLoadingIndicator" style="text-align:center; padding:24px; color:#9ca3af; font-size:0.85rem;">
-      Desliza hacia abajo para mas contenidos...
     </div>
   `;
 }
