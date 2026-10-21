@@ -176,7 +176,7 @@ function getVerStyles() {
       flex-direction: column;
     }
 
-    #favList {
+    #favList, #searchResultsList {
       flex: 1;
       min-height: 0;
       overflow-y: auto;
@@ -188,8 +188,17 @@ function getVerStyles() {
       padding: 12px 10px 24px 10px;
     }
 
-    /* Filas Horizontales de Favoritos */
-    .fav-row-card {
+    .search-results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 6px 8px 6px;
+      border-bottom: 1px solid #1f2937;
+      margin-bottom: 4px;
+    }
+
+    /* Filas Horizontales de Favoritos y Resultados de Busqueda */
+    .fav-row-card, .media-row-card {
       background: #0f172a;
       border: 1px solid #1e293b;
       border-radius: 14px;
@@ -202,7 +211,7 @@ function getVerStyles() {
       position: relative;
     }
 
-    .fav-row-card:active {
+    .fav-row-card:active, .media-row-card:active {
       transform: scale(0.98);
       background: #1e293b;
       border-color: #334155;
@@ -293,21 +302,27 @@ function getVerStyles() {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: rgba(251, 191, 36, 0.12);
-      border: 1px solid rgba(251, 191, 36, 0.35);
-      color: #fbbf24;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #64748b;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       flex-shrink: 0;
-      transition: transform 0.15s ease, background 0.15s ease;
+      transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
       padding: 0;
+    }
+
+    .fav-star-btn.favorited {
+      background: rgba(251, 191, 36, 0.12);
+      border-color: rgba(251, 191, 36, 0.35);
+      color: #fbbf24;
     }
 
     .fav-star-btn:active {
       transform: scale(0.88);
-      background: rgba(251, 191, 36, 0.25);
+      background: rgba(255, 255, 255, 0.15);
     }
 
     /* Popup Modal de Visualizacion Multimedia */

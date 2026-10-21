@@ -199,10 +199,17 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
               return;
             }
 
-            const postsHtml = data.items.map(item => renderPostCardHtml(item)).join('');
-            container.innerHTML = '<div id="feedList">' + postsHtml + '</div>';
-            setupVideoAutoplayObserver();
-            setTimeout(checkVisibleVideos, 120);
+            data.items.forEach(item => {
+              favoritesCache.set(item.mediaId, item);
+            });
+            const cardsHtml = data.items.map(item => renderMediaRowCardHtml(item)).join('');
+            container.innerHTML = '<div id="searchResultsList">' +
+              '<div class="search-results-header">' +
+                '<span style="font-size:0.82rem; color:#9ca3af; font-weight:600;">Resultados encontrados (' + data.items.length + ')</span>' +
+                '<button type="button" onclick="clearTopSearch()" style="background:transparent; border:none; color:#38bdf8; font-size:0.78rem; font-weight:600; cursor:pointer;">Limpiar busqueda</button>' +
+              '</div>' +
+              cardsHtml +
+            '</div>';
           })
           .catch(() => {
             container.innerHTML = '<div style="padding:40px 20px; text-align:center; color:#ef4444; font-size:0.85rem;">Error al buscar contenidos.</div>';
@@ -822,7 +829,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         });
     }
 
-    function renderFavRowCardHtml(item) {
+    function renderMediaRowCardHtml(item) {
       const tagsList = Array.isArray(item.tags) ? item.tags : [];
       const appSource = item.appSource || (item.path ? getClientReadableSource(item.path) : 'Dispositivo');
       const formattedDate = new Date(item.lastModified || Date.now()).toLocaleDateString('es-CO', {
@@ -840,7 +847,12 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         thumbHtml = '<div class="fav-audio-icon">' + SVG_ICONS.audio + '</div>';
       }
 
-      return '<div class="fav-row-card" id="favRow_' + item.mediaId + '" onclick="openMediaPopup(\\'' + item.mediaId + '\\')">' +
+      const isFav = Boolean(item.isFavorite);
+      const starIcon = isFav ? SVG_ICONS.starFilled : SVG_ICONS.starOutline;
+      const starClass = isFav ? 'favorited' : '';
+      const starTitle = isFav ? 'Quitar de favoritos' : 'Agregar a favoritos';
+
+      return '<div class="fav-row-card media-row-card" id="favRow_' + item.mediaId + '" onclick="openMediaPopup(\\'' + item.mediaId + '\\')">' +
         '<div class="fav-thumb-box">' + thumbHtml + '</div>' +
         '<div class="fav-info">' +
           '<span class="fav-title" title="' + item.name + '">' + item.name + '</span>' +
@@ -855,10 +867,14 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             '</div>'
           ) : '') +
         '</div>' +
-        '<button type="button" class="fav-star-btn favorited" id="favStar_' + item.mediaId + '" onclick="event.stopPropagation(); toggleFav(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + item.type + '\\')" title="Quitar de favoritos">' +
-          SVG_ICONS.starFilled +
+        '<button type="button" class="fav-star-btn ' + starClass + '" id="favStar_' + item.mediaId + '" onclick="event.stopPropagation(); toggleFav(\\'' + item.mediaId + '\\', \\'' + encodeURIComponent(item.name) + '\\', \\'' + item.type + '\\')" title="' + starTitle + '">' +
+          starIcon +
         '</button>' +
       '</div>';
+    }
+
+    function renderFavRowCardHtml(item) {
+      return renderMediaRowCardHtml(item);
     }
 
     function openMediaPopup(mediaId) {
