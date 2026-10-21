@@ -250,7 +250,7 @@ function getVerStyles() {
     /* Barra vertical flotante de acciones a la derecha del contenido */
     .post-side-actions {
       position: absolute;
-      right: 12px;
+      right: 6px;
       top: 50%;
       transform: translateY(-50%);
       display: flex;
@@ -355,6 +355,34 @@ function getVerStyles() {
       white-space: nowrap;
     }
 
+    /* Indicador de carga de video */
+    .video-loading-box {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 15;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .video-spinner {
+      width: 42px;
+      height: 42px;
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #ec4899;
+      border-right-color: #8b5cf6;
+      border-radius: 50%;
+      animation: spinLoader 0.75s linear infinite;
+    }
+
+    @keyframes spinLoader {
+      to { transform: rotate(360deg); }
+    }
+
     .app-source-badge {
       display: inline-flex;
       align-items: center;
@@ -362,15 +390,25 @@ function getVerStyles() {
       font-size: 0.72rem;
       font-weight: 700;
       color: #38bdf8;
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      padding: 2px 8px;
-      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      padding: 3px 9px;
+      border-radius: 999px;
       width: fit-content;
-      max-width: 100%;
+      max-width: calc(100% - 70px);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .post-media-container .app-source-badge {
+      position: absolute;
+      bottom: 14px;
+      left: 12px;
+      z-index: 20;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.75);
     }
 
     .post-tags-container {
@@ -440,18 +478,20 @@ function getVerStyles() {
       font-size: 1.25rem;
     }
 
-    /* Modal Táctil de Etiquetado y Catalogación */
+    /* Modal Tactil de Etiquetado y Catalogacion (Elevado contra teclado movil) */
     .modal-overlay {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(6px);
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       display: none;
       justify-content: center;
-      align-items: flex-end;
+      align-items: center;
+      padding: 16px;
       z-index: 200;
     }
 
@@ -461,23 +501,22 @@ function getVerStyles() {
 
     .modal-sheet {
       width: 100%;
-      max-width: 480px;
+      max-width: 440px;
       background: #111827;
-      border-top-left-radius: 20px;
-      border-top-right-radius: 20px;
+      border-radius: 18px;
       border: 1px solid #374151;
-      border-bottom: none;
-      padding: 20px 18px 28px 18px;
-      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.8);
+      padding: 22px 18px 24px 18px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85);
       display: flex;
       flex-direction: column;
       gap: 14px;
-      animation: slideUp 0.25s ease-out;
+      margin-bottom: 22vh;
+      animation: popInModal 0.2s ease-out;
     }
 
-    @keyframes slideUp {
-      from { transform: translateY(100%); }
-      to { transform: translateY(0); }
+    @keyframes popInModal {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
     }
 
     .sheet-handle {

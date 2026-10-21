@@ -103,26 +103,55 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       }
     }
 
+    function showVideoSpinner(mediaId) {
+      const loader = document.getElementById('vloader_' + mediaId);
+      if (loader) {
+        loader.style.opacity = '1';
+        loader.style.display = 'flex';
+      }
+    }
+
+    function hideVideoSpinner(mediaId) {
+      const loader = document.getElementById('vloader_' + mediaId);
+      if (loader) {
+        loader.style.opacity = '0';
+        setTimeout(() => {
+          if (loader.style.opacity === '0') loader.style.display = 'none';
+        }, 250);
+      }
+    }
+
     function tryPlayVideo(video) {
       if (!video) return;
       video.muted = true;
       video.setAttribute('muted', '');
       video.setAttribute('playsinline', '');
+      const card = video.closest ? video.closest('.post-card') : null;
+      const mediaId = card && card.dataset ? card.dataset.mediaId : null;
+      if (mediaId && video.readyState < 3) {
+        showVideoSpinner(mediaId);
+      }
       const playPromise = video.play();
       if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          video.muted = true;
-          const onReady = () => {
-            video.removeEventListener('loadeddata', onReady);
-            video.removeEventListener('canplay', onReady);
-            if (currentlyPlayingVideo === video) {
-              video.muted = true;
-              video.play().catch(() => {});
-            }
-          };
-          video.addEventListener('loadeddata', onReady);
-          video.addEventListener('canplay', onReady);
-        });
+        playPromise
+          .then(() => {
+            if (mediaId) hideVideoSpinner(mediaId);
+          })
+          .catch(() => {
+            video.muted = true;
+            const onReady = () => {
+              video.removeEventListener('loadeddata', onReady);
+              video.removeEventListener('canplay', onReady);
+              if (currentlyPlayingVideo === video) {
+                video.muted = true;
+                video.play()
+                  .then(() => { if (mediaId) hideVideoSpinner(mediaId); })
+                  .catch(() => {});
+              }
+            };
+            video.addEventListener('loadeddata', onReady);
+            video.addEventListener('canplay', onReady);
+          });
       }
     }
 
@@ -327,7 +356,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
       let mediaHtml = '';
       if (item.type === 'video') {
-        mediaHtml = '<video class="post-video" playsinline webkit-playsinline loop preload="auto" muted src="' + item.contentUrl + '" onclick="toggleVideoPlay(\\'' + item.mediaId + '\\')"></video>';
+        mediaHtml = '<div class="video-loading-box" id="vloader_' + item.mediaId + '"><div class="video-spinner"></div></div>' +
+          '<video class="post-video" playsinline webkit-playsinline loop preload="auto" muted src="' + item.contentUrl + '" onclick="toggleVideoPlay(\\'' + item.mediaId + '\\')" onwaiting="showVideoSpinner(\\'' + item.mediaId + '\\')" onloadstart="showVideoSpinner(\\'' + item.mediaId + '\\')" oncanplay="hideVideoSpinner(\\'' + item.mediaId + '\\')" onplaying="hideVideoSpinner(\\'' + item.mediaId + '\\')"></video>';
       } else if (item.type === 'image') {
         mediaHtml = '<img class="post-img" loading="lazy" src="' + item.contentUrl + '" alt="' + item.name + '" onclick="markMediaSeen(\\'' + item.mediaId + '\\')" />';
       } else if (item.type === 'audio') {
@@ -368,10 +398,9 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
               '<span class="post-date">' + formattedDate + '</span>' +
             '</div>' +
           '</div>' +
-          '<span class="app-source-badge">' + appSource + '</span>' +
         '</div>' +
 
-        '<div class="post-media-container">' + mediaHtml + sideActionsHtml + '</div>' +
+        '<div class="post-media-container">' + mediaHtml + '<span class="app-source-badge">' + appSource + '</span>' + sideActionsHtml + '</div>' +
 
         '<div class="post-details">' +
           (notes ? '<div class="post-notes" id="notes_' + item.mediaId + '">' + notes + '</div>' : '<div class="post-notes" id="notes_' + item.mediaId + '" style="display:none;"></div>') +

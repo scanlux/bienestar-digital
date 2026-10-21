@@ -29,7 +29,10 @@ function renderVerFeedView({ items = [] }) {
     let mediaHtml = '';
     if (item.type === 'video') {
       mediaHtml = `
-        <video class="post-video" ${idx === 0 ? 'autoplay' : ''} playsinline webkit-playsinline loop preload="auto" muted src="${item.contentUrl}" onclick="toggleVideoPlay('${item.mediaId}')"></video>
+        <div class="video-loading-box" id="vloader_${item.mediaId}">
+          <div class="video-spinner"></div>
+        </div>
+        <video class="post-video" ${idx === 0 ? 'autoplay' : ''} playsinline webkit-playsinline loop preload="auto" muted src="${item.contentUrl}" onclick="toggleVideoPlay('${item.mediaId}')" onwaiting="showVideoSpinner('${item.mediaId}')" onloadstart="showVideoSpinner('${item.mediaId}')" oncanplay="hideVideoSpinner('${item.mediaId}')" onplaying="hideVideoSpinner('${item.mediaId}')"></video>
       `;
     } else if (item.type === 'image') {
       mediaHtml = `<img class="post-img" loading="lazy" src="${item.contentUrl}" alt="${item.name}" onclick="markMediaSeen('${item.mediaId}')" />`;
@@ -57,11 +60,11 @@ function renderVerFeedView({ items = [] }) {
               <span class="post-date">${formattedDate}</span>
             </div>
           </div>
-          <span class="app-source-badge">${appSource}</span>
         </div>
 
         <div class="post-media-container">
           ${mediaHtml}
+          <span class="app-source-badge">${appSource}</span>
           <div class="post-side-actions">
             <button type="button" class="side-action-btn btn-star ${isFav ? 'favorited' : ''}" id="star_${item.mediaId}" onclick="event.stopPropagation(); toggleFav('${item.mediaId}')" title="Agregar a Favoritos">
               ${isFav ? ICONS.starFilled : ICONS.starOutline}
