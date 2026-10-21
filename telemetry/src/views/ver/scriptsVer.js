@@ -1527,7 +1527,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     }
 
     function renderExploreTagsTab(container) {
-      container.innerHTML = '<div style="padding:16px;"><h2 style="font-size:1.1rem; font-weight:800; margin-bottom:12px;">Explorar por Etiquetas</h2><div id="tagsList">Cargando catalogo de etiquetas...</div><div id="tagResults" style="margin-top:18px;"></div></div>';
+      container.innerHTML = '<div style="padding:16px;"><div id="tagsList">Cargando catalogo de etiquetas...</div><div id="tagResults" style="margin-top:18px;"></div></div>';
 
       fetch('/api/ver/tags')
         .then(res => res.json())
@@ -1544,10 +1544,11 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
           }
 
           listDiv.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">' +
-            keys.map(k => '<button type="button" onclick="filterByTag(\\'' + k + '\\')" style="background:#1e293b; border:1px solid #374151; color:#38bdf8; font-size:0.82rem; font-weight:600; padding:6px 12px; border-radius:999px; cursor:pointer;">#' + k + ' (' + tags[k] + ')</button>').join('') +
+            keys.map(k => '<button type="button" class="tag-chip-btn" id="tagBtn_' + k + '" onclick="filterByTag(\\'' + k + '\\')" style="background:#1e293b; border:1px solid #374151; color:#38bdf8; font-size:0.82rem; font-weight:600; padding:6px 12px; border-radius:999px; cursor:pointer;">#' + k + ' (' + tags[k] + ')</button>').join('') +
           '</div>';
         })
-        .catch(() => {
+        .catch(err => {
+          console.error('[TAGS] Error al cargar etiquetas:', err);
           const listDiv = document.getElementById('tagsList');
           if (listDiv) listDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem;">Error al cargar etiquetas.</p>';
         });
@@ -1556,6 +1557,18 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     function filterByTag(tag) {
       const resultsDiv = document.getElementById('tagResults');
       if (!resultsDiv) return;
+
+      document.querySelectorAll('.tag-chip-btn').forEach(btn => {
+        btn.style.background = '#1e293b';
+        btn.style.borderColor = '#374151';
+        btn.style.color = '#38bdf8';
+      });
+      const activeBtn = document.getElementById('tagBtn_' + tag);
+      if (activeBtn) {
+        activeBtn.style.background = 'rgba(56, 189, 248, 0.2)';
+        activeBtn.style.borderColor = '#38bdf8';
+        activeBtn.style.color = '#ffffff';
+      }
 
       resultsDiv.innerHTML = '<div style="padding:16px 0; text-align:center;"><div class="video-spinner" style="display:block; margin:0 auto 10px auto;"></div><p style="color:#9ca3af; font-size:0.85rem;">Buscando contenidos con #' + tag + '...</p></div>';
 
@@ -1568,7 +1581,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
           }
 
           data.items.forEach(it => {
-            loadedMediaMap.set(it.mediaId, it);
+            favoritesCache.set(it.mediaId, it);
           });
 
           const rowsHtml = data.items.map(item => renderMediaRowCardHtml(item)).join('');
@@ -1578,7 +1591,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
           '</div>' +
           '<div id="tagResultsList" style="display:flex; flex-direction:column; gap:8px;">' + rowsHtml + '</div>';
         })
-        .catch(() => {
+        .catch(err => {
+          console.error('[TAG_FILTER] Error al filtrar por etiqueta:', err);
           resultsDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem; padding:16px 0; text-align:center;">Error al filtrar por etiqueta.</p>';
         });
     }
