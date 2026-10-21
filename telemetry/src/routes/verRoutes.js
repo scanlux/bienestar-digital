@@ -16,6 +16,9 @@ const {
 } = require('../services/mediaRecommendationService');
 const { verAuthMiddleware } = require('../middleware/verAuth');
 const { renderVerLoginView } = require('../views/ver/loginView');
+const { renderVerLayout } = require('../views/ver/layoutVer');
+const { renderVerFeedView } = require('../views/ver/feedView');
+const { getVerClientScript } = require('../views/ver/scriptsVer');
 
 const verLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -206,33 +209,29 @@ router.post('/api/ver/tag', (req, res) => {
   });
 });
 
-// GET /expl/ver - Placeholder de la vista del Feed que se conectará en Fases 2, 3 y 4
+// GET /expl/ver - Feed Principal Móvil Estilo Instagram
 router.get('/expl/ver', (req, res) => {
   const user = req.verUser;
-  return res.send(`<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Ver Media - Feed</title>
-  <style>
-    body { background:#000; color:#fff; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; text-align:center; padding:20px; }
-    .card { background:#111827; border:1px solid #1f2937; border-radius:16px; padding:24px; max-width:400px; width:100%; }
-    .badge { background:rgba(16,185,129,0.15); color:#10b981; padding:4px 10px; border-radius:8px; font-weight:700; font-size:0.8rem; display:inline-block; margin-bottom:12px; }
-    a { color:#38bdf8; text-decoration:none; font-weight:600; display:inline-block; margin-top:16px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="badge">Sesión Activa</div>
-    <h2>Ver Media (/expl/ver)</h2>
-    <p style="color:#9ca3af; font-size:0.9rem; margin-top:8px;">Dispositivo: <strong style="color:#fff;">${user.deviceId}</strong></p>
-    <p style="color:#9ca3af; font-size:0.9rem;">Usuario: <strong style="color:#fff;">${user.username}</strong></p>
-    <p style="color:#34d399; font-size:0.85rem; margin-top:14px;">Fase 1 completada con éxito. Próximo paso: Motor de recomendación algorítmica y Feed tipo Instagram.</p>
-    <a href="/expl/ver/logout">Cerrar Sesión</a>
-  </div>
-</body>
-</html>`);
+  const initialBlock = getRecommendedFeedBlock(user.deviceId);
+
+  const contentHtml = renderVerFeedView({
+    items: initialBlock.items
+  });
+
+  const scriptsHtml = getVerClientScript({
+    deviceId: user.deviceId,
+    initialItems: initialBlock.items
+  });
+
+  const html = renderVerLayout({
+    title: `Ver Media — ${user.deviceId}`,
+    deviceId: user.deviceId,
+    username: user.username,
+    contentHtml,
+    scriptsHtml
+  });
+
+  return res.send(html);
 });
 
 module.exports = router;

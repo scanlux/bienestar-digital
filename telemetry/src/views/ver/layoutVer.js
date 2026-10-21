@@ -1,0 +1,101 @@
+/**
+ * Shell maestro de presentación para Ver Media (/expl/ver)
+ */
+const { getVerStyles } = require('./stylesVer');
+
+function renderVerLayout({
+  title = 'Ver Media',
+  deviceId = '',
+  username = '',
+  contentHtml = '',
+  scriptsHtml = ''
+}) {
+  const styles = getVerStyles();
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>${title}</title>
+  <link rel="icon" href="https://trendy.sytes.net/favicon.ico" type="image/x-icon">
+  <style>
+${styles}
+  </style>
+</head>
+<body>
+  <div class="app-viewport">
+    <!-- Top Bar Sticky -->
+    <header class="top-bar">
+      <div class="brand-title">Ver Media</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="device-chip" title="Dispositivo: ${deviceId}">${deviceId}</span>
+        <a href="/expl/ver/logout" title="Cerrar Sesión" style="color:#ef4444; text-decoration:none; font-size:1.1rem; padding:4px;">🚪</a>
+      </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main id="mainContent" style="flex:1;">
+      ${contentHtml}
+    </main>
+
+    <!-- Barra de Navegación Fija Inferior -->
+    <nav class="bottom-nav">
+      <button type="button" class="nav-tab active" id="tabFeed" onclick="switchMainTab('feed')">
+        <span class="nav-tab-icon">🏠</span>
+        <span>Feed</span>
+      </button>
+      <button type="button" class="nav-tab" id="tabFavorites" onclick="switchMainTab('favorites')">
+        <span class="nav-tab-icon">⭐</span>
+        <span>Favoritos</span>
+      </button>
+      <button type="button" class="nav-tab" id="tabExplore" onclick="switchMainTab('explore')">
+        <span class="nav-tab-icon">🏷️</span>
+        <span>Etiquetas</span>
+      </button>
+    </nav>
+
+    <!-- Modal Táctil de Etiquetado y Catalogación -->
+    <div id="tagModalOverlay" class="modal-overlay" onclick="if(event.target === this) closeTagModal()">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="font-size:1rem; font-weight:700; color:#fff;">🏷️ Catalogar Contenido</h3>
+          <button type="button" onclick="closeTagModal()" style="background:transparent; border:none; color:#9ca3af; font-size:1.2rem; cursor:pointer;">✕</button>
+        </div>
+        <p style="font-size:0.8rem; color:#9ca3af;" id="tagModalFilename">archivo.mp4</p>
+        
+        <div>
+          <label style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:#9ca3af; display:block; margin-bottom:6px;">
+            Etiquetas (separadas por coma)
+          </label>
+          <input type="text" id="tagInput" placeholder="familia, trabajo, importante..." style="width:100%; background:#0b0f19; border:1px solid #374151; border-radius:8px; padding:10px 12px; color:#fff; font-size:0.9rem; outline:none;" />
+        </div>
+
+        <div>
+          <label style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:#9ca3af; display:block; margin-bottom:6px;">
+            Nota / Descripción
+          </label>
+          <textarea id="notesInput" rows="3" placeholder="Añade una descripción o detalle para recordar..." style="width:100%; background:#0b0f19; border:1px solid #374151; border-radius:8px; padding:10px 12px; color:#fff; font-size:0.9rem; outline:none; resize:none;"></textarea>
+        </div>
+
+        <button type="button" onclick="submitTagModal()" style="width:100%; background:linear-gradient(90deg, #ec4899, #8b5cf6); border:none; border-radius:8px; color:#fff; font-weight:700; font-size:0.9rem; padding:11px; cursor:pointer;">
+          Guardar Catalogación
+        </button>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="appToast" class="toast">Enlace copiado al portapapeles</div>
+  </div>
+
+  <script>
+${scriptsHtml}
+  </script>
+</body>
+</html>`;
+}
+
+module.exports = {
+  renderVerLayout
+};
