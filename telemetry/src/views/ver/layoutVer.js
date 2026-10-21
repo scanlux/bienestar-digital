@@ -39,7 +39,6 @@ ${styles}
         <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">✕</button>
       </div>
       <div class="top-bar-right">
-        <span class="device-chip" title="Dispositivo: ${deviceId}">${deviceId}</span>
         <a href="/expl/ver/logout" title="Cerrar Sesion" style="color:#ef4444; display:flex; align-items:center; text-decoration:none; padding:4px;">${ICONS.logout}</a>
       </div>
     </header>
