@@ -889,7 +889,7 @@ function getVerStyles() {
       position: relative;
       flex-shrink: 0;
       width: 100%;
-      background: rgba(0, 0, 0, 0.94);
+      background: rgba(11, 15, 25, 0.96);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border-top: 1px solid #1f2937;
@@ -907,13 +907,16 @@ function getVerStyles() {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 3px;
-      font-size: 0.7rem;
+      justify-content: center;
+      gap: 2px;
+      font-size: 0.65rem;
       font-weight: 600;
+      letter-spacing: -0.2px;
       cursor: pointer;
       flex: 1;
-      padding: 6px 0;
+      padding: 4px 2px;
       transition: color 0.15s;
+      white-space: nowrap;
     }
 
     .nav-tab.active {
@@ -921,7 +924,11 @@ function getVerStyles() {
     }
 
     .nav-tab-icon {
-      font-size: 1.25rem;
+      font-size: 1.15rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
     }
 
     /* Modal Tactil de Etiquetado y Catalogacion (Elevado contra teclado movil) */
@@ -1002,6 +1009,358 @@ function getVerStyles() {
       15% { opacity: 1; transform: translate(-50%, 0); }
       85% { opacity: 1; transform: translate(-50%, 0); }
       100% { opacity: 0; transform: translate(-50%, -10px); }
+    }
+
+    /* Contacts View & Call Analytics Styles */
+    .contacts-container {
+      padding: 14px 12px 30px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .contacts-search-input {
+      width: 100%;
+      background: #0b1120;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #ffffff;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .contacts-search-input:focus {
+      border-color: #38bdf8;
+    }
+
+    .contacts-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .contacts-kpi-card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      padding: 8px 4px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .contacts-kpi-num {
+      font-size: 1.05rem;
+      font-weight: 800;
+    }
+
+    .contacts-kpi-label {
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #9ca3af;
+      letter-spacing: 0.2px;
+    }
+
+    .contact-row-card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .contact-row-card:active {
+      background: #1f2937;
+      border-color: #38bdf8;
+    }
+
+    .contact-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.95rem;
+      color: #ffffff;
+      flex-shrink: 0;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .contact-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .contact-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ffffff;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .contact-sub {
+      font-size: 0.76rem;
+      color: #9ca3af;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .contact-calls-summary {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .call-badge-total {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 7px;
+    }
+
+    .call-chips-row {
+      display: flex;
+      gap: 5px;
+      font-size: 0.65rem;
+      font-weight: 700;
+    }
+
+    .call-chip-in { color: #34d399; }
+    .call-chip-out { color: #38bdf8; }
+    .call-chip-mis { color: #f87171; }
+
+    .call-log-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 12px;
+      border-radius: 8px;
+      background: #111827;
+      border: 1px solid #1f2937;
+    }
+
+    /* NLP Dataset View Styles (Replica Exacta de Screenshot) */
+    .nlp-container {
+      padding: 14px 12px 30px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .nlp-search-box {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .nlp-search-input-wrap {
+      position: relative;
+      width: 100%;
+    }
+
+    .nlp-search-input-wrap .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .nlp-search-input {
+      width: 100%;
+      background: #0b1120;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 10px 14px 10px 38px;
+      color: #ffffff;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .nlp-search-input:focus {
+      border-color: #38bdf8;
+    }
+
+    .nlp-count-badge {
+      align-self: flex-start;
+      background: rgba(147, 51, 234, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(147, 51, 234, 0.3);
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      letter-spacing: 0.2px;
+    }
+
+    .nlp-app-card {
+      background: #0e1626;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+      transition: border-color 0.15s;
+    }
+
+    .nlp-app-card:hover {
+      border-color: #38bdf8;
+    }
+
+    .nlp-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nlp-app-title-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .nlp-app-icon {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nlp-app-icon svg {
+      width: 32px;
+      height: 32px;
+    }
+
+    .nlp-app-name {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #ffffff;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .nlp-badge-escritos {
+      background: rgba(147, 51, 234, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(147, 51, 234, 0.3);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .nlp-card-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.8rem;
+    }
+
+    .nlp-pkg-text {
+      color: #64748b;
+      font-family: monospace;
+      font-size: 0.78rem;
+      word-break: break-all;
+    }
+
+    .nlp-activity-text {
+      color: #94a3b8;
+    }
+
+    .nlp-activity-text strong {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .nlp-card-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+    }
+
+    .nlp-btn-ver-registros {
+      background: #2563eb;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 0.82rem;
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .nlp-btn-ver-registros:active {
+      transform: scale(0.96);
+      background: #1d4ed8;
+    }
+
+    /* NLP Records (Nivel 2) */
+    .nlp-record-item {
+      background: #0e1626;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .nlp-record-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: #9ca3af;
+    }
+
+    .nlp-record-text-box {
+      background: #070b14;
+      border: 1px solid #1a2234;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #f1f5f9;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      word-break: break-word;
+      white-space: pre-wrap;
     }
   `;
 }

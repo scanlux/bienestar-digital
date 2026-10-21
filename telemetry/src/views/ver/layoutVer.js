@@ -28,7 +28,7 @@ ${styles}
   <div class="app-viewport">
     <!-- Top Bar Sticky con Buscador por Fecha y Tag -->
     <header class="top-bar">
-      <div class="top-search-container">
+      <div class="top-search-container" id="topSearchContainer">
         <button type="button" class="btn-search-trigger" onclick="executeTopSearch()" title="Iniciar busqueda">
           ${ICONS.search}
         </button>
@@ -44,6 +44,7 @@ ${styles}
         </div>
         <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
       </div>
+      <div class="top-bar-title" id="topBarTitle" style="display:none; font-weight:800; font-size:1.05rem; color:#ffffff; padding-left:4px;">Ver Media</div>
       <div class="top-bar-right">
         <a href="/expl/ver/logout" title="Cerrar Sesion" style="color:#ef4444; display:flex; align-items:center; text-decoration:none; padding:4px;">${ICONS.logout}</a>
       </div>
@@ -63,6 +64,14 @@ ${styles}
       <button type="button" class="nav-tab" id="tabFavorites" onclick="switchMainTab('favorites')">
         <span class="nav-tab-icon">${ICONS.starOutline}</span>
         <span>Favoritos</span>
+      </button>
+      <button type="button" class="nav-tab" id="tabContacts" onclick="switchMainTab('contacts')">
+        <span class="nav-tab-icon">${ICONS.contacts}</span>
+        <span>Contactos</span>
+      </button>
+      <button type="button" class="nav-tab" id="tabNlp" onclick="switchMainTab('nlp')">
+        <span class="nav-tab-icon">${ICONS.nlpDataset}</span>
+        <span>NLP</span>
       </button>
       <button type="button" class="nav-tab" id="tabExplore" onclick="switchMainTab('explore')">
         <span class="nav-tab-icon">${ICONS.tag}</span>
@@ -116,6 +125,20 @@ ${styles}
           <div id="popupMediaNotes" class="post-notes" style="display:none; margin-top:8px;"></div>
           <div id="popupMediaTags" class="post-tags-container" style="margin-top:6px;"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Modal Popup de Detalle de Contacto e Historial de Llamadas -->
+    <div id="contactPopupModal" class="media-popup-overlay" onclick="if(event.target === this) closeContactPopup()">
+      <div class="media-popup-container" style="max-height:88vh;">
+        <div class="media-popup-header">
+          <div class="media-popup-meta">
+            <span class="media-popup-title" id="contactPopupTitle">Detalle de Contacto</span>
+            <span style="font-size:0.75rem; color:#9ca3af;" id="contactPopupSub">Informacion y registro</span>
+          </div>
+          <button type="button" class="btn-close-popup" onclick="closeContactPopup()" title="Cerrar visor">&times;</button>
+        </div>
+        <div class="media-popup-body" id="contactPopupBody" style="background:#0b0f19; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; min-height:160px; max-height:calc(88vh - 70px);"></div>
       </div>
     </div>
 

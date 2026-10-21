@@ -75,7 +75,25 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       document.querySelectorAll('.nav-tab').forEach(btn => btn.classList.remove('active'));
       if (tab === 'feed') document.getElementById('tabFeed').classList.add('active');
       if (tab === 'favorites') document.getElementById('tabFavorites').classList.add('active');
+      if (tab === 'contacts') document.getElementById('tabContacts').classList.add('active');
+      if (tab === 'nlp') document.getElementById('tabNlp').classList.add('active');
       if (tab === 'explore') document.getElementById('tabExplore').classList.add('active');
+
+      const searchContainer = document.getElementById('topSearchContainer');
+      const barTitle = document.getElementById('topBarTitle');
+
+      if (tab === 'feed' || tab === 'favorites') {
+        if (searchContainer) searchContainer.style.display = 'flex';
+        if (barTitle) barTitle.style.display = 'none';
+      } else {
+        if (searchContainer) searchContainer.style.display = 'none';
+        if (barTitle) {
+          barTitle.style.display = 'block';
+          if (tab === 'contacts') barTitle.textContent = 'Contactos';
+          else if (tab === 'nlp') barTitle.textContent = 'Explorador Dataset NLP';
+          else if (tab === 'explore') barTitle.textContent = 'Explorar Etiquetas';
+        }
+      }
 
       const container = document.getElementById('mainContent');
       if (!container) return;
@@ -93,8 +111,499 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         }
       } else if (tab === 'favorites') {
         renderFavoritesTab(container);
+      } else if (tab === 'contacts') {
+        renderContactsTab(container);
+      } else if (tab === 'nlp') {
+        renderNlpTab(container);
       } else if (tab === 'explore') {
         renderExploreTagsTab(container);
+      }
+    }
+
+    let cachedContactsData = null;
+
+    function getAvatarGradient(name) {
+      const gradients = [
+        'linear-gradient(135deg, #ec4899, #8b5cf6)',
+        'linear-gradient(135deg, #3b82f6, #2dd4bf)',
+        'linear-gradient(135deg, #f59e0b, #ef4444)',
+        'linear-gradient(135deg, #8b5cf6, #3b82f6)',
+        'linear-gradient(135deg, #10b981, #06b6d4)',
+        'linear-gradient(135deg, #6366f1, #a855f7)'
+      ];
+      let sum = 0;
+      for (let i = 0; i < (name || '').length; i++) sum += name.charCodeAt(i);
+      return gradients[sum % gradients.length];
+    }
+
+    function getContactInitials(name) {
+      if (!name) return '?';
+      const clean = name.replace(/[^\\w\\s]/gi, '').trim();
+      const parts = clean.split(/\\s+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      if (parts.length === 1 && parts[0].length >= 2) return parts[0].substring(0, 2).toUpperCase();
+      return (name.substring(0, 2) || '?').toUpperCase();
+    }
+
+    function renderContactsTab(container) {
+      if (cachedContactsData) {
+        paintContactsTab(container, cachedContactsData);
+        return;
+      }
+
+      container.innerHTML = '<div style="padding:40px 20px; text-align:center;">' +
+        '<div class="video-spinner" style="display:block; margin:0 auto 16px auto;"></div>' +
+        '<p style="color:#9ca3af; font-size:0.88rem;">Cargando libreta de contactos y registros de llamadas...</p>' +
+      '</div>';
+
+      fetch('/api/ver/contacts')
+        .then(res => res.json())
+        .then(data => {
+          if (!data || !data.success) {
+            container.innerHTML = '<div style="padding:30px; text-align:center; color:#ef4444;">' +
+              '<p style="font-size:0.9rem;">No se pudieron cargar los contactos.</p>' +
+              '<button type="button" onclick="cachedContactsData=null; renderContactsTab(document.getElementById(\\'mainContent\\'))" class="btn" style="margin-top:12px; font-size:0.8rem; padding:6px 14px;">Reintentar</button>' +
+            '</div>';
+            return;
+          }
+          cachedContactsData = data;
+          paintContactsTab(container, data);
+        })
+        .catch(err => {
+          console.error('[CONTACTS] Error fetch:', err);
+          container.innerHTML = '<div style="padding:30px; text-align:center; color:#ef4444;">' +
+            '<p style="font-size:0.9rem;">Error al conectar con el servidor.</p>' +
+          '</div>';
+        });
+    }
+
+    function paintContactsTab(container, data) {
+      const meta = data.metadata || {};
+      const contacts = data.contacts || [];
+
+      let html = '<div class="contacts-container">';
+      html += '<input type="text" id="contactSearchInput" class="contacts-search-input" placeholder="Buscar contacto por nombre o numero..." oninput="handleContactSearch(this.value)" />';
+
+      html += '<div class="contacts-kpi-grid">' +
+        '<div class="contacts-kpi-card"><span class="contacts-kpi-num" style="color:#c084fc;">' + (meta.totalContacts || 0) + '</span><span class="contacts-kpi-label">Contactos</span></div>' +
+        '<div class="contacts-kpi-card"><span class="contacts-kpi-num" style="color:#38bdf8;">' + (meta.totalCalls || 0) + '</span><span class="contacts-kpi-label">Llamadas</span></div>' +
+        '<div class="contacts-kpi-card"><span class="contacts-kpi-num" style="color:#34d399;">' + (meta.incomingCalls || 0) + '</span><span class="contacts-kpi-label">Entrantes</span></div>' +
+        '<div class="contacts-kpi-card"><span class="contacts-kpi-num" style="color:#f87171;">' + (meta.missedCalls || 0) + '</span><span class="contacts-kpi-label">Perdidas</span></div>' +
+      '</div>';
+
+      html += '<div id="contactsListItems" style="display:flex; flex-direction:column; gap:8px;">';
+      html += renderContactRowsList(contacts);
+      html += '</div></div>';
+
+      container.innerHTML = html;
+    }
+
+    function renderContactRowsList(contactsList) {
+      if (!contactsList || contactsList.length === 0) {
+        return '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:24px 0; text-align:center;">No se encontraron contactos coincidentes.</p>';
+      }
+
+      return contactsList.map(c => {
+        const initials = getContactInitials(c.fullName);
+        const grad = getAvatarGradient(c.fullName);
+        const primaryPhone = (c.phoneNumbers && c.phoneNumbers[0]) ? c.phoneNumbers[0].number : 'Sin telefono';
+        const safeId = String(c.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+        let callStatsHtml = '';
+        if (c.totalCalls > 0) {
+          callStatsHtml = '<div class="contact-calls-summary">' +
+            '<span class="call-badge-total">' + c.totalCalls + ' llamadas</span>' +
+            '<div class="call-chips-row">' +
+              (c.incomingCalls > 0 ? '<span class="call-chip-in">+' + c.incomingCalls + '</span>' : '') +
+              (c.outgoingCalls > 0 ? '<span class="call-chip-out">-' + c.outgoingCalls + '</span>' : '') +
+              (c.missedCalls > 0 ? '<span class="call-chip-mis">&times;' + c.missedCalls + '</span>' : '') +
+            '</div>' +
+          '</div>';
+        }
+
+        const orgText = c.organization && c.organization.company ? (' &bull; ' + c.organization.company) : '';
+
+        return '<div class="contact-row-card" onclick="openContactDetailModal(\\'' + safeId + '\\')">' +
+          '<div class="contact-avatar" style="background:' + grad + ';">' + initials + '</div>' +
+          '<div class="contact-info">' +
+            '<span class="contact-name">' + c.fullName + '</span>' +
+            '<span class="contact-sub">' + primaryPhone + orgText + '</span>' +
+          '</div>' +
+          callStatsHtml +
+        '</div>';
+      }).join('');
+    }
+
+    function handleContactSearch(query) {
+      if (!cachedContactsData) return;
+      const q = (query || '').trim().toLowerCase();
+      const listDiv = document.getElementById('contactsListItems');
+      if (!listDiv) return;
+
+      if (!q) {
+        listDiv.innerHTML = renderContactRowsList(cachedContactsData.contacts);
+        return;
+      }
+
+      const filtered = (cachedContactsData.contacts || []).filter(c => {
+        const nameMatch = (c.fullName || '').toLowerCase().includes(q);
+        const phoneMatch = (c.phoneNumbers || []).some(p => String(p.number || '').includes(q));
+        const orgMatch = c.organization && (c.organization.company || '').toLowerCase().includes(q);
+        return nameMatch || phoneMatch || orgMatch;
+      });
+
+      listDiv.innerHTML = renderContactRowsList(filtered);
+    }
+
+    function openContactDetailModal(contactId) {
+      if (!cachedContactsData) return;
+      const c = (cachedContactsData.contacts || []).find(item => String(item.id).replace(/[^a-zA-Z0-9_-]/g, '_') === String(contactId));
+      if (!c) return;
+
+      const modal = document.getElementById('contactPopupModal');
+      const titleEl = document.getElementById('contactPopupTitle');
+      const subEl = document.getElementById('contactPopupSub');
+      const bodyEl = document.getElementById('contactPopupBody');
+      if (!modal || !bodyEl) return;
+
+      if (titleEl) titleEl.textContent = c.fullName || 'Contacto';
+      if (subEl) subEl.textContent = c.organization?.company || c.nickname || 'Detalle del contacto';
+
+      const initials = getContactInitials(c.fullName);
+      const grad = getAvatarGradient(c.fullName);
+
+      let bodyHtml = '<div style="display:flex; align-items:center; gap:14px; background:#111827; border:1px solid #1f2937; border-radius:12px; padding:12px 14px;">' +
+        '<div class="contact-avatar" style="width:52px; height:52px; font-size:1.15rem; background:' + grad + ';">' + initials + '</div>' +
+        '<div style="flex:1; min-width:0;">' +
+          '<h3 style="font-size:1rem; font-weight:800; color:#fff; margin-bottom:2px;">' + c.fullName + '</h3>' +
+          (c.organization?.company ? '<p style="font-size:0.78rem; color:#9ca3af;">' + c.organization.company + (c.organization.jobPosition ? ' &bull; ' + c.organization.jobPosition : '') + '</p>' : '') +
+          (c.nickname ? '<p style="font-size:0.75rem; color:#6b7280; font-style:italic;">' + c.nickname + '</p>' : '') +
+        '</div>' +
+      '</div>';
+
+      if (c.phoneNumbers && c.phoneNumbers.length > 0) {
+        bodyHtml += '<div><span style="font-size:0.72rem; text-transform:uppercase; font-weight:700; color:#9ca3af; display:block; margin-bottom:6px;">Telefonos</span>';
+        bodyHtml += '<div style="display:flex; flex-direction:column; gap:6px;">' +
+          c.phoneNumbers.map(p => {
+            const raw = p.number || '';
+            const digits = raw.replace(/[^0-9]/g, '');
+            const waNumber = digits.length === 10 ? ('57' + digits) : digits;
+            return '<div style="display:flex; justify-content:space-between; align-items:center; background:#111827; border:1px solid #1f2937; border-radius:8px; padding:8px 12px;">' +
+              '<div><span style="font-size:0.88rem; font-weight:700; color:#ffffff;">' + raw + '</span><span style="font-size:0.7rem; color:#6b7280; margin-left:6px;">' + (p.label || '') + '</span></div>' +
+              '<div style="display:flex; gap:8px;">' +
+                '<a href="tel:' + raw + '" style="background:#1e293b; color:#38bdf8; border:1px solid #374151; border-radius:6px; font-size:0.75rem; font-weight:700; padding:4px 10px; text-decoration:none;">Llamar</a>' +
+                (digits.length >= 7 ? '<a href="https://wa.me/' + waNumber + '" target="_blank" rel="noopener" style="background:#064e3b; color:#34d399; border:1px solid #059669; border-radius:6px; font-size:0.75rem; font-weight:700; padding:4px 10px; text-decoration:none; display:flex; align-items:center; gap:4px;">' + SVG_ICONS.whatsapp + '</a>' : '') +
+              '</div>' +
+            '</div>';
+          }).join('') +
+        '</div></div>';
+      }
+
+      if (c.emails && c.emails.length > 0) {
+        bodyHtml += '<div><span style="font-size:0.72rem; text-transform:uppercase; font-weight:700; color:#9ca3af; display:block; margin-bottom:6px;">Correos Electronicos</span>';
+        bodyHtml += '<div style="display:flex; flex-direction:column; gap:6px;">' +
+          c.emails.map(e => '<a href="mailto:' + e.email + '" style="background:#111827; border:1px solid #1f2937; border-radius:8px; padding:8px 12px; color:#38bdf8; font-size:0.82rem; text-decoration:none;">' + e.email + '</a>').join('') +
+        '</div></div>';
+      }
+
+      if (c.notes) {
+        bodyHtml += '<div><span style="font-size:0.72rem; text-transform:uppercase; font-weight:700; color:#9ca3af; display:block; margin-bottom:4px;">Notas</span>' +
+          '<div style="background:#111827; border:1px solid #1f2937; border-radius:8px; padding:10px 12px; font-size:0.8rem; color:#d1d5db;">' + c.notes + '</div>' +
+        '</div>';
+      }
+
+      bodyHtml += '<div><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+        '<span style="font-size:0.72rem; text-transform:uppercase; font-weight:700; color:#9ca3af;">Historial de Llamadas</span>' +
+        '<span style="font-size:0.75rem; font-weight:700; color:#38bdf8;">' + (c.callLogs ? c.callLogs.length : 0) + ' registros</span>' +
+      '</div>';
+
+      if (c.callLogs && c.callLogs.length > 0) {
+        bodyHtml += '<div style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto;">' +
+          c.callLogs.map(l => {
+            const isInc = l.type === 'incoming';
+            const isOut = l.type === 'outgoing';
+            const typeLabel = isInc ? 'Entrante' : (isOut ? 'Saliente' : 'Perdida');
+            const typeColor = isInc ? '#34d399' : (isOut ? '#38bdf8' : '#f87171');
+            return '<div class="call-log-item">' +
+              '<div>' +
+                '<span style="color:' + typeColor + '; font-size:0.75rem; font-weight:800; display:block;">' + typeLabel + '</span>' +
+                '<span style="font-size:0.72rem; color:#9ca3af;">' + (l.dateFormatted || '') + '</span>' +
+              '</div>' +
+              '<span style="font-size:0.78rem; font-weight:700; color:#e5e7eb;">' + (l.durationFormatted || '0s') + '</span>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+      } else {
+        bodyHtml += '<p style="color:#6b7280; font-size:0.8rem; font-style:italic; padding:10px 0;">No hay llamadas registradas con este contacto.</p>';
+      }
+      bodyHtml += '</div>';
+
+      bodyEl.innerHTML = bodyHtml;
+      modal.classList.add('active');
+      modal.style.display = 'flex';
+    }
+
+    function closeContactPopup() {
+      const modal = document.getElementById('contactPopupModal');
+      if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }
+    }
+
+    let cachedNlpAppsData = null;
+    let currentNlpApp = null;
+    let cachedNlpRecordsMap = {};
+
+    function escapeHtmlSimple(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function renderNlpTab(container) {
+      if (currentNlpApp) {
+        renderNlpRecordsView(container, currentNlpApp);
+        return;
+      }
+
+      if (cachedNlpAppsData) {
+        paintNlpAppsTab(container, cachedNlpAppsData);
+        return;
+      }
+
+      container.innerHTML = '<div style="padding:40px 20px; text-align:center;">' +
+        '<div class="video-spinner" style="display:block; margin:0 auto 16px auto;"></div>' +
+        '<p style="color:#9ca3af; font-size:0.88rem;">Cargando catalogo de aplicaciones NLP...</p>' +
+      '</div>';
+
+      fetch('/api/ver/nlp/apps')
+        .then(res => res.json())
+        .then(data => {
+          if (!data || !data.success) {
+            container.innerHTML = '<div style="padding:30px; text-align:center; color:#ef4444;">' +
+              '<p style="font-size:0.9rem;">No se pudieron cargar las aplicaciones.</p>' +
+              '<button type="button" onclick="cachedNlpAppsData=null; renderNlpTab(document.getElementById(\\'mainContent\\'))" class="btn" style="margin-top:12px; font-size:0.8rem; padding:6px 14px;">Reintentar</button>' +
+            '</div>';
+            return;
+          }
+          cachedNlpAppsData = data;
+          paintNlpAppsTab(container, data);
+        })
+        .catch(err => {
+          console.error('[NLP] Error fetch apps:', err);
+          container.innerHTML = '<div style="padding:30px; text-align:center; color:#ef4444;">' +
+            '<p style="font-size:0.9rem;">Error al conectar con el servidor.</p>' +
+          '</div>';
+        });
+    }
+
+    function paintNlpAppsTab(container, data) {
+      const apps = data.apps || [];
+      let html = '<div class="nlp-container">';
+      html += '<div class="nlp-search-box">';
+      html += '<div class="nlp-search-input-wrap">' +
+        '<span class="search-icon">' + SVG_ICONS.search + '</span>' +
+        '<input type="text" id="nlpAppSearchInput" class="nlp-search-input" placeholder="Buscar aplicacion por nombre o paquete..." oninput="handleNlpAppSearch(this.value)" />' +
+      '</div>';
+      html += '<span class="nlp-count-badge" id="nlpCountBadge">Aplicaciones: ' + (data.totalApps || apps.length) + '</span>';
+      html += '</div>';
+
+      html += '<div id="nlpAppsList" style="display:flex; flex-direction:column; gap:12px;">';
+      html += renderNlpAppCardsList(apps);
+      html += '</div></div>';
+
+      container.innerHTML = html;
+    }
+
+    function renderNlpAppCardsList(appsList) {
+      if (!appsList || appsList.length === 0) {
+        return '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:24px 0; text-align:center;">No se encontraron aplicaciones coincidentes.</p>';
+      }
+
+      return appsList.map(a => {
+        const iconHtml = a.appIconSvg || SVG_ICONS.nlpDataset;
+        const safePkg = encodeURIComponent(a.packageName || 'unknown');
+        const safeName = encodeURIComponent(a.displayName || 'Aplicacion');
+
+        return '<div class="nlp-app-card">' +
+          '<div class="nlp-card-header">' +
+            '<div class="nlp-app-title-box">' +
+              '<span class="nlp-app-icon">' + iconHtml + '</span>' +
+              '<span class="nlp-app-name">' + a.displayName + '</span>' +
+            '</div>' +
+            '<span class="nlp-badge-escritos">' + (a.count || 0) + ' escritos</span>' +
+          '</div>' +
+          '<div class="nlp-card-meta">' +
+            '<span class="nlp-pkg-text">Paquete: ' + a.packageName + '</span>' +
+            '<span class="nlp-activity-text">Ultima actividad: <strong>' + (a.lastActivityFormatted || 'Reciente') + '</strong></span>' +
+          '</div>' +
+          '<div class="nlp-card-footer">' +
+            '<button type="button" class="nlp-btn-ver-registros" onclick="openNlpAppRecords(\\'' + safePkg + '\\', \\'' + safeName + '\\')">' +
+              'Ver Registros &rarr;' +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function handleNlpAppSearch(query) {
+      if (!cachedNlpAppsData) return;
+      const q = (query || '').trim().toLowerCase();
+      const listDiv = document.getElementById('nlpAppsList');
+      const badgeEl = document.getElementById('nlpCountBadge');
+      if (!listDiv) return;
+
+      if (!q) {
+        if (badgeEl) badgeEl.textContent = 'Aplicaciones: ' + (cachedNlpAppsData.totalApps || cachedNlpAppsData.apps.length);
+        listDiv.innerHTML = renderNlpAppCardsList(cachedNlpAppsData.apps);
+        return;
+      }
+
+      const filtered = (cachedNlpAppsData.apps || []).filter(a => {
+        const nameMatch = (a.displayName || '').toLowerCase().includes(q);
+        const pkgMatch = (a.packageName || '').toLowerCase().includes(q);
+        return nameMatch || pkgMatch;
+      });
+
+      if (badgeEl) badgeEl.textContent = 'Aplicaciones: ' + filtered.length;
+      listDiv.innerHTML = renderNlpAppCardsList(filtered);
+    }
+
+    function openNlpAppRecords(safePkg, safeName) {
+      const pkg = decodeURIComponent(safePkg);
+      const name = decodeURIComponent(safeName);
+
+      const app = (cachedNlpAppsData && cachedNlpAppsData.apps)
+        ? (cachedNlpAppsData.apps.find(a => a.packageName === pkg) || { packageName: pkg, displayName: name, count: 0 })
+        : { packageName: pkg, displayName: name, count: 0 };
+
+      currentNlpApp = app;
+      const container = document.getElementById('mainContent');
+      if (container) renderNlpRecordsView(container, app);
+    }
+
+    function backToNlpApps() {
+      currentNlpApp = null;
+      const container = document.getElementById('mainContent');
+      if (container && cachedNlpAppsData) {
+        paintNlpAppsTab(container, cachedNlpAppsData);
+      }
+    }
+
+    function renderNlpRecordsView(container, app) {
+      const pkg = app.packageName;
+      const iconHtml = app.appIconSvg || SVG_ICONS.nlpDataset;
+
+      let html = '<div class="nlp-container">';
+      html += '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+        '<button type="button" onclick="backToNlpApps()" style="background:#1e293b; border:1px solid #374151; color:#38bdf8; font-size:0.8rem; font-weight:700; border-radius:8px; padding:6px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">&larr; Volver a Aplicaciones</button>' +
+        '<span class="nlp-badge-escritos" id="recordCountBadge">' + (app.count || 0) + ' escritos</span>' +
+      '</div>';
+
+      html += '<div style="display:flex; align-items:center; gap:12px; background:#0e1626; border:1px solid #1e293b; border-radius:12px; padding:12px 14px;">' +
+        '<span class="nlp-app-icon" style="width:36px; height:36px;">' + iconHtml + '</span>' +
+        '<div style="min-width:0; flex:1;">' +
+          '<h3 style="font-size:1.05rem; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + app.displayName + '</h3>' +
+          '<span style="font-family:monospace; font-size:0.75rem; color:#64748b; word-break:break-all;">' + app.packageName + '</span>' +
+        '</div>' +
+      '</div>';
+
+      html += '<div class="nlp-search-input-wrap">' +
+        '<span class="search-icon">' + SVG_ICONS.search + '</span>' +
+        '<input type="text" id="nlpRecordSearchInput" class="nlp-search-input" placeholder="Buscar texto escrito en ' + app.displayName + '..." oninput="handleNlpRecordSearch(this.value)" />' +
+      '</div>';
+
+      html += '<div id="nlpRecordsItems" style="display:flex; flex-direction:column; gap:10px;">' +
+        '<div style="padding:30px 20px; text-align:center;">' +
+          '<div class="video-spinner" style="display:block; margin:0 auto 12px auto;"></div>' +
+          '<p style="color:#9ca3af; font-size:0.85rem;">Cargando registros de texto...</p>' +
+        '</div>' +
+      '</div></div>';
+
+      container.innerHTML = html;
+
+      if (cachedNlpRecordsMap[pkg]) {
+        paintNlpRecordItems(cachedNlpRecordsMap[pkg]);
+        return;
+      }
+
+      fetch('/api/ver/nlp/records?appPackage=' + encodeURIComponent(pkg) + '&limit=100')
+        .then(res => res.json())
+        .then(data => {
+          if (!data || !data.success) {
+            const listDiv = document.getElementById('nlpRecordsItems');
+            if (listDiv) listDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem; padding:20px; text-align:center;">No se pudieron cargar los registros.</p>';
+            return;
+          }
+          cachedNlpRecordsMap[pkg] = data.records || [];
+          paintNlpRecordItems(cachedNlpRecordsMap[pkg]);
+          const badgeEl = document.getElementById('recordCountBadge');
+          if (badgeEl) badgeEl.textContent = (data.total || (data.records || []).length) + ' escritos';
+        })
+        .catch(err => {
+          console.error('[NLP] Error fetch records:', err);
+          const listDiv = document.getElementById('nlpRecordsItems');
+          if (listDiv) listDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem; padding:20px; text-align:center;">Error al conectar con el servidor.</p>';
+        });
+    }
+
+    function paintNlpRecordItems(recordsList) {
+      const listDiv = document.getElementById('nlpRecordsItems');
+      if (!listDiv) return;
+
+      if (!recordsList || recordsList.length === 0) {
+        listDiv.innerHTML = '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:24px 0; text-align:center;">No se encontraron registros de texto.</p>';
+        return;
+      }
+
+      listDiv.innerHTML = recordsList.map(r => {
+        const escaped = escapeHtmlSimple(r.text);
+        const dateStr = r.formattedDate || '—';
+        const fieldStr = r.fieldInfo ? (' &bull; ' + escapeHtmlSimple(r.fieldInfo)) : '';
+
+        return '<div class="nlp-record-item">' +
+          '<div class="nlp-record-header">' +
+            '<span>' + dateStr + fieldStr + '</span>' +
+            '<button type="button" onclick="copyNlpText(this)" data-text="' + encodeURIComponent(r.text || '') + '" style="background:transparent; border:none; color:#38bdf8; font-size:0.75rem; font-weight:700; cursor:pointer;">Copiar</button>' +
+          '</div>' +
+          '<div class="nlp-record-text-box">' + escaped + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function handleNlpRecordSearch(query) {
+      if (!currentNlpApp) return;
+      const pkg = currentNlpApp.packageName;
+      const allRecords = cachedNlpRecordsMap[pkg] || [];
+      const q = (query || '').trim().toLowerCase();
+
+      if (!q) {
+        paintNlpRecordItems(allRecords);
+        return;
+      }
+
+      const filtered = allRecords.filter(r => (r.text || '').toLowerCase().includes(q));
+      paintNlpRecordItems(filtered);
+    }
+
+    function copyNlpText(btn) {
+      const raw = btn.getAttribute('data-text');
+      const text = decodeURIComponent(raw || '');
+      if (!text) return;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          showAppToast('Texto copiado al portapapeles');
+        }).catch(() => {
+          showAppToast('No se pudo copiar');
+        });
+      } else {
+        showAppToast('Copiado');
       }
     }
 
@@ -534,7 +1043,9 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       comment: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
       share: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>',
       download: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>',
-      whatsapp: '<svg width="22" height="22" viewBox="0 0 24 24" fill="#25D366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>'
+      whatsapp: '<svg width="22" height="22" viewBox="0 0 24 24" fill="#25D366"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>',
+      contacts: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+      nlpDataset: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="6" y1="8" x2="6.01" y2="8"></line><line x1="10" y1="8" x2="10.01" y2="8"></line><line x1="14" y1="8" x2="14.01" y2="8"></line><line x1="18" y1="8" x2="18.01" y2="8"></line><line x1="6" y1="12" x2="6.01" y2="12"></line><line x1="10" y1="12" x2="10.01" y2="12"></line><line x1="14" y1="12" x2="14.01" y2="12"></line><line x1="18" y1="12" x2="18.01" y2="12"></line><line x1="8" y1="16" x2="16" y2="16"></line></svg>'
     };
 
     function getClientReadableSource(remotePath) {
@@ -1046,21 +1557,29 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       const resultsDiv = document.getElementById('tagResults');
       if (!resultsDiv) return;
 
-      resultsDiv.innerHTML = '<p style="color:#9ca3af; font-size:0.85rem;">Buscando contenidos con #' + tag + '...</p>';
+      resultsDiv.innerHTML = '<div style="padding:16px 0; text-align:center;"><div class="video-spinner" style="display:block; margin:0 auto 10px auto;"></div><p style="color:#9ca3af; font-size:0.85rem;">Buscando contenidos con #' + tag + '...</p></div>';
 
       fetch('/api/ver/tags?tag=' + encodeURIComponent(tag))
         .then(res => res.json())
         .then(data => {
           if (!data.success || !Array.isArray(data.items) || data.items.length === 0) {
-            resultsDiv.innerHTML = '<p style="color:#9ca3af; font-size:0.85rem;">No se encontraron contenidos con la etiqueta #' + tag + '</p>';
+            resultsDiv.innerHTML = '<p style="color:#9ca3af; font-size:0.85rem; padding:16px 0; text-align:center;">No se encontraron contenidos con la etiqueta #' + tag + '</p>';
             return;
           }
 
-          resultsDiv.innerHTML = '<h3 style="font-size:0.95rem; font-weight:700; margin-bottom:10px; color:#38bdf8;">Resultados para #' + tag + ' (' + data.items.length + ')</h3>' +
-            data.items.map(item => renderPostCardHtml(item)).join('');
+          data.items.forEach(it => {
+            loadedMediaMap.set(it.mediaId, it);
+          });
+
+          const rowsHtml = data.items.map(item => renderMediaRowCardHtml(item)).join('');
+          resultsDiv.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">' +
+            '<h3 style="font-size:0.95rem; font-weight:700; color:#38bdf8;">Resultados para #' + tag + ' (' + data.items.length + ')</h3>' +
+            '<button type="button" onclick="document.getElementById(\\'tagResults\\').innerHTML=\\'\\'" style="background:transparent; border:none; color:#9ca3af; font-size:0.8rem; cursor:pointer;">Limpiar</button>' +
+          '</div>' +
+          '<div id="tagResultsList" style="display:flex; flex-direction:column; gap:8px;">' + rowsHtml + '</div>';
         })
         .catch(() => {
-          resultsDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem;">Error al filtrar por etiqueta.</p>';
+          resultsDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem; padding:16px 0; text-align:center;">Error al filtrar por etiqueta.</p>';
         });
     }
   `;
