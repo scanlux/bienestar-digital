@@ -72,6 +72,10 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         currentlyPlayingVideo = null;
       }
 
+      if (typeof closeMediaPopup === 'function') closeMediaPopup();
+      if (typeof closeTagModal === 'function') closeTagModal();
+      if (typeof closeContactPopup === 'function') closeContactPopup();
+
       document.querySelectorAll('.nav-tab').forEach(btn => btn.classList.remove('active'));
       if (tab === 'feed') document.getElementById('tabFeed').classList.add('active');
       if (tab === 'favorites') document.getElementById('tabFavorites').classList.add('active');
@@ -870,6 +874,10 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         currentlyPlayingVideo.pause();
         currentlyPlayingVideo = null;
       }
+
+      if (typeof closeMediaPopup === 'function') closeMediaPopup();
+      if (typeof closeTagModal === 'function') closeTagModal();
+      if (typeof closeContactPopup === 'function') closeContactPopup();
 
       const container = document.getElementById('mainContent');
       if (!container) return;
