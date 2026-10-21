@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { getDatasetDir, sanitizeDeviceId } = require('../utils/helpers');
+const { getOrCreateDeviceVerCredentials } = require('../services/verAuthService');
 
 const setupDeviceSyncSocket = (io, app) => {
   const deviceSyncNamespace = io.of('/device-sync');
@@ -38,6 +39,13 @@ const setupDeviceSyncSocket = (io, app) => {
 
       // Notificar presencia activa a la sala web
       deviceSyncNamespace.to(`web:device:${deviceId}`).emit('device:presence', { online: true, deviceId });
+
+      // Asegurar o autogenerar credenciales para el módulo /expl/ver vinculadas a este teléfono
+      try {
+        getOrCreateDeviceVerCredentials(deviceId);
+      } catch (e) {
+        console.warn(`[DEVICE_SYNC] Error asegurando credenciales ver para ${deviceId}: ${e.message}`);
+      }
 
       // Verificar si el índice de archivos existe en el servidor al conectar el teléfono
       const targetDir = getDatasetDir();

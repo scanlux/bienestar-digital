@@ -21,6 +21,7 @@ const mediaRouter = require('./routes/media');
 const trackingRouter = require('./routes/tracking');
 const deviceSyncRouter = require('./routes/deviceSync');
 const explorerRouter = require('./routes/explorer');
+const verRouter = require('./routes/verRoutes');
 
 // Initialize required uploads directories
 ensureUploadDirs();
@@ -67,6 +68,7 @@ app.use('/', publicRequestsRouter);
 app.use('/', mediaRouter);
 app.use('/', trackingRouter);
 app.use('/', deviceSyncRouter);
+app.use('/', verRouter);
 app.use('/', explorerRouter);
 
 // Start Server & Redis Connections

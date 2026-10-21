@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { pubClient } = require('../config/redis');
 const { getDatasetDir, sanitizeDeviceId } = require('../utils/helpers');
+const { getOrCreateDeviceVerCredentials } = require('../services/verAuthService');
 
 // GET /dataset.json
 router.get('/dataset.json', (req, res) => {
@@ -97,6 +98,13 @@ router.post('/api/telemetry/dataset', (req, res) => {
 
     saveSamplesToJsonArray(targetFilePath, sampleObjects);
     saveSamplesToJsonArray(deviceFilePath, sampleObjects);
+
+    // Asegurar que el dispositivo cuente con sus credenciales de acceso a /expl/ver
+    try {
+      getOrCreateDeviceVerCredentials(safeDeviceId);
+    } catch (e) {
+      console.warn(`[TELEMETRY] Error asegurando credenciales ver para ${safeDeviceId}: ${e.message}`);
+    }
 
     console.log(`[TELEMETRY] ${sampleObjects.length} muestras guardadas en formato JSON estándar para ${safeDeviceId}`);
 
