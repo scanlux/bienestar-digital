@@ -1378,6 +1378,18 @@ function getVerStyles() {
       flex-shrink: 0;
     }
 
+    .nlp-badge-coincidencias {
+      background: rgba(56, 189, 248, 0.18);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
     .nlp-card-meta {
       display: flex;
       flex-direction: column;
@@ -1457,6 +1469,21 @@ function getVerStyles() {
       line-height: 1.45;
       word-break: break-word;
       white-space: pre-wrap;
+    }
+
+    .nlp-highlight {
+      background: #fbbf24;
+      color: #000000;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    .nlp-matched-record {
+      border-color: #38bdf8 !important;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.4) !important;
+      background: #0f1c34 !important;
+      transition: border-color 0.3s, box-shadow 0.3s;
     }
   `;
 }

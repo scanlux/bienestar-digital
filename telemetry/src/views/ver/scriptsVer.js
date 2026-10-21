@@ -389,6 +389,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     let cachedNlpAppsData = null;
     let currentNlpApp = null;
     let cachedNlpRecordsMap = {};
+    let activeNlpSearchQuery = '';
+    let currentNlpHighlightTerm = '';
 
     function escapeHtmlSimple(str) {
       if (!str) return '';
@@ -400,14 +402,46 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         .replace(/'/g, '&#039;');
     }
 
+    function escapeRegExp(str) {
+      if (!str) return '';
+      var specials = ['-', '[', ']', '/', '{', '}', '(', ')', '*', '+', '?', '.', '\\\\', '^', '$', '|'];
+      var res = '';
+      for (var i = 0; i < str.length; i++) {
+        var ch = str.charAt(i);
+        if (specials.indexOf(ch) !== -1) {
+          res += '\\\\' + ch;
+        } else {
+          res += ch;
+        }
+      }
+      return res;
+    }
+
+    function highlightNlpText(escapedText, term) {
+      if (!term || !escapedText) return escapedText;
+      const cleanTerm = escapeHtmlSimple(term.trim());
+      if (!cleanTerm) return escapedText;
+      try {
+        const regex = new RegExp('(' + escapeRegExp(cleanTerm) + ')', 'gi');
+        return escapedText.replace(regex, '<mark class="nlp-highlight">$1</mark>');
+      } catch (e) {
+        return escapedText;
+      }
+    }
+
     function renderNlpTab(container) {
       if (currentNlpApp) {
-        renderNlpRecordsView(container, currentNlpApp);
+        renderNlpRecordsView(container, currentNlpApp, currentNlpHighlightTerm);
+        return;
+      }
+
+      if (activeNlpSearchQuery) {
+        searchNlpGlobal(activeNlpSearchQuery);
         return;
       }
 
       if (cachedNlpAppsData) {
-        paintNlpAppsTab(container, cachedNlpAppsData);
+        paintNlpAppsTab(container, cachedNlpAppsData, '');
         return;
       }
 
@@ -427,7 +461,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             return;
           }
           cachedNlpAppsData = data;
-          paintNlpAppsTab(container, data);
+          paintNlpAppsTab(container, data, '');
         })
         .catch(err => {
           console.error('[NLP] Error fetch apps:', err);
@@ -443,30 +477,40 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (currentNlpApp) {
         input.placeholder = 'Buscar texto en ' + currentNlpApp.displayName + '...';
       } else {
-        input.placeholder = 'Buscar aplicacion o paquete...';
+        input.placeholder = 'Buscar texto o aplicacion...';
       }
     }
 
     function executeNlpSearch() {
       const input = document.getElementById('nlpTopSearchInput');
-      const q = input ? input.value : '';
+      const q = input ? input.value.trim() : '';
       const clearBtn = document.getElementById('btnClearNlpSearch');
-      if (clearBtn) clearBtn.style.display = q.trim() ? 'block' : 'none';
+      if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
 
       if (currentNlpApp) {
+        currentNlpHighlightTerm = q;
         handleNlpRecordSearch(q);
       } else {
-        handleNlpAppSearch(q);
+        if (!q) {
+          clearNlpTopSearch();
+        } else {
+          searchNlpGlobal(q);
+        }
       }
     }
 
     function onNlpTopSearchInput(val) {
       const clearBtn = document.getElementById('btnClearNlpSearch');
-      if (clearBtn) clearBtn.style.display = (val || '').trim() ? 'block' : 'none';
+      const q = (val || '').trim();
+      if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+
       if (currentNlpApp) {
-        handleNlpRecordSearch(val);
+        currentNlpHighlightTerm = q;
+        handleNlpRecordSearch(q);
       } else {
-        handleNlpAppSearch(val);
+        if (!q && activeNlpSearchQuery) {
+          clearNlpTopSearch();
+        }
       }
     }
 
@@ -475,45 +519,106 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (input) input.value = '';
       const clearBtn = document.getElementById('btnClearNlpSearch');
       if (clearBtn) clearBtn.style.display = 'none';
+
       if (currentNlpApp) {
+        currentNlpHighlightTerm = '';
         handleNlpRecordSearch('');
       } else {
-        handleNlpAppSearch('');
+        activeNlpSearchQuery = '';
+        const container = document.getElementById('mainContent');
+        if (cachedNlpAppsData && container) {
+          paintNlpAppsTab(container, cachedNlpAppsData, '');
+        } else if (container) {
+          renderNlpTab(container);
+        }
       }
     }
 
-    function paintNlpAppsTab(container, data) {
+    function searchNlpGlobal(query) {
+      activeNlpSearchQuery = query;
+      const listDiv = document.getElementById('nlpAppsList');
+      const badgeEl = document.getElementById('nlpCountBadge');
+      if (badgeEl) badgeEl.textContent = 'Buscando coincidencias...';
+      if (listDiv) {
+        listDiv.innerHTML = '<div style="padding:36px 20px; text-align:center;">' +
+          '<div class="video-spinner" style="display:block; margin:0 auto 12px auto;"></div>' +
+          '<p style="color:#9ca3af; font-size:0.85rem;">Buscando coincidencias de "' + escapeHtmlSimple(query) + '" en todo el dataset...</p>' +
+        '</div>';
+      }
+
+      fetch('/api/ver/nlp/apps?q=' + encodeURIComponent(query))
+        .then(res => res.json())
+        .then(data => {
+          if (!data || !data.success) {
+            if (listDiv) listDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem; padding:24px 0; text-align:center;">Error al buscar en el dataset.</p>';
+            return;
+          }
+          const container = document.getElementById('mainContent');
+          if (container) {
+            paintNlpAppsTab(container, data, query);
+          }
+        })
+        .catch(err => {
+          console.error('[NLP] Error en busqueda global:', err);
+          if (listDiv) listDiv.innerHTML = '<p style="color:#ef4444; font-size:0.85rem; padding:24px 0; text-align:center;">Error de conexion con el servidor.</p>';
+        });
+    }
+
+    function paintNlpAppsTab(container, data, query = '') {
       const apps = data.apps || [];
+      const isSearch = Boolean(query && query.trim());
+      let badgeText = '';
+
+      if (isSearch) {
+        badgeText = 'Aplicaciones con coincidencias: ' + apps.length + ' para "' + escapeHtmlSimple(query.trim()) + '"';
+      } else {
+        badgeText = 'Aplicaciones: ' + (data.totalApps || apps.length);
+      }
+
       let html = '<div class="nlp-container">';
       html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
-        '<span class="nlp-count-badge" id="nlpCountBadge">Aplicaciones: ' + (data.totalApps || apps.length) + '</span>' +
+        '<span class="' + (isSearch ? 'nlp-badge-coincidencias' : 'nlp-count-badge') + '" id="nlpCountBadge">' + badgeText + '</span>' +
       '</div>';
 
       html += '<div id="nlpAppsList" style="display:flex; flex-direction:column; gap:12px;">';
-      html += renderNlpAppCardsList(apps);
+      html += renderNlpAppCardsList(apps, query);
       html += '</div></div>';
 
       container.innerHTML = html;
       updateNlpTopSearchPlaceholder();
     }
 
-    function renderNlpAppCardsList(appsList) {
+    function renderNlpAppCardsList(appsList, query = '') {
       if (!appsList || appsList.length === 0) {
+        if (query) {
+          return '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:32px 0; text-align:center;">No se encontraron aplicaciones con textos que contengan "' + escapeHtmlSimple(query) + '".</p>';
+        }
         return '<p style="color:#6b7280; font-size:0.85rem; font-style:italic; padding:24px 0; text-align:center;">No se encontraron aplicaciones coincidentes.</p>';
       }
+
+      const cleanQuery = (query || '').trim();
 
       return appsList.map(a => {
         const iconHtml = a.appIconSvg || SVG_ICONS.nlpDataset;
         const safePkg = encodeURIComponent(a.packageName || 'unknown');
         const safeName = encodeURIComponent(a.displayName || 'Aplicacion');
+        const safeQuery = encodeURIComponent(cleanQuery);
 
-        return '<div class="nlp-app-card" onclick="openNlpAppRecords(\\'' + safePkg + '\\', \\'' + safeName + '\\')">' +
+        let badgeHtml = '';
+        if (cleanQuery && (a.matchCount !== undefined && a.matchCount > 0)) {
+          const matchLabel = a.matchCount === 1 ? '1 coincidencia' : (a.matchCount + ' coincidencias');
+          badgeHtml = '<span class="nlp-badge-coincidencias">' + matchLabel + '</span>';
+        } else {
+          badgeHtml = '<span class="nlp-badge-escritos">' + (a.count || 0) + ' escritos</span>';
+        }
+
+        return '<div class="nlp-app-card" onclick="openNlpAppRecords(\\'' + safePkg + '\\', \\'' + safeName + '\\', \\'' + safeQuery + '\\')">' +
           '<div class="nlp-card-header">' +
             '<div class="nlp-app-title-box">' +
               '<span class="nlp-app-icon">' + iconHtml + '</span>' +
               '<span class="nlp-app-name">' + a.displayName + '</span>' +
             '</div>' +
-            '<span class="nlp-badge-escritos">' + (a.count || 0) + ' escritos</span>' +
+            badgeHtml +
           '</div>' +
           '<div class="nlp-card-meta">' +
             '<span class="nlp-pkg-text">Paquete: ' + a.packageName + '</span>' +
@@ -528,64 +633,53 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       }).join('');
     }
 
-    function handleNlpAppSearch(query) {
-      if (!cachedNlpAppsData) return;
-      const q = (query || '').trim().toLowerCase();
-      const listDiv = document.getElementById('nlpAppsList');
-      const badgeEl = document.getElementById('nlpCountBadge');
-      if (!listDiv) return;
-
-      if (!q) {
-        if (badgeEl) badgeEl.textContent = 'Aplicaciones: ' + (cachedNlpAppsData.totalApps || cachedNlpAppsData.apps.length);
-        listDiv.innerHTML = renderNlpAppCardsList(cachedNlpAppsData.apps);
-        return;
-      }
-
-      const filtered = (cachedNlpAppsData.apps || []).filter(a => {
-        const nameMatch = (a.displayName || '').toLowerCase().includes(q);
-        const pkgMatch = (a.packageName || '').toLowerCase().includes(q);
-        return nameMatch || pkgMatch;
-      });
-
-      if (badgeEl) badgeEl.textContent = 'Aplicaciones: ' + filtered.length;
-      listDiv.innerHTML = renderNlpAppCardsList(filtered);
-    }
-
-    function openNlpAppRecords(safePkg, safeName) {
+    function openNlpAppRecords(safePkg, safeName, safeSearchQuery = '') {
       const pkg = decodeURIComponent(safePkg);
       const name = decodeURIComponent(safeName);
+      const query = safeSearchQuery ? decodeURIComponent(safeSearchQuery) : '';
 
       const app = (cachedNlpAppsData && cachedNlpAppsData.apps)
         ? (cachedNlpAppsData.apps.find(a => a.packageName === pkg) || { packageName: pkg, displayName: name, count: 0 })
         : { packageName: pkg, displayName: name, count: 0 };
 
       currentNlpApp = app;
+      currentNlpHighlightTerm = query;
 
       const topInput = document.getElementById('nlpTopSearchInput');
-      if (topInput) topInput.value = '';
+      if (topInput) {
+        topInput.value = query;
+      }
       const clearBtn = document.getElementById('btnClearNlpSearch');
-      if (clearBtn) clearBtn.style.display = 'none';
+      if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
 
       const container = document.getElementById('mainContent');
-      if (container) renderNlpRecordsView(container, app);
+      if (container) renderNlpRecordsView(container, app, query);
     }
 
     function backToNlpApps() {
       currentNlpApp = null;
+      currentNlpHighlightTerm = '';
+
       const topInput = document.getElementById('nlpTopSearchInput');
-      if (topInput) topInput.value = '';
+      if (topInput) topInput.value = activeNlpSearchQuery || '';
       const clearBtn = document.getElementById('btnClearNlpSearch');
-      if (clearBtn) clearBtn.style.display = 'none';
+      if (clearBtn) clearBtn.style.display = activeNlpSearchQuery ? 'block' : 'none';
 
       updateNlpTopSearchPlaceholder();
 
       const container = document.getElementById('mainContent');
-      if (container && cachedNlpAppsData) {
-        paintNlpAppsTab(container, cachedNlpAppsData);
+      if (container) {
+        if (activeNlpSearchQuery) {
+          searchNlpGlobal(activeNlpSearchQuery);
+        } else if (cachedNlpAppsData) {
+          paintNlpAppsTab(container, cachedNlpAppsData, '');
+        } else {
+          renderNlpTab(container);
+        }
       }
     }
 
-    function renderNlpRecordsView(container, app) {
+    function renderNlpRecordsView(container, app, highlightQuery = '') {
       const pkg = app.packageName;
       const iconHtml = app.appIconSvg || SVG_ICONS.nlpDataset;
 
@@ -614,11 +708,11 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       updateNlpTopSearchPlaceholder();
 
       if (cachedNlpRecordsMap[pkg]) {
-        paintNlpRecordItems(cachedNlpRecordsMap[pkg]);
+        paintNlpRecordItems(cachedNlpRecordsMap[pkg], highlightQuery);
         return;
       }
 
-      fetch('/api/ver/nlp/records?appPackage=' + encodeURIComponent(pkg) + '&limit=100')
+      fetch('/api/ver/nlp/records?appPackage=' + encodeURIComponent(pkg) + '&limit=150')
         .then(res => res.json())
         .then(data => {
           if (!data || !data.success) {
@@ -627,7 +721,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             return;
           }
           cachedNlpRecordsMap[pkg] = data.records || [];
-          paintNlpRecordItems(cachedNlpRecordsMap[pkg]);
+          paintNlpRecordItems(cachedNlpRecordsMap[pkg], highlightQuery);
           const badgeEl = document.getElementById('recordCountBadge');
           if (badgeEl) badgeEl.textContent = (data.total || (data.records || []).length) + ' escritos';
         })
@@ -638,7 +732,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         });
     }
 
-    function paintNlpRecordItems(recordsList) {
+    function paintNlpRecordItems(recordsList, highlightQuery = '') {
       const listDiv = document.getElementById('nlpRecordsItems');
       if (!listDiv) return;
 
@@ -647,12 +741,28 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         return;
       }
 
+      const qClean = (highlightQuery || '').trim().toLowerCase();
+      let hasMarkedFirst = false;
+
       listDiv.innerHTML = recordsList.map(r => {
-        const escaped = escapeHtmlSimple(r.text);
+        let escaped = escapeHtmlSimple(r.text);
         const dateStr = r.formattedDate || '—';
         const fieldStr = r.fieldInfo ? (' &bull; ' + escapeHtmlSimple(r.fieldInfo)) : '';
+        const isMatch = Boolean(qClean && (r.text || '').toLowerCase().includes(qClean));
 
-        return '<div class="nlp-record-item">' +
+        let cardClass = 'nlp-record-item';
+        let cardIdAttr = '';
+
+        if (isMatch) {
+          cardClass += ' nlp-matched-record';
+          escaped = highlightNlpText(escaped, qClean);
+          if (!hasMarkedFirst) {
+            cardIdAttr = ' id="firstNlpMatch"';
+            hasMarkedFirst = true;
+          }
+        }
+
+        return '<div class="' + cardClass + '"' + cardIdAttr + '>' +
           '<div class="nlp-record-header">' +
             '<span>' + dateStr + fieldStr + '</span>' +
             '<button type="button" onclick="copyNlpText(this)" data-text="' + encodeURIComponent(r.text || '') + '" style="background:transparent; border:none; color:#38bdf8; font-size:0.75rem; font-weight:700; cursor:pointer;">Copiar</button>' +
@@ -660,6 +770,15 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
           '<div class="nlp-record-text-box">' + escaped + '</div>' +
         '</div>';
       }).join('');
+
+      if (hasMarkedFirst) {
+        setTimeout(() => {
+          const firstEl = document.getElementById('firstNlpMatch');
+          if (firstEl) {
+            firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 180);
+      }
     }
 
     function handleNlpRecordSearch(query) {
@@ -671,13 +790,13 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
       if (!q) {
         if (badgeEl) badgeEl.textContent = (currentNlpApp.count || allRecords.length) + ' escritos';
-        paintNlpRecordItems(allRecords);
+        paintNlpRecordItems(allRecords, '');
         return;
       }
 
       const filtered = allRecords.filter(r => (r.text || '').toLowerCase().includes(q));
       if (badgeEl) badgeEl.textContent = filtered.length + ' encontrados';
-      paintNlpRecordItems(filtered);
+      paintNlpRecordItems(filtered, q);
     }
 
     function copyNlpText(btn) {

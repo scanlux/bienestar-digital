@@ -353,8 +353,10 @@ function getDeviceContactsAndCallLogs(deviceId) {
 
 /**
  * Obtiene el catalogo de aplicaciones con cantidad de textos NLP y ultima actividad
+ * Si options.q esta presente, busca texto en todos los registros y retorna solo las apps con coincidencias
  */
-function getDeviceNlpApps(deviceId) {
+function getDeviceNlpApps(deviceId, options = {}) {
+  const { q = '' } = options;
   const safeId = sanitizeDeviceId(deviceId);
   const datasetFile = findDeviceDatasetFile(safeId);
 
@@ -363,45 +365,110 @@ function getDeviceNlpApps(deviceId) {
       success: true,
       totalApps: 0,
       totalEvents: 0,
+      searchQuery: q,
       apps: []
     };
   }
 
   const allItems = readJsonLinesFile(datasetFile);
   const userItems = allItems.filter(item => !isSystemInitEvent(item));
+  const cleanQ = String(q || '').trim().toLowerCase();
 
+  // Si no hay termino de busqueda, agrupamos todas las apps normalmente
+  if (!cleanQ) {
+    const appsMap = {};
+    userItems.forEach(item => {
+      const appName = item.app_contexto || 'unknown';
+      if (!appsMap[appName]) {
+        appsMap[appName] = {
+          packageName: appName,
+          displayName: getAppDisplayName(appName),
+          appIconSvg: getAppIcon(appName),
+          count: 0,
+          matchCount: 0,
+          lastActivity: null,
+          lastActivityFormatted: 'Reciente'
+        };
+      }
+      appsMap[appName].count++;
+      const itemDate = item.created_at || (item.ts ? new Date(item.ts).toISOString() : null);
+      if (itemDate && (!appsMap[appName].lastActivity || new Date(itemDate) > new Date(appsMap[appName].lastActivity))) {
+        appsMap[appName].lastActivity = itemDate;
+        appsMap[appName].lastActivityFormatted = formatCompactDate(itemDate);
+      }
+    });
+
+    const appsList = Object.values(appsMap).sort((a, b) => {
+      const tA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+      const tB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+      if (tB !== tA) return tB - tA;
+      return b.count - a.count;
+    });
+
+    return {
+      success: true,
+      totalApps: appsList.length,
+      totalEvents: userItems.length,
+      searchQuery: '',
+      apps: appsList
+    };
+  }
+
+  // Busqueda de texto dentro de todos los registros del dataset
   const appsMap = {};
   userItems.forEach(item => {
     const appName = item.app_contexto || 'unknown';
-    if (!appsMap[appName]) {
-      appsMap[appName] = {
-        packageName: appName,
-        displayName: getAppDisplayName(appName),
-        appIconSvg: getAppIcon(appName),
-        count: 0,
-        lastActivity: null,
-        lastActivityFormatted: 'Reciente'
-      };
+    const text = String(item.textoL || item.textoC || item.texto || '').toLowerCase();
+    const pkg = String(appName).toLowerCase();
+    const dName = String(getAppDisplayName(appName)).toLowerCase();
+
+    const isTextMatch = text.includes(cleanQ);
+    const isAppMatch = pkg.includes(cleanQ) || dName.includes(cleanQ);
+
+    if (isTextMatch || isAppMatch) {
+      if (!appsMap[appName]) {
+        appsMap[appName] = {
+          packageName: appName,
+          displayName: getAppDisplayName(appName),
+          appIconSvg: getAppIcon(appName),
+          count: 0,
+          matchCount: 0,
+          lastActivity: null,
+          lastActivityFormatted: 'Reciente'
+        };
+      }
+
+      appsMap[appName].matchCount++;
+
+      const itemDate = item.created_at || (item.ts ? new Date(item.ts).toISOString() : null);
+      if (itemDate && (!appsMap[appName].lastActivity || new Date(itemDate) > new Date(appsMap[appName].lastActivity))) {
+        appsMap[appName].lastActivity = itemDate;
+        appsMap[appName].lastActivityFormatted = formatCompactDate(itemDate);
+      }
     }
-    appsMap[appName].count++;
-    const itemDate = item.created_at || (item.ts ? new Date(item.ts).toISOString() : null);
-    if (itemDate && (!appsMap[appName].lastActivity || new Date(itemDate) > new Date(appsMap[appName].lastActivity))) {
-      appsMap[appName].lastActivity = itemDate;
-      appsMap[appName].lastActivityFormatted = formatCompactDate(itemDate);
+  });
+
+  // Calculamos el total de eventos historicos para las apps que tuvieron coincidencias
+  const matchedAppNames = new Set(Object.keys(appsMap));
+  userItems.forEach(item => {
+    const appName = item.app_contexto || 'unknown';
+    if (matchedAppNames.has(appName)) {
+      appsMap[appName].count++;
     }
   });
 
   const appsList = Object.values(appsMap).sort((a, b) => {
+    if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
     const tA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
     const tB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
-    if (tB !== tA) return tB - tA;
-    return b.count - a.count;
+    return tB - tA;
   });
 
   return {
     success: true,
     totalApps: appsList.length,
     totalEvents: userItems.length,
+    searchQuery: cleanQ,
     apps: appsList
   };
 }

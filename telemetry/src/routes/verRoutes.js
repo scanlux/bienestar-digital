@@ -485,11 +485,12 @@ router.get('/api/ver/contacts', (req, res) => {
   }
 });
 
-// GET /api/ver/nlp/apps - Catalogo de aplicaciones con cantidad de escritos y ultima actividad
+// GET /api/ver/nlp/apps - Catalogo de aplicaciones con cantidad de escritos y ultima actividad (soporta busqueda q global)
 router.get('/api/ver/nlp/apps', (req, res) => {
   const { deviceId } = req.verUser;
+  const { q = '' } = req.query;
   try {
-    const result = getDeviceNlpApps(deviceId);
+    const result = getDeviceNlpApps(deviceId, { q });
     return res.json(result);
   } catch (err) {
     console.error('[VER_API] Error al obtener catalogo de apps NLP:', err);
