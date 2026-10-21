@@ -168,6 +168,30 @@ ${styles}
     <div id="appToast" class="toast">Enlace copiado al portapapeles</div>
   </div>
 
+  <!-- Session Lock Screen Overlay (Solicitud de Palabra Clave al Cargar o Enfocar la Pestaña) -->
+  <div id="sessionLockOverlay" class="session-lock-overlay">
+    <div class="lock-card">
+      <div class="logo-badge">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
+      <h1 class="app-title">Ver Media</h1>
+      <p class="app-subtitle">Introduce la palabra clave para desbloquear</p>
+
+      <div id="lockErrorBanner" class="error-banner" style="display:none;"></div>
+
+      <form id="lockPasscodeForm" onsubmit="event.preventDefault(); submitUnlockPasscode();">
+        <div class="input-group">
+          <label for="lockPasscodeInput">Palabra Clave</label>
+          <input type="password" id="lockPasscodeInput" placeholder="Introduce la palabra clave..." required autofocus autocomplete="off" />
+        </div>
+        <button type="submit" id="btnUnlockSubmit" class="btn-submit">Desbloquear</button>
+      </form>
+    </div>
+  </div>
+
   <script>
 ${scriptsHtml}
   </script>

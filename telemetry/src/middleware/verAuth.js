@@ -16,8 +16,8 @@ const parseCookies = (req) => {
 };
 
 const verAuthMiddleware = (req, res, next) => {
-  // Rutas públicas dentro de /expl/ver
-  if (req.path === '/login' || req.path === '/logout' || req.path.startsWith('/share/')) {
+  // Rutas públicas dentro de /expl/ver y /api/ver
+  if (req.path === '/login' || req.path === '/logout' || req.path === '/unlock' || req.path.startsWith('/share/')) {
     return next();
   }
 

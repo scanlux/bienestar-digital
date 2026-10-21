@@ -23,8 +23,103 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     });
 
     let scrollCheckTimer = null;
+    let isSessionUnlocked = false;
+
+    function lockSessionScreen() {
+      isSessionUnlocked = false;
+      const overlay = document.getElementById('sessionLockOverlay');
+      const input = document.getElementById('lockPasscodeInput');
+      const errBanner = document.getElementById('lockErrorBanner');
+      if (errBanner) {
+        errBanner.style.display = 'none';
+        errBanner.textContent = '';
+      }
+      if (input) {
+        input.value = '';
+      }
+      if (overlay) {
+        overlay.classList.remove('hidden');
+        overlay.style.display = 'flex';
+        setTimeout(() => { if (input) input.focus(); }, 120);
+      }
+      if (currentlyPlayingVideo) {
+        currentlyPlayingVideo.pause();
+        currentlyPlayingVideo = null;
+      }
+    }
+
+    function unlockSessionScreen() {
+      isSessionUnlocked = true;
+      const overlay = document.getElementById('sessionLockOverlay');
+      if (overlay) {
+        overlay.classList.add('hidden');
+        setTimeout(() => {
+          if (isSessionUnlocked) overlay.style.display = 'none';
+        }, 280);
+      }
+      setTimeout(checkVisibleVideos, 150);
+    }
+
+    function submitUnlockPasscode() {
+      const input = document.getElementById('lockPasscodeInput');
+      const errBanner = document.getElementById('lockErrorBanner');
+      const submitBtn = document.getElementById('btnUnlockSubmit');
+      const code = input ? input.value.trim() : '';
+      if (!code) return;
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Verificando...';
+      }
+      if (errBanner) errBanner.style.display = 'none';
+
+      fetch('/api/ver/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passcode: code })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          unlockSessionScreen();
+        } else {
+          if (errBanner) {
+            errBanner.textContent = (data && data.error) || 'Palabra clave incorrecta.';
+            errBanner.style.display = 'block';
+          }
+          if (input) {
+            input.value = '';
+            input.focus();
+          }
+        }
+      })
+      .catch(err => {
+        console.error('[LOCK] Error:', err);
+        if (errBanner) {
+          errBanner.textContent = 'Error de conexion. Intente de nuevo.';
+          errBanner.style.display = 'block';
+        }
+      })
+      .finally(() => {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Desbloquear';
+        }
+      });
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        lockSessionScreen();
+      }
+    });
+
+    window.addEventListener('pageshow', () => {
+      lockSessionScreen();
+    });
 
     document.addEventListener('DOMContentLoaded', () => {
+      lockSessionScreen();
       setupIntersectionObserver();
       setupVideoAutoplayObserver();
       checkVisibleVideos();

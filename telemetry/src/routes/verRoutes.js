@@ -167,6 +167,34 @@ router.post('/expl/ver/login', verLoginLimiter, (req, res) => {
   return res.redirect(303, '/expl/ver');
 });
 
+// POST /api/ver/unlock - Desbloqueo rápido mediante palabra clave para el Lock Screen
+router.post('/api/ver/unlock', verLoginLimiter, (req, res) => {
+  const { passcode } = req.body || {};
+  const user = authenticateVerPasscode(passcode);
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Palabra clave incorrecta.'
+    });
+  }
+
+  const sessionToken = createVerSessionToken(user.deviceId, user.username);
+  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+
+  res.setHeader('Set-Cookie', [
+    `ver_session=${sessionToken}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
+    `ver_device=${encodeURIComponent(user.deviceId)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
+    `ver_user=${encodeURIComponent(user.username)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`
+  ]);
+
+  return res.json({
+    success: true,
+    deviceId: user.deviceId,
+    username: user.username
+  });
+});
+
 // GET /expl/ver/logout
 router.get('/expl/ver/logout', (req, res) => {
   res.setHeader('Set-Cookie', [

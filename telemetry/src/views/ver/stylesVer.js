@@ -1486,6 +1486,143 @@ function getVerStyles() {
       background: #0f1c34 !important;
       transition: border-color 0.3s, box-shadow 0.3s;
     }
+
+    /* Session Lock Overlay (Gate de Seguridad por Pestaña) */
+    .session-lock-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: #000000;
+      z-index: 999999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+
+    .session-lock-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .lock-card {
+      width: 100%;
+      max-width: 380px;
+      background: #0b0f19;
+      border: 1px solid #1f2937;
+      border-radius: 20px;
+      padding: 32px 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .lock-card .logo-badge {
+      width: 68px;
+      height: 68px;
+      background: linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6);
+      border-radius: 18px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2rem;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.35);
+    }
+
+    .lock-card .app-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #f472b6, #c084fc, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .lock-card .app-subtitle {
+      font-size: 0.82rem;
+      color: #9ca3af;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .lock-card .error-banner {
+      width: 100%;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.84rem;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .lock-card form {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .lock-card .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .lock-card .input-group label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .lock-card .input-group input {
+      width: 100%;
+      background: #111827;
+      border: 1px solid #374151;
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #ffffff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .lock-card .input-group input:focus {
+      border-color: #8b5cf6;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+    }
+
+    .lock-card .btn-submit {
+      width: 100%;
+      background: linear-gradient(90deg, #ec4899, #8b5cf6);
+      border: none;
+      border-radius: 10px;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 0.95rem;
+      padding: 13px;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .lock-card .btn-submit:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
   `;
 }
 
