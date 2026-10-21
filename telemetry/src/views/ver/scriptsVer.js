@@ -9,6 +9,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     let activeTagMediaId = null;
     let currentMainTab = 'feed';
     let intersectionObserver = null;
+    let videoObserver = null;
+    let currentlyPlayingVideo = null;
 
     // Inicializar IDs precargados
     const initialList = ${JSON.stringify(initialItems)};
@@ -18,6 +20,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
     document.addEventListener('DOMContentLoaded', () => {
       setupIntersectionObserver();
+      setupVideoAutoplayObserver();
     });
 
     function showToast(msg) {
@@ -34,6 +37,11 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (currentMainTab === tab) return;
       currentMainTab = tab;
 
+      if (currentlyPlayingVideo) {
+        currentlyPlayingVideo.pause();
+        currentlyPlayingVideo = null;
+      }
+
       document.querySelectorAll('.nav-tab').forEach(btn => btn.classList.remove('active'));
       if (tab === 'feed') document.getElementById('tabFeed').classList.add('active');
       if (tab === 'favorites') document.getElementById('tabFavorites').classList.add('active');
@@ -46,6 +54,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         container.innerHTML = '<div id="feedList"></div><div id="feedLoadingIndicator" style="text-align:center; padding:24px; color:#9ca3af; font-size:0.85rem;">Cargando feed...</div>';
         loadedMediaIds.clear();
         hasMoreContent = true;
+        setupIntersectionObserver();
+        setupVideoAutoplayObserver();
         fetchNextFeedBlock();
       } else if (tab === 'favorites') {
         renderFavoritesTab(container);
@@ -57,6 +67,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     function setupIntersectionObserver() {
       if (intersectionObserver) intersectionObserver.disconnect();
 
+      const feedList = document.getElementById('feedList');
       intersectionObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting && !isFetchingMore && hasMoreContent && currentMainTab === 'feed') {
@@ -64,7 +75,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             fetchNextFeedBlock();
           }
         });
-      }, { rootMargin: '200px' });
+      }, { root: feedList, rootMargin: '400px' });
 
       attachObserverToEighthPost();
     }
@@ -77,6 +88,89 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         if (targetPost && intersectionObserver) {
           intersectionObserver.observe(targetPost);
         }
+      }
+    }
+
+    function setupVideoAutoplayObserver() {
+      if (videoObserver) videoObserver.disconnect();
+
+      const feedList = document.getElementById('feedList');
+      if (!feedList) return;
+
+      const options = {
+        root: feedList,
+        threshold: 0.6 // Debe estar al menos 60% visible en el área de scroll
+      };
+
+      videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const card = entry.target;
+          const video = card.querySelector('video');
+          if (!video) return;
+
+          if (entry.isIntersecting) {
+            // Pausar cualquier otro video activo previamente
+            if (currentlyPlayingVideo && currentlyPlayingVideo !== video) {
+              currentlyPlayingVideo.pause();
+            }
+
+            currentlyPlayingVideo = video;
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(() => {
+                video.muted = true;
+                video.play().catch(() => {});
+              });
+            }
+            markMediaSeen(card.dataset.mediaId);
+          } else {
+            // Al salir del área visible, pausar inmediatamente
+            if (currentlyPlayingVideo === video) {
+              currentlyPlayingVideo = null;
+            }
+            video.pause();
+          }
+        });
+      }, options);
+
+      observeAllFeedVideos();
+    }
+
+    function observeAllFeedVideos() {
+      if (!videoObserver) return;
+      document.querySelectorAll('#feedList .post-card').forEach(card => {
+        if (card.querySelector('video')) {
+          videoObserver.observe(card);
+        }
+      });
+    }
+
+    function toggleVideoSound(mediaId) {
+      const card = document.getElementById('post_' + mediaId);
+      if (!card) return;
+      const video = card.querySelector('video');
+      const btn = document.getElementById('muteBtn_' + mediaId);
+      if (!video || !btn) return;
+
+      video.muted = !video.muted;
+      btn.innerHTML = video.muted ? SVG_ICONS.soundMuted : SVG_ICONS.soundOn;
+      showToast(video.muted ? 'Sonido silenciado' : 'Sonido activado');
+    }
+
+    function toggleVideoPlay(mediaId) {
+      const card = document.getElementById('post_' + mediaId);
+      if (!card) return;
+      const video = card.querySelector('video');
+      if (!video) return;
+
+      if (video.paused) {
+        if (currentlyPlayingVideo && currentlyPlayingVideo !== video) {
+          currentlyPlayingVideo.pause();
+        }
+        currentlyPlayingVideo = video;
+        video.play().catch(() => {});
+      } else {
+        video.pause();
       }
     }
 
@@ -111,6 +205,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             feedList.insertAdjacentHTML('beforeend', renderPostCardHtml(item));
           });
 
+          observeAllFeedVideos();
           attachObserverToEighthPost();
         })
         .catch(err => {
@@ -124,6 +219,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
     const SVG_ICONS = {
       video: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>',
+      soundOn: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>',
+      soundMuted: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>',
       image: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>',
       audio: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>',
       starOutline: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>',
@@ -145,8 +242,18 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
 
       let mediaHtml = '';
       if (item.type === 'video') {
-        mediaHtml = '<video class="post-video" controls playsinline preload="metadata" src="' + item.contentUrl + '" onplay="markMediaSeen(\\'' + item.mediaId + '\\')"></video>';
+        mediaHtml = '<video class="post-video" playsinline loop preload="metadata" muted src="' + item.contentUrl + '" onclick="toggleVideoPlay(\\'' + item.mediaId + '\\')"></video>' +
+          '<button type="button" class="video-sound-badge" id="muteBtn_' + item.mediaId + '" onclick="toggleVideoSound(\\'' + item.mediaId + '\\')" title="Alternar sonido">' +
+            SVG_ICONS.soundMuted +
+          '</button>';
       } else if (item.type === 'image') {
+        mediaHtml = '<img class="post-img" loading="lazy" src="' + item.contentUrl + '" alt="' + item.name + '" onclick="markMediaSeen(\\'' + item.mediaId + '\\')" />';
+      } else if (item.type === 'audio') {
+        mediaHtml = '<div class="post-audio-container">' +
+          '<div class="audio-icon-box" style="display:flex; justify-content:center; align-items:center;">' + SVG_ICONS.audio + '</div>' +
+          '<audio class="post-audio" controls src="' + item.contentUrl + '" onplay="markMediaSeen(\\'' + item.mediaId + '\\')"></audio>' +
+        '</div>';
+      }
         mediaHtml = '<img class="post-img" loading="lazy" src="' + item.contentUrl + '" alt="' + item.name + '" onclick="markMediaSeen(\\'' + item.mediaId + '\\')" />';
       } else if (item.type === 'audio') {
         mediaHtml = '<div class="post-audio-container">' +

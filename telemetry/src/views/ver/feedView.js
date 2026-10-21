@@ -27,7 +27,12 @@ function renderVerFeedView({ items = [] }) {
 
     let mediaHtml = '';
     if (item.type === 'video') {
-      mediaHtml = `<video class="post-video" controls playsinline preload="metadata" src="${item.contentUrl}" onplay="markMediaSeen('${item.mediaId}')"></video>`;
+      mediaHtml = `
+        <video class="post-video" playsinline loop preload="metadata" muted src="${item.contentUrl}" onclick="toggleVideoPlay('${item.mediaId}')"></video>
+        <button type="button" class="video-sound-badge" id="muteBtn_${item.mediaId}" onclick="toggleVideoSound('${item.mediaId}')" title="Alternar sonido">
+          ${ICONS.soundMuted}
+        </button>
+      `;
     } else if (item.type === 'image') {
       mediaHtml = `<img class="post-img" loading="lazy" src="${item.contentUrl}" alt="${item.name}" onclick="markMediaSeen('${item.mediaId}')" />`;
     } else if (item.type === 'audio') {

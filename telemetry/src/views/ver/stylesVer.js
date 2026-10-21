@@ -14,39 +14,42 @@ function getVerStyles() {
       background: #000000;
       color: #f3f4f6;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      min-height: 100vh;
+      height: 100vh;
+      height: 100dvh;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
-      overflow-x: hidden;
+      align-items: center;
+      overflow: hidden;
+      margin: 0;
     }
 
     .app-viewport {
       width: 100%;
       max-width: 480px;
-      min-height: 100vh;
+      height: 100vh;
+      height: 100dvh;
       background: #000000;
       border-left: 1px solid #1f2937;
       border-right: 1px solid #1f2937;
       display: flex;
       flex-direction: column;
       position: relative;
-      padding-bottom: 74px; /* espacio para la barra de navegación inferior */
+      overflow: hidden;
     }
 
     /* Top Bar */
     .top-bar {
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      background: rgba(0, 0, 0, 0.88);
+      flex-shrink: 0;
+      height: 52px;
+      background: rgba(0, 0, 0, 0.92);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid #1f2937;
-      padding: 12px 16px;
+      padding: 0 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      z-index: 50;
     }
 
     .brand-title {
@@ -72,20 +75,52 @@ function getVerStyles() {
       white-space: nowrap;
     }
 
-    /* Post Card estilo Instagram */
-    .post-card {
-      background: #000000;
-      border-bottom: 1px solid #1f2937;
+    /* Contenedor Principal */
+    #mainContent {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       position: relative;
     }
 
+    #feedList {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      scroll-snap-type: y mandatory;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Post Card estilo TikTok / Reels con scroll asistido */
+    .post-card {
+      background: #000000;
+      border-bottom: 1px solid #1f2937;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      height: 100%;
+      min-height: 100%;
+      max-height: 100%;
+      flex-shrink: 0;
+      scroll-snap-align: start;
+      scroll-snap-stop: normal;
+      overflow: hidden;
+    }
+
     .post-header {
+      flex-shrink: 0;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 14px;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 5;
     }
 
     .post-author {
@@ -96,14 +131,13 @@ function getVerStyles() {
     }
 
     .author-avatar {
-      width: 36px;
-      height: 36px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       background: linear-gradient(135deg, #ec4899, #8b5cf6);
       display: flex;
       justify-content: center;
       align-items: center;
-      font-size: 1.1rem;
       flex-shrink: 0;
     }
 
@@ -114,7 +148,7 @@ function getVerStyles() {
     }
 
     .author-name {
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       font-weight: 700;
       color: #ffffff;
       overflow: hidden;
@@ -127,12 +161,12 @@ function getVerStyles() {
       color: #9ca3af;
     }
 
-    /* Media Container */
+    /* Media Container Flexible */
     .post-media-container {
+      flex: 1;
+      min-height: 0;
       width: 100%;
-      min-height: 280px;
-      max-height: 520px;
-      background: #0a0e17;
+      background: #050811;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -143,23 +177,53 @@ function getVerStyles() {
     .post-img {
       width: 100%;
       height: 100%;
-      max-height: 520px;
+      max-height: 100%;
       object-fit: contain;
       display: block;
     }
 
     .post-video {
       width: 100%;
-      max-height: 520px;
+      height: 100%;
+      max-height: 100%;
+      object-fit: contain;
       background: #000;
       outline: none;
+      cursor: pointer;
+    }
+
+    .video-sound-badge {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      color: #ffffff;
+      z-index: 10;
+      transition: transform 0.15s, background 0.15s;
+    }
+
+    .video-sound-badge:active {
+      transform: scale(0.9);
+      background: rgba(0, 0, 0, 0.85);
     }
 
     .post-audio-container {
       width: 100%;
+      height: 100%;
       padding: 30px 20px;
       display: flex;
       flex-direction: column;
+      justify-content: center;
       align-items: center;
       gap: 16px;
       background: linear-gradient(180deg, #111827 0%, #0b0f19 100%);
@@ -174,20 +238,23 @@ function getVerStyles() {
       display: flex;
       justify-content: center;
       align-items: center;
-      font-size: 2.2rem;
+      color: #c084fc;
     }
 
     .post-audio {
       width: 100%;
+      max-width: 360px;
       border-radius: 8px;
     }
 
     /* Acciones del Post */
     .post-actions {
+      flex-shrink: 0;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 14px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.65);
     }
 
     .action-group-left {
@@ -224,11 +291,13 @@ function getVerStyles() {
 
     /* Detalles y Tags */
     .post-details {
-      padding: 0 14px 14px 14px;
+      flex-shrink: 0;
+      padding: 0 14px 10px 14px;
       font-size: 0.85rem;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
+      background: rgba(0, 0, 0, 0.65);
     }
 
     .post-filename {
@@ -267,14 +336,11 @@ function getVerStyles() {
       border-left: 3px solid #8b5cf6;
     }
 
-    /* Bottom Navigation Bar Fija */
+    /* Bottom Navigation Bar */
     .bottom-nav {
-      position: fixed;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
+      position: relative;
+      flex-shrink: 0;
       width: 100%;
-      max-width: 480px;
       background: rgba(0, 0, 0, 0.94);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
