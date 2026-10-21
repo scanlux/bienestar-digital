@@ -44,6 +44,17 @@ ${styles}
         </div>
         <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
       </div>
+      <!-- Barra de Busqueda Superior para NLP con Boton de Envio -->
+      <div class="top-search-container" id="topSearchNlpContainer" style="display:none;">
+        <div class="top-search-group">
+          <input type="text" id="nlpTopSearchInput" class="top-search-input" placeholder="Buscar aplicacion o paquete..." oninput="onNlpTopSearchInput(this.value)" onkeydown="if(event.key==='Enter') executeNlpSearch()" />
+        </div>
+        <button type="button" id="btnClearNlpSearch" class="btn-clear-search" onclick="clearNlpTopSearch()" title="Limpiar busqueda" style="display:none;">&times;</button>
+        <button type="button" class="btn-nlp-search-submit" onclick="executeNlpSearch()" title="Enviar busqueda">
+          ${ICONS.search}
+          <span>Buscar</span>
+        </button>
+      </div>
       <div class="top-bar-title" id="topBarTitle" style="display:none; font-weight:800; font-size:1.05rem; color:#ffffff; padding-left:4px;">Ver Media</div>
       <div class="top-bar-right">
         <a href="/expl/ver/logout" title="Cerrar Sesion" style="color:#ef4444; display:flex; align-items:center; text-decoration:none; padding:4px;">${ICONS.logout}</a>

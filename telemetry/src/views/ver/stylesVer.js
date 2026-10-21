@@ -188,6 +188,36 @@ function getVerStyles() {
       flex-shrink: 0;
     }
 
+    .btn-nlp-search-submit {
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn-nlp-search-submit:hover {
+      background: #1d4ed8;
+    }
+
+    .btn-nlp-search-submit:active {
+      transform: scale(0.92);
+      background: #1e40af;
+    }
+
+    .btn-nlp-search-submit svg {
+      width: 14px;
+      height: 14px;
+    }
+
     .top-bar-right {
       display: flex;
       align-items: center;
@@ -1013,10 +1043,27 @@ function getVerStyles() {
 
     /* Contacts View & Call Analytics Styles */
     .contacts-container {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
       padding: 14px 12px 30px 12px;
       display: flex;
       flex-direction: column;
       gap: 12px;
+    }
+
+    .explore-tags-container {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
+      padding: 16px 14px 30px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
 
     .contacts-search-input {
@@ -1162,6 +1209,11 @@ function getVerStyles() {
 
     /* NLP Dataset View Styles (Replica Exacta de Screenshot) */
     .nlp-container {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
       padding: 14px 12px 30px 12px;
       display: flex;
       flex-direction: column;
@@ -1227,10 +1279,16 @@ function getVerStyles() {
       flex-direction: column;
       gap: 10px;
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, transform 0.12s ease;
+      cursor: pointer;
     }
 
     .nlp-app-card:hover {
+      border-color: #38bdf8;
+    }
+
+    .nlp-app-card:active {
+      transform: scale(0.985);
       border-color: #38bdf8;
     }
 
@@ -1325,6 +1383,7 @@ function getVerStyles() {
       align-items: center;
       gap: 5px;
       transition: background 0.15s, transform 0.1s;
+      pointer-events: none;
     }
 
     .nlp-btn-ver-registros:active {

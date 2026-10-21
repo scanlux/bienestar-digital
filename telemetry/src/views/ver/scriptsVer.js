@@ -80,17 +80,24 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (tab === 'explore') document.getElementById('tabExplore').classList.add('active');
 
       const searchContainer = document.getElementById('topSearchContainer');
+      const nlpSearchContainer = document.getElementById('topSearchNlpContainer');
       const barTitle = document.getElementById('topBarTitle');
 
       if (tab === 'feed' || tab === 'favorites') {
         if (searchContainer) searchContainer.style.display = 'flex';
+        if (nlpSearchContainer) nlpSearchContainer.style.display = 'none';
         if (barTitle) barTitle.style.display = 'none';
+      } else if (tab === 'nlp') {
+        if (searchContainer) searchContainer.style.display = 'none';
+        if (nlpSearchContainer) nlpSearchContainer.style.display = 'flex';
+        if (barTitle) barTitle.style.display = 'none';
+        updateNlpTopSearchPlaceholder();
       } else {
         if (searchContainer) searchContainer.style.display = 'none';
+        if (nlpSearchContainer) nlpSearchContainer.style.display = 'none';
         if (barTitle) {
           barTitle.style.display = 'block';
           if (tab === 'contacts') barTitle.textContent = 'Contactos';
-          else if (tab === 'nlp') barTitle.textContent = 'Explorador Dataset NLP';
           else if (tab === 'explore') barTitle.textContent = 'Explorar Etiquetas';
         }
       }
@@ -402,22 +409,64 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         });
     }
 
+    function updateNlpTopSearchPlaceholder() {
+      const input = document.getElementById('nlpTopSearchInput');
+      if (!input) return;
+      if (currentNlpApp) {
+        input.placeholder = 'Buscar texto en ' + currentNlpApp.displayName + '...';
+      } else {
+        input.placeholder = 'Buscar aplicacion o paquete...';
+      }
+    }
+
+    function executeNlpSearch() {
+      const input = document.getElementById('nlpTopSearchInput');
+      const q = input ? input.value : '';
+      const clearBtn = document.getElementById('btnClearNlpSearch');
+      if (clearBtn) clearBtn.style.display = q.trim() ? 'block' : 'none';
+
+      if (currentNlpApp) {
+        handleNlpRecordSearch(q);
+      } else {
+        handleNlpAppSearch(q);
+      }
+    }
+
+    function onNlpTopSearchInput(val) {
+      const clearBtn = document.getElementById('btnClearNlpSearch');
+      if (clearBtn) clearBtn.style.display = (val || '').trim() ? 'block' : 'none';
+      if (currentNlpApp) {
+        handleNlpRecordSearch(val);
+      } else {
+        handleNlpAppSearch(val);
+      }
+    }
+
+    function clearNlpTopSearch() {
+      const input = document.getElementById('nlpTopSearchInput');
+      if (input) input.value = '';
+      const clearBtn = document.getElementById('btnClearNlpSearch');
+      if (clearBtn) clearBtn.style.display = 'none';
+      if (currentNlpApp) {
+        handleNlpRecordSearch('');
+      } else {
+        handleNlpAppSearch('');
+      }
+    }
+
     function paintNlpAppsTab(container, data) {
       const apps = data.apps || [];
       let html = '<div class="nlp-container">';
-      html += '<div class="nlp-search-box">';
-      html += '<div class="nlp-search-input-wrap">' +
-        '<span class="search-icon">' + SVG_ICONS.search + '</span>' +
-        '<input type="text" id="nlpAppSearchInput" class="nlp-search-input" placeholder="Buscar aplicacion por nombre o paquete..." oninput="handleNlpAppSearch(this.value)" />' +
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+        '<span class="nlp-count-badge" id="nlpCountBadge">Aplicaciones: ' + (data.totalApps || apps.length) + '</span>' +
       '</div>';
-      html += '<span class="nlp-count-badge" id="nlpCountBadge">Aplicaciones: ' + (data.totalApps || apps.length) + '</span>';
-      html += '</div>';
 
       html += '<div id="nlpAppsList" style="display:flex; flex-direction:column; gap:12px;">';
       html += renderNlpAppCardsList(apps);
       html += '</div></div>';
 
       container.innerHTML = html;
+      updateNlpTopSearchPlaceholder();
     }
 
     function renderNlpAppCardsList(appsList) {
@@ -430,7 +479,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         const safePkg = encodeURIComponent(a.packageName || 'unknown');
         const safeName = encodeURIComponent(a.displayName || 'Aplicacion');
 
-        return '<div class="nlp-app-card">' +
+        return '<div class="nlp-app-card" onclick="openNlpAppRecords(\\'' + safePkg + '\\', \\'' + safeName + '\\')">' +
           '<div class="nlp-card-header">' +
             '<div class="nlp-app-title-box">' +
               '<span class="nlp-app-icon">' + iconHtml + '</span>' +
@@ -443,7 +492,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             '<span class="nlp-activity-text">Ultima actividad: <strong>' + (a.lastActivityFormatted || 'Reciente') + '</strong></span>' +
           '</div>' +
           '<div class="nlp-card-footer">' +
-            '<button type="button" class="nlp-btn-ver-registros" onclick="openNlpAppRecords(\\'' + safePkg + '\\', \\'' + safeName + '\\')">' +
+            '<button type="button" class="nlp-btn-ver-registros">' +
               'Ver Registros &rarr;' +
             '</button>' +
           '</div>' +
@@ -483,12 +532,25 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         : { packageName: pkg, displayName: name, count: 0 };
 
       currentNlpApp = app;
+
+      const topInput = document.getElementById('nlpTopSearchInput');
+      if (topInput) topInput.value = '';
+      const clearBtn = document.getElementById('btnClearNlpSearch');
+      if (clearBtn) clearBtn.style.display = 'none';
+
       const container = document.getElementById('mainContent');
       if (container) renderNlpRecordsView(container, app);
     }
 
     function backToNlpApps() {
       currentNlpApp = null;
+      const topInput = document.getElementById('nlpTopSearchInput');
+      if (topInput) topInput.value = '';
+      const clearBtn = document.getElementById('btnClearNlpSearch');
+      if (clearBtn) clearBtn.style.display = 'none';
+
+      updateNlpTopSearchPlaceholder();
+
       const container = document.getElementById('mainContent');
       if (container && cachedNlpAppsData) {
         paintNlpAppsTab(container, cachedNlpAppsData);
@@ -513,11 +575,6 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         '</div>' +
       '</div>';
 
-      html += '<div class="nlp-search-input-wrap">' +
-        '<span class="search-icon">' + SVG_ICONS.search + '</span>' +
-        '<input type="text" id="nlpRecordSearchInput" class="nlp-search-input" placeholder="Buscar texto escrito en ' + app.displayName + '..." oninput="handleNlpRecordSearch(this.value)" />' +
-      '</div>';
-
       html += '<div id="nlpRecordsItems" style="display:flex; flex-direction:column; gap:10px;">' +
         '<div style="padding:30px 20px; text-align:center;">' +
           '<div class="video-spinner" style="display:block; margin:0 auto 12px auto;"></div>' +
@@ -526,6 +583,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       '</div></div>';
 
       container.innerHTML = html;
+      updateNlpTopSearchPlaceholder();
 
       if (cachedNlpRecordsMap[pkg]) {
         paintNlpRecordItems(cachedNlpRecordsMap[pkg]);
@@ -581,13 +639,16 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       const pkg = currentNlpApp.packageName;
       const allRecords = cachedNlpRecordsMap[pkg] || [];
       const q = (query || '').trim().toLowerCase();
+      const badgeEl = document.getElementById('recordCountBadge');
 
       if (!q) {
+        if (badgeEl) badgeEl.textContent = (currentNlpApp.count || allRecords.length) + ' escritos';
         paintNlpRecordItems(allRecords);
         return;
       }
 
       const filtered = allRecords.filter(r => (r.text || '').toLowerCase().includes(q));
+      if (badgeEl) badgeEl.textContent = filtered.length + ' encontrados';
       paintNlpRecordItems(filtered);
     }
 
@@ -1527,7 +1588,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     }
 
     function renderExploreTagsTab(container) {
-      container.innerHTML = '<div style="padding:16px;"><div id="tagsList">Cargando catalogo de etiquetas...</div><div id="tagResults" style="margin-top:18px;"></div></div>';
+      container.innerHTML = '<div class="explore-tags-container"><div id="tagsList">Cargando catalogo de etiquetas...</div><div id="tagResults" style="margin-top:18px;"></div></div>';
 
       fetch('/api/ver/tags')
         .then(res => res.json())
