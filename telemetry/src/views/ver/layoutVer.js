@@ -29,12 +29,18 @@ ${styles}
     <!-- Top Bar Sticky con Buscador por Fecha y Tag -->
     <header class="top-bar">
       <div class="top-search-container">
+        <button type="button" class="btn-search-trigger" onclick="executeTopSearch()" title="Iniciar busqueda">
+          ${ICONS.search}
+        </button>
         <div class="top-search-group">
-          <span class="search-icon">${ICONS.tag}</span>
-          <input type="text" id="topSearchTag" class="top-search-input" placeholder="Buscar tag o texto..." oninput="handleTopSearchInput()" />
+          <input type="text" id="topSearchTag" class="top-search-input" placeholder="Buscar por tag o texto..." onkeydown="if(event.key==='Enter') executeTopSearch()" />
         </div>
+        <div id="activeDateBadgeContainer" style="display:none;"></div>
         <div class="top-date-group">
-          <input type="date" id="topSearchDate" class="top-date-input" title="Filtrar por fecha" onchange="handleTopSearchInput()" />
+          <input type="date" id="topSearchDate" class="top-date-hidden" onchange="onDateSelected(this.value)" />
+          <button type="button" class="btn-calendar-trigger" onclick="openCalendarPicker()" title="Buscar por calendario">
+            ${ICONS.calendar}
+          </button>
         </div>
         <button type="button" id="btnClearTopSearch" class="btn-clear-search" onclick="clearTopSearch()" title="Limpiar busqueda" style="display:none;">✕</button>
       </div>

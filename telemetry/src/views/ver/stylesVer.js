@@ -77,12 +77,22 @@ function getVerStyles() {
       gap: 6px;
     }
 
-    .search-icon {
-      color: #94a3b8;
+    .btn-search-trigger {
+      background: transparent;
+      border: none;
+      color: #38bdf8;
       display: flex;
       align-items: center;
       justify-content: center;
+      cursor: pointer;
+      padding: 2px 4px;
       flex-shrink: 0;
+      transition: transform 0.15s ease, color 0.15s ease;
+    }
+
+    .btn-search-trigger:active {
+      transform: scale(0.88);
+      color: #7dd3fc;
     }
 
     .top-search-input {
@@ -90,7 +100,7 @@ function getVerStyles() {
       background: transparent;
       border: none;
       color: #f8fafc;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       outline: none;
       padding: 2px 0;
     }
@@ -100,31 +110,75 @@ function getVerStyles() {
       font-size: 0.78rem;
     }
 
-    .top-date-group {
-      display: flex;
+    .active-date-badge {
+      background: rgba(56, 189, 248, 0.16);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+      font-size: 0.72rem;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 2px 8px;
+      display: inline-flex;
       align-items: center;
+      gap: 5px;
+      white-space: nowrap;
       flex-shrink: 0;
     }
 
-    .top-date-input {
-      background: #1e293b;
-      border: 1px solid #475569;
-      border-radius: 6px;
-      color: #e2e8f0;
-      font-size: 0.72rem;
-      padding: 2px 4px;
-      outline: none;
+    .active-date-badge .badge-remove {
       cursor: pointer;
-      max-width: 95px;
-      color-scheme: dark;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      padding-left: 2px;
+    }
+
+    .active-date-badge .badge-remove:hover {
+      color: #f87171;
+    }
+
+    .top-date-group {
+      display: flex;
+      align-items: center;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .top-date-hidden {
+      position: absolute;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .btn-calendar-trigger {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 999px;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+      padding: 0;
+    }
+
+    .btn-calendar-trigger:active {
+      transform: scale(0.9);
+      background: #334155;
+      color: #38bdf8;
     }
 
     .btn-clear-search {
       background: #334155;
       border: none;
       color: #f1f5f9;
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       font-size: 0.75rem;
       cursor: pointer;
