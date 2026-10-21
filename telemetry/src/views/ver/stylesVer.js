@@ -1010,9 +1010,11 @@ function getVerStyles() {
       -webkit-backdrop-filter: blur(8px);
       display: none;
       justify-content: center;
-      align-items: center;
+      align-items: flex-start;
       padding: 16px;
+      padding-top: 55px;
       z-index: 200;
+      overflow-y: auto;
     }
 
     .modal-overlay.active {
@@ -1025,12 +1027,11 @@ function getVerStyles() {
       background: #111827;
       border-radius: 18px;
       border: 1px solid #374151;
-      padding: 22px 18px 24px 18px;
+      padding: 18px 16px 20px 16px;
       box-shadow: 0 12px 35px rgba(0, 0, 0, 0.85);
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      margin-bottom: 22vh;
+      gap: 12px;
       animation: popInModal 0.2s ease-out;
     }
 

@@ -110,7 +110,6 @@ ${styles}
           <h3 style="font-size:1rem; font-weight:700; color:#fff;">Catalogar Contenido</h3>
           <button type="button" onclick="closeTagModal()" style="background:transparent; border:none; color:#9ca3af; font-size:1.2rem; cursor:pointer;">&times;</button>
         </div>
-        <p style="font-size:0.8rem; color:#9ca3af;" id="tagModalFilename">archivo.mp4</p>
         
         <div>
           <label style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:#9ca3af; display:block; margin-bottom:6px;">

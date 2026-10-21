@@ -1495,11 +1495,8 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     function openTagModal(mediaId, nameEnc) {
       activeTagMediaId = mediaId;
       const modal = document.getElementById('tagModalOverlay');
-      const filenameLabel = document.getElementById('tagModalFilename');
       const tagInput = document.getElementById('tagInput');
       const notesInput = document.getElementById('notesInput');
-
-      if (filenameLabel) filenameLabel.textContent = decodeURIComponent(nameEnc);
 
       // Pre-cargar valores actuales
       const postEl = document.getElementById('post_' + mediaId);
