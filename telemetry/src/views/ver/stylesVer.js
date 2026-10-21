@@ -309,6 +309,24 @@ function getVerStyles() {
       white-space: nowrap;
     }
 
+    .app-source-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 2px 8px;
+      border-radius: 6px;
+      width: fit-content;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .post-tags-container {
       display: flex;
       flex-wrap: wrap;

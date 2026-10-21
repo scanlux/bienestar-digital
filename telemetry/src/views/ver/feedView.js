@@ -2,6 +2,7 @@
  * Vista de Feed Principal para Ver Media (/expl/ver)
  */
 const { ICONS } = require('./icons');
+const { getHumanReadableSource } = require('../../services/mediaRecommendationService');
 
 function renderVerFeedView({ items = [] }) {
   if (items.length === 0) {
@@ -47,6 +48,7 @@ function renderVerFeedView({ items = [] }) {
     }
 
     const typeIcon = item.type === 'video' ? ICONS.video : item.type === 'image' ? ICONS.image : ICONS.audio;
+    const appSource = item.appSource || getHumanReadableSource(item.path);
 
     return `
       <article class="post-card" id="post_${item.mediaId}" data-media-id="${item.mediaId}">
@@ -77,7 +79,10 @@ function renderVerFeedView({ items = [] }) {
         </div>
 
         <div class="post-details">
-          <div class="post-filename">${item.path}</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="app-source-badge">${appSource}</span>
+            <span style="font-size:0.75rem; color:#9ca3af; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</span>
+          </div>
           ${notes ? `<div class="post-notes" id="notes_${item.mediaId}">${notes}</div>` : `<div class="post-notes" id="notes_${item.mediaId}" style="display:none;"></div>`}
           <div class="post-tags-container" id="tags_${item.mediaId}">
             ${tagsList.map(t => `<span class="tag-badge">#${t}</span>`).join('')}

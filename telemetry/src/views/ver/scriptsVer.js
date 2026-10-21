@@ -231,11 +231,36 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       download: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>'
     };
 
+    function getClientReadableSource(remotePath) {
+      if (!remotePath) return 'Almacenamiento';
+      const p = remotePath.replace(/\\/g, '/');
+      if (p.includes('com.whatsapp') || p.includes('WhatsApp')) {
+        if (p.includes('Voice Notes')) return 'Nota de Voz WhatsApp';
+        if (p.includes('WhatsApp Audio')) return 'Audio WhatsApp';
+        if (p.includes('WhatsApp Video')) return 'Video WhatsApp';
+        if (p.includes('WhatsApp Images') || p.includes('WhatsApp Animated Gifs')) return 'Foto WhatsApp';
+        return 'WhatsApp';
+      }
+      if (p.includes('DCIM/Camera') || p.includes('/Camera/')) return 'Camara';
+      if (p.includes('Screenshots')) return 'Captura de Pantalla';
+      if (p.includes('Telegram')) return 'Telegram';
+      if (p.includes('Download')) return 'Descargas';
+      if (p.includes('Instagram')) return 'Instagram';
+      if (p.includes('Facebook')) return 'Facebook';
+      if (p.includes('TikTok')) return 'TikTok';
+      if (p.includes('Pictures')) return 'Imagenes';
+      if (p.includes('Movies')) return 'Videos';
+      if (p.includes('Music')) return 'Musica';
+      const parts = p.split('/').filter(Boolean);
+      return parts.length >= 2 ? parts[parts.length - 2] : 'Dispositivo';
+    }
+
     function renderPostCardHtml(item) {
       const isFav = Boolean(item.isFavorite);
       const tagsList = Array.isArray(item.tags) ? item.tags : [];
       const hasTags = tagsList.length > 0;
       const notes = item.notes || '';
+      const appSource = item.appSource || (item.path ? getClientReadableSource(item.path) : 'Dispositivo');
       const formattedDate = new Date(item.lastModified || Date.now()).toLocaleDateString('es-CO', {
         day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
       });
@@ -247,13 +272,6 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
             SVG_ICONS.soundMuted +
           '</button>';
       } else if (item.type === 'image') {
-        mediaHtml = '<img class="post-img" loading="lazy" src="' + item.contentUrl + '" alt="' + item.name + '" onclick="markMediaSeen(\\'' + item.mediaId + '\\')" />';
-      } else if (item.type === 'audio') {
-        mediaHtml = '<div class="post-audio-container">' +
-          '<div class="audio-icon-box" style="display:flex; justify-content:center; align-items:center;">' + SVG_ICONS.audio + '</div>' +
-          '<audio class="post-audio" controls src="' + item.contentUrl + '" onplay="markMediaSeen(\\'' + item.mediaId + '\\')"></audio>' +
-        '</div>';
-      }
         mediaHtml = '<img class="post-img" loading="lazy" src="' + item.contentUrl + '" alt="' + item.name + '" onclick="markMediaSeen(\\'' + item.mediaId + '\\')" />';
       } else if (item.type === 'audio') {
         mediaHtml = '<div class="post-audio-container">' +
@@ -290,7 +308,10 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         '</div>' +
 
         '<div class="post-details">' +
-          '<div class="post-filename">' + item.path + '</div>' +
+          '<div style="display:flex; align-items:center; gap:8px;">' +
+            '<span class="app-source-badge">' + appSource + '</span>' +
+            '<span style="font-size:0.75rem; color:#9ca3af; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + item.name + '</span>' +
+          '</div>' +
           (notes ? '<div class="post-notes" id="notes_' + item.mediaId + '">' + notes + '</div>' : '<div class="post-notes" id="notes_' + item.mediaId + '" style="display:none;"></div>') +
           '<div class="post-tags-container" id="tags_' + item.mediaId + '">' +
             tagsList.map(t => '<span class="tag-badge">#' + t + '</span>').join('') +

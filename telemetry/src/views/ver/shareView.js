@@ -4,6 +4,7 @@
  */
 const { getVerStyles } = require('./stylesVer');
 const { ICONS } = require('./icons');
+const { getHumanReadableSource } = require('../../services/mediaRecommendationService');
 
 function renderVerShareView({ item, hostUrl = 'https://trendy-telemetry.sytes.net' }) {
   const styles = getVerStyles();
@@ -78,6 +79,7 @@ function renderVerShareView({ item, hostUrl = 'https://trendy-telemetry.sytes.ne
   const typeIcon = isVideo ? ICONS.video : isImage ? ICONS.image : ICONS.audio;
   const tagsList = Array.isArray(item.tags) ? item.tags : [];
   const notes = item.notes || '';
+  const appSource = item.appSource || getHumanReadableSource(item.path);
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -149,7 +151,10 @@ ${styles}
         </div>
 
         <div class="post-details" style="padding: 0 14px 20px;">
-          <div class="post-filename">${item.path}</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="app-source-badge">${appSource}</span>
+            <span style="font-size:0.75rem; color:#9ca3af; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</span>
+          </div>
           ${notes ? `<div class="post-notes">${notes}</div>` : ''}
           ${tagsList.length > 0 ? `
             <div class="post-tags-container">

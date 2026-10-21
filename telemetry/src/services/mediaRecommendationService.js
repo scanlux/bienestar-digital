@@ -15,6 +15,44 @@ function getMediaType(filename) {
   return 'other';
 }
 
+/**
+ * Normaliza la ruta interna del dispositivo a un nombre legible de aplicación o carpeta
+ */
+function getHumanReadableSource(remotePath) {
+  if (!remotePath) return 'Almacenamiento';
+  const p = remotePath.replace(/\\/g, '/');
+
+  if (p.includes('com.whatsapp') || p.includes('WhatsApp')) {
+    if (p.includes('WhatsApp Voice Notes') || p.includes('Voice Notes')) return 'Nota de Voz WhatsApp';
+    if (p.includes('WhatsApp Audio')) return 'Audio WhatsApp';
+    if (p.includes('WhatsApp Video')) return 'Video WhatsApp';
+    if (p.includes('WhatsApp Images') || p.includes('WhatsApp Animated Gifs')) return 'Foto WhatsApp';
+    if (p.includes('WhatsApp Documents')) return 'Documento WhatsApp';
+    return 'WhatsApp';
+  }
+  if (p.includes('DCIM/Camera') || p.includes('/Camera/')) return 'Camara';
+  if (p.includes('Screenshots')) return 'Captura de Pantalla';
+  if (p.includes('org.telegram.messenger') || p.includes('/Telegram/')) return 'Telegram';
+  if (p.includes('/Instagram/')) return 'Instagram';
+  if (p.includes('/Facebook/')) return 'Facebook';
+  if (p.includes('/TikTok/')) return 'TikTok';
+  if (p.includes('/Download/')) return 'Descargas';
+  if (p.includes('/DCIM/')) return 'Galeria (DCIM)';
+  if (p.includes('/Pictures/')) return 'Imagenes';
+  if (p.includes('/Movies/')) return 'Videos';
+  if (p.includes('/Music/')) return 'Musica';
+
+  // Fallback: extraer la carpeta contenedora inmediata
+  const parts = p.split('/').filter(Boolean);
+  if (parts.length >= 2) {
+    const parent = parts[parts.length - 2];
+    if (parent && !parent.startsWith('0') && parent !== 'emulated' && parent !== 'storage') {
+      return parent;
+    }
+  }
+  return 'Dispositivo';
+}
+
 function getMediaId(remotePath, deviceId) {
   return crypto.createHash('md5').update(`${deviceId}:${remotePath}`).digest('hex').substring(0, 16);
 }
@@ -208,11 +246,13 @@ function getAllDownloadedMedia(safeDeviceId) {
     const mTags = tagsData[mediaId] || { tags: [], notes: '' };
     const isFav = Boolean(favorites[mediaId]);
     const suggestedCount = history.suggestedCounts[mediaId] || 0;
+    const appSource = getHumanReadableSource(normRemote);
 
     mediaList.push({
       mediaId,
       deviceId: safeDeviceId,
       path: normRemote,
+      appSource,
       name: filename,
       type,
       size,
@@ -423,6 +463,7 @@ function getMediaById(mediaId, optionalDeviceId = null) {
 module.exports = {
   getMediaId,
   getMediaType,
+  getHumanReadableSource,
   getAllDownloadedMedia,
   getRecommendedFeedBlock,
   recordMediaSeen,
