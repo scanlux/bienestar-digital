@@ -64,7 +64,7 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
     }
 
     function switchMainTab(tab) {
-      if (currentMainTab === tab) return;
+      const isSameTab = (currentMainTab === tab);
       currentMainTab = tab;
 
       if (currentlyPlayingVideo) {
@@ -99,7 +99,6 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
         if (contactsSearchContainer) contactsSearchContainer.style.display = 'none';
         if (nlpSearchContainer) nlpSearchContainer.style.display = 'flex';
         if (barTitle) barTitle.style.display = 'none';
-        updateNlpTopSearchPlaceholder();
       } else {
         if (searchContainer) searchContainer.style.display = 'none';
         if (contactsSearchContainer) contactsSearchContainer.style.display = 'none';
@@ -114,6 +113,9 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
       if (!container) return;
 
       if (tab === 'feed') {
+        if (isSameTab) {
+          clearTopSearch();
+        }
         if (isSearchActive) {
           executeTopSearch();
         } else {
@@ -123,12 +125,27 @@ function getVerClientScript({ deviceId, initialItems = [] }) {
           setupIntersectionObserver();
           setupVideoAutoplayObserver();
           fetchNextFeedBlock();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }
       } else if (tab === 'favorites') {
         renderFavoritesTab(container);
       } else if (tab === 'contacts') {
+        if (isSameTab) {
+          clearContactsTopSearch();
+          cachedContactsData = null;
+        }
         renderContactsTab(container);
       } else if (tab === 'nlp') {
+        // Al pulsar NLP (especialmente si ya estabamos dentro de un paquete o busqueda)
+        // se resetea la vista anidada para volver a la lista general de aplicaciones
+        currentNlpApp = null;
+        currentNlpHighlightTerm = '';
+        activeNlpSearchQuery = '';
+        const nlpInput = document.getElementById('nlpTopSearchInput');
+        if (nlpInput) nlpInput.value = '';
+        const btnClearNlp = document.getElementById('btnClearNlpSearch');
+        if (btnClearNlp) btnClearNlp.style.display = 'none';
+        updateNlpTopSearchPlaceholder();
         renderNlpTab(container);
       } else if (tab === 'explore') {
         renderExploreTagsTab(container);

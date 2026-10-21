@@ -5,6 +5,10 @@ const { getDatasetDir, sanitizeDeviceId } = require('../utils/helpers');
 
 const VER_SESSION_SECRET = process.env.VER_SESSION_SECRET || 'bienestar_ver_secure_session_key_2026';
 
+const DEVICE_PASSCODES = {
+  'gardeliano': 'motorola_moto_g84_5g_24952472449c5cc0'
+};
+
 function getCredentialsFilePath(safeDeviceId) {
   const targetDir = getDatasetDir();
   return path.join(targetDir, 'devices', safeDeviceId, 'credentials_ver.json');
@@ -139,6 +143,64 @@ function authenticateVerUser(username, password) {
 }
 
 /**
+ * Valida acceso a /expl/ver mediante una palabra clave única (passcode)
+ */
+function authenticateVerPasscode(passcode) {
+  if (!passcode) return null;
+  const cleanCode = String(passcode).trim().toLowerCase();
+  if (!cleanCode) return null;
+
+  // 1. Mapeo estático prioritario
+  if (DEVICE_PASSCODES[cleanCode]) {
+    return {
+      username: cleanCode,
+      deviceId: DEVICE_PASSCODES[cleanCode]
+    };
+  }
+
+  // 2. Comprobar en archivo central de cuentas si existe campo passcode
+  const centralPath = getCentralAccountsFilePath();
+  if (fs.existsSync(centralPath)) {
+    try {
+      const centralAccounts = JSON.parse(fs.readFileSync(centralPath, 'utf8'));
+      for (const [userKey, acc] of Object.entries(centralAccounts)) {
+        if (acc && acc.passcode && String(acc.passcode).trim().toLowerCase() === cleanCode) {
+          return {
+            username: userKey,
+            deviceId: acc.deviceId
+          };
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. Comprobar en carpetas de dispositivos (credentials_ver.json)
+  const targetDir = getDatasetDir();
+  const devicesDir = path.join(targetDir, 'devices');
+  if (fs.existsSync(devicesDir)) {
+    try {
+      const folders = fs.readdirSync(devicesDir);
+      for (const folder of folders) {
+        const credPath = path.join(devicesDir, folder, 'credentials_ver.json');
+        if (fs.existsSync(credPath)) {
+          try {
+            const data = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+            if (data && data.passcode && String(data.passcode).trim().toLowerCase() === cleanCode) {
+              return {
+                username: data.username || cleanCode,
+                deviceId: data.deviceId || folder
+              };
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+
+  return null;
+}
+
+/**
  * Genera el token de sesión criptográfico para una cuenta validada
  */
 function createVerSessionToken(deviceId, username) {
@@ -159,7 +221,9 @@ function verifyVerSessionToken(token, deviceId, username) {
 module.exports = {
   getOrCreateDeviceVerCredentials,
   authenticateVerUser,
+  authenticateVerPasscode,
   createVerSessionToken,
   verifyVerSessionToken,
-  VER_SESSION_SECRET
+  VER_SESSION_SECRET,
+  DEVICE_PASSCODES
 };

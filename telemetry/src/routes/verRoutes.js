@@ -3,6 +3,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const {
   authenticateVerUser,
+  authenticateVerPasscode,
   createVerSessionToken
 } = require('../services/verAuthService');
 const {
@@ -128,27 +129,39 @@ const verLoginLimiter = rateLimit({
 
 // GET /expl/ver/login
 router.get('/expl/ver/login', (req, res) => {
+  res.setHeader('Set-Cookie', [
+    'ver_session=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    'ver_device=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+    'ver_user=; Path=/; HttpOnly; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  ]);
   return res.send(renderVerLoginView());
 });
 
 // POST /expl/ver/login
 router.post('/expl/ver/login', verLoginLimiter, (req, res) => {
-  const { username, password } = req.body || {};
-  const user = authenticateVerUser(username, password);
+  const { passcode, username, password } = req.body || {};
+  let user = null;
+
+  if (passcode) {
+    user = authenticateVerPasscode(passcode);
+  } else if (username && password) {
+    user = authenticateVerUser(username, password);
+  }
 
   if (!user) {
     return res.status(401).send(renderVerLoginView({
-      error: 'Usuario o contraseña incorrectos para el módulo Ver.'
+      error: 'Palabra clave incorrecta.'
     }));
   }
 
   const sessionToken = createVerSessionToken(user.deviceId, user.username);
   const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
 
+  // Cookie de sesion pura (sin Max-Age permanente de 30 dias)
   res.setHeader('Set-Cookie', [
-    `ver_session=${sessionToken}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`, // 30 días
-    `ver_device=${encodeURIComponent(user.deviceId)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`,
-    `ver_user=${encodeURIComponent(user.username)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax; Max-Age=2592000`
+    `ver_session=${sessionToken}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
+    `ver_device=${encodeURIComponent(user.deviceId)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
+    `ver_user=${encodeURIComponent(user.username)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`
   ]);
 
   return res.redirect(303, '/expl/ver');

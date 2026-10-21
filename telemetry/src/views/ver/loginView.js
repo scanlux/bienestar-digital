@@ -152,18 +152,14 @@ function renderVerLoginView({ error = null } = {}) {
 
     <form method="POST" action="/expl/ver/login">
       <div class="input-group">
-        <label for="username">Usuario</label>
-        <input type="text" id="username" name="username" placeholder="ver_device..." required autofocus autocomplete="username" />
+        <label for="passcode">Palabra Clave</label>
+        <input type="password" id="passcode" name="passcode" placeholder="Introduce la palabra clave..." required autofocus autocomplete="off" />
       </div>
-      <div class="input-group">
-        <label for="password">Contraseña</label>
-        <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password" />
-      </div>
-      <button type="submit" class="btn-submit">Ingresar al Feed</button>
+      <button type="submit" class="btn-submit">Acceder al Feed</button>
     </form>
 
     <div class="footer-note">
-      Las credenciales se generan automáticamente al vincular un teléfono en el ecosistema de telemetría.
+      Ingresa la palabra clave autorizada para desbloquear los contenidos multimedia.
     </div>
   </div>
 </body>
