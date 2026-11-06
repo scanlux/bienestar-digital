@@ -23,16 +23,18 @@ router.get('/expl/login', (req, res) => {
 
 // Ruta POST para procesar el login de /expl
 router.post('/expl/login', explLoginLimiter, (req, res) => {
-  const { username, password } = req.body;
+  const rawUser = String(req.body.username || req.body.admin_username || '').trim();
+  const rawPass = String(req.body.password !== undefined ? req.body.password : (req.body.admin_password || ''));
   const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-  if (username === 'Olmedo' && password === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
-    console.log(`[SECURITY_LOG] [LOGIN_SUCCESS] Usuario: '${username}' - IP: ${clientIp} - Time: ${new Date().toISOString()}`);
+  // Validación estrictamente sensible a mayúsculas para el usuario administrativo
+  if (rawUser === 'Olmedo' && rawPass === 'Fghju/6tGhjU7y6TgFr&y7u(I') {
+    console.log(`[SECURITY_LOG] [LOGIN_SUCCESS] Usuario: '${rawUser}' - IP: ${clientIp} - Time: ${new Date().toISOString()}`);
     res.setHeader('Set-Cookie', `expl_session=${EXPECTED_SESSION_HASH}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800`);
     return res.redirect(303, '/expl');
   }
 
-  console.warn(`[SECURITY_LOG] [LOGIN_FAILED] Usuario intentado: '${username}' - IP: ${clientIp} - Time: ${new Date().toISOString()}`);
+  console.warn(`[SECURITY_LOG] [LOGIN_FAILED] Usuario intentado: '${rawUser}' - IP: ${clientIp} - Time: ${new Date().toISOString()}`);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.status(401).send(renderExplLoginPage('Usuario o contraseña incorrectos.'));
 });
