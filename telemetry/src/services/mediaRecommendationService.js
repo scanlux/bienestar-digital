@@ -309,12 +309,12 @@ function shuffleArray(array) {
 }
 
 /**
- * Algoritmo de recomendación por bloques de 10 posts:
- * - Posiciones 1, 3, 4: Medios más recientes con suggestedCount <= 3.
- * - Posición 2 (fila 2): Obligatoriamente el último medio recientemente visto.
- * - Posiciones 5 a 7: 3 medios con suggestedCount < 5 elegidos aleatoriamente.
- * - Posiciones 8 a 10: 3 medios del resto del catálogo.
- * - Barajado aleatorio estricto del sub-bloque de posiciones 5 a 10 antes de retornar.
+ * Algoritmo de recomendación dinámico por bloques de 10 posts:
+ * - Emplea umbrales dinámicos adaptativos (mínimo conteo relativo) para evitar saturación.
+ * - Partición A (Filas 1, 3, 4): Medios recientes con menor frecuencia de sugerencia (con barajado ponderado).
+ * - Fila 2: Ancla rotativa (último medio visto si no está fatigado, o favorito/descubrimiento fresco).
+ * - Particiones B y C (Filas 5 a 10): Muestreo balanceado ponderado por menor conteo en todo el catálogo y barajado Fisher-Yates.
+ * - Rutina de atenuación (decay) para conservar frescura perpetua a largo plazo.
  */
 function getRecommendedFeedBlock(safeDeviceId, options = {}) {
   const allMedia = getAllDownloadedMedia(safeDeviceId);
@@ -327,39 +327,76 @@ function getRecommendedFeedBlock(safeDeviceId, options = {}) {
   }
 
   const history = getViewHistory(safeDeviceId);
+  if (!history.suggestedCounts) history.suggestedCounts = {};
+
+  // Rutina de amortiguamiento (Decay): Si el promedio de sugerencias supera 25, restamos una base para mantener contraste
+  const countValues = Object.values(history.suggestedCounts);
+  if (countValues.length > 50) {
+    const minGlobal = Math.min(...countValues);
+    if (minGlobal >= 10) {
+      const reduction = Math.floor(minGlobal * 0.7);
+      for (const k of Object.keys(history.suggestedCounts)) {
+        history.suggestedCounts[k] = Math.max(0, history.suggestedCounts[k] - reduction);
+      }
+      // Actualizar conteos en allMedia
+      allMedia.forEach(m => {
+        m.suggestedCount = history.suggestedCounts[m.mediaId] || 0;
+      });
+    }
+  }
+
   const mediaMap = new Map(allMedia.map(m => [m.mediaId, m]));
   const usedMediaIds = new Set(options.excludeMediaIds || []);
+  const favorites = getFavorites(safeDeviceId);
+  const favList = Object.values(favorites).map(f => mediaMap.get(f.mediaId)).filter(Boolean);
 
-  // 1. Determinar el "último más reciente visto" para la Fila 2 (Posición 2 / índice 1)
-  let lastSeenItem = null;
+  // 1. Determinar el Ancla para la Fila 2 (Posición 2) con Rotación Inteligente
+  let anchorItem = null;
   if (history.lastSeenMediaId && mediaMap.has(history.lastSeenMediaId)) {
-    lastSeenItem = mediaMap.get(history.lastSeenMediaId);
+    const candidate = mediaMap.get(history.lastSeenMediaId);
+    const candidateCount = history.suggestedCounts[candidate.mediaId] || 0;
+    // Si el último visto no ha sido sobre-sugerido en el feed (<= 15 sugerencias) y no está en exclusión
+    if (candidateCount <= 15 && !usedMediaIds.has(candidate.mediaId)) {
+      anchorItem = candidate;
+    }
   }
 
-  // Si no hay último visto o ya fue excluido, tomar el elemento más reciente como ancla
-  if (!lastSeenItem) {
-    lastSeenItem = allMedia[0];
+  // Si no hay ancla o está fatigada, rotar entre un favorito no excluido o un medio destacado
+  if (!anchorItem) {
+    const availableFavs = favList.filter(f => !usedMediaIds.has(f.mediaId));
+    if (availableFavs.length > 0) {
+      anchorItem = availableFavs[Math.floor(Math.random() * availableFavs.length)];
+    }
   }
 
-  // Disponibles sin considerar el ancla de la fila 2
-  const availablePool = allMedia.filter(m => m.mediaId !== lastSeenItem.mediaId && !usedMediaIds.has(m.mediaId));
+  // Si aún no hay ancla, tomar el medio más reciente disponible que no esté excluido
+  if (!anchorItem) {
+    anchorItem = allMedia.find(m => !usedMediaIds.has(m.mediaId)) || allMedia[0];
+  }
 
-  // 2. Partición A: 3 más recientes con suggestedCount <= 3
-  const poolRecentNew = availablePool
-    .filter(m => (m.suggestedCount || 0) <= 3)
-    .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0));
+  // Disponibles sin considerar el ancla
+  const availablePool = allMedia.filter(m => m.mediaId !== anchorItem.mediaId && !usedMediaIds.has(m.mediaId));
 
-  const chosenPartA = poolRecentNew.slice(0, 3);
+  // 2. Partición A: Novedades Dinámicas (Filas 1, 3 y 4)
+  // Tomamos una ventana de los más recientes (hasta 60 elementos)
+  const recentWindow = availablePool.slice(0, Math.min(60, availablePool.length));
+  
+  // Calcular el umbral dinámico de menor conteo en esta ventana
+  const recentCounts = recentWindow.map(m => m.suggestedCount || 0);
+  const minRecentCount = recentCounts.length > 0 ? Math.min(...recentCounts) : 0;
+  const recentThreshold = minRecentCount + 4; // Tolerancia dinámica relativa
+
+  const poolRecentFresh = recentWindow.filter(m => (m.suggestedCount || 0) <= recentThreshold);
+  // Barajar para que no sean siempre exactamente los mismos 3 en orden idéntico
+  const shuffledRecent = shuffleArray(poolRecentFresh.length >= 3 ? poolRecentFresh : recentWindow);
+  const chosenPartA = shuffledRecent.slice(0, 3);
   const chosenPartAIds = new Set(chosenPartA.map(m => m.mediaId));
 
-  // Si no alcanzaron 3 con <= 3 sugerencias, completar con los más recientes disponibles
+  // Si aún faltaran para completar 3, tomar del pool disponible general
   if (chosenPartA.length < 3) {
-    const fallback = availablePool
-      .filter(m => !chosenPartAIds.has(m.mediaId))
-      .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0));
-    
-    while (chosenPartA.length < 3 && fallback.length > 0) {
-      const nextItem = fallback.shift();
+    const fallbackRecent = availablePool.filter(m => !chosenPartAIds.has(m.mediaId));
+    while (chosenPartA.length < 3 && fallbackRecent.length > 0) {
+      const nextItem = fallbackRecent.shift();
       chosenPartA.push(nextItem);
       chosenPartAIds.add(nextItem.mediaId);
     }
@@ -367,12 +404,12 @@ function getRecommendedFeedBlock(safeDeviceId, options = {}) {
 
   // Ensamblar las primeras 4 filas:
   // Fila 1: chosenPartA[0]
-  // Fila 2: lastSeenItem (OBLIGATORIA EN POSICION 2)
+  // Fila 2: anchorItem (Ancla rotativa)
   // Fila 3: chosenPartA[1]
   // Fila 4: chosenPartA[2]
   const firstFour = [];
   if (chosenPartA[0]) firstFour.push(chosenPartA[0]);
-  firstFour.push(lastSeenItem);
+  if (anchorItem) firstFour.push(anchorItem);
   if (chosenPartA[1]) firstFour.push(chosenPartA[1]);
   if (chosenPartA[2]) firstFour.push(chosenPartA[2]);
 
@@ -381,29 +418,24 @@ function getRecommendedFeedBlock(safeDeviceId, options = {}) {
   // 3. Pool restante para posiciones 5 a 10
   const remainingPool = availablePool.filter(m => !usedInFirstFour.has(m.mediaId));
 
-  // Partición B (Filas 5 a 7): aleatorios con suggestedCount < 5
-  const poolLessFive = remainingPool.filter(m => (m.suggestedCount || 0) < 5);
-  const shuffledLessFive = shuffleArray(poolLessFive);
-  const chosenPartB = shuffledLessFive.slice(0, 3);
-  const chosenPartBIds = new Set(chosenPartB.map(m => m.mediaId));
+  // Calcular el mínimo dinámico global en los elementos restantes
+  const remainingCounts = remainingPool.map(m => m.suggestedCount || 0);
+  const minRemainingCount = remainingCounts.length > 0 ? Math.min(...remainingCounts) : 0;
+  const generalThreshold = minRemainingCount + 6; // Rango dinámico amplio
 
-  // Si no alcanzan 3, completar del pool restante
-  if (chosenPartB.length < 3) {
-    const fallback = remainingPool.filter(m => !chosenPartBIds.has(m.mediaId));
-    while (chosenPartB.length < 3 && fallback.length > 0) {
-      const nextItem = fallback.shift();
-      chosenPartB.push(nextItem);
-      chosenPartBIds.add(nextItem.mediaId);
-    }
-  }
+  // Partición B (Filas 5 a 7): Menos sugeridos de forma adaptativa
+  const poolFreshGeneral = remainingPool.filter(m => (m.suggestedCount || 0) <= generalThreshold);
+  const shuffledFresh = shuffleArray(poolFreshGeneral.length >= 3 ? poolFreshGeneral : remainingPool);
+  const chosenPartB = shuffledFresh.slice(0, 3);
+  const chosenPartBIds = new Set(chosenPartB.map(m => m.mediaId));
 
   const usedSoFar = new Set([...usedInFirstFour, ...chosenPartBIds]);
 
-  // Partición C (Filas 8 a 10): 3 restantes de todo el catálogo
+  // Partición C (Filas 8 a 10): 3 restantes variados de todo el catálogo
   const poolRest = remainingPool.filter(m => !usedSoFar.has(m.mediaId));
-  const chosenPartC = shuffleArray(poolRest).slice(0, 3);
+  const chosenPartC = shuffleArray(poolRest.length >= 3 ? poolRest : allMedia.filter(m => !usedSoFar.has(m.mediaId))).slice(0, 3);
 
-  // Si aún faltan elementos para completar 10 y se agotó el pool no usado, reciclar del catálogo general
+  // 4. Sub-bloque 5 a 10: unificar y barajar aleatoriamente con Fisher-Yates
   let backfill = [];
   const totalChosenSoFar = firstFour.length + chosenPartB.length + chosenPartC.length;
   if (totalChosenSoFar < 10) {
@@ -411,14 +443,13 @@ function getRecommendedFeedBlock(safeDeviceId, options = {}) {
     backfill = shuffleArray(allRemaining).slice(0, 10 - totalChosenSoFar);
   }
 
-  // 4. Sub-bloque 5 a 10: unificar y barajar aleatoriamente
   const rawSubBlock = [...chosenPartB, ...chosenPartC, ...backfill];
   const randomizedSubBlock = shuffleArray(rawSubBlock);
 
   // 5. Bloque final de 10 posts
   const finalBlock = [...firstFour, ...randomizedSubBlock].slice(0, 10);
 
-  // 6. Actualizar contadores de sugerencia en segundo plano para los elementos entregados
+  // 6. Actualizar contadores de sugerencia
   finalBlock.forEach(item => {
     history.suggestedCounts[item.mediaId] = (history.suggestedCounts[item.mediaId] || 0) + 1;
     item.suggestedCount = history.suggestedCounts[item.mediaId];
