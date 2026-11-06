@@ -9,6 +9,8 @@ const {
 const {
   getRecommendedFeedBlock,
   recordMediaSeen,
+  getCurrentFeedMode,
+  toggleFeedMode,
   getFavorites,
   toggleFavorite,
   getTags,
@@ -156,12 +158,15 @@ router.post('/expl/ver/login', verLoginLimiter, (req, res) => {
 
   const sessionToken = createVerSessionToken(user.deviceId, user.username);
   const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  // Alternar el modo del feed para la nueva sesión ('A' -> 'B' o 'B' -> 'A')
+  const newFeedMode = toggleFeedMode(user.deviceId);
 
   // Cookie de sesion pura (sin Max-Age permanente de 30 dias)
   res.setHeader('Set-Cookie', [
     `ver_session=${sessionToken}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
     `ver_device=${encodeURIComponent(user.deviceId)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
-    `ver_user=${encodeURIComponent(user.username)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`
+    `ver_user=${encodeURIComponent(user.username)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
+    `ver_feed_mode=${encodeURIComponent(newFeedMode)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`
   ]);
 
   return res.redirect(303, '/expl/ver');
@@ -181,17 +186,21 @@ router.post('/api/ver/unlock', verLoginLimiter, (req, res) => {
 
   const sessionToken = createVerSessionToken(user.deviceId, user.username);
   const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  // Alternar el modo del feed en cada desbloqueo
+  const newFeedMode = toggleFeedMode(user.deviceId);
 
   res.setHeader('Set-Cookie', [
     `ver_session=${sessionToken}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
     `ver_device=${encodeURIComponent(user.deviceId)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
-    `ver_user=${encodeURIComponent(user.username)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`
+    `ver_user=${encodeURIComponent(user.username)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`,
+    `ver_feed_mode=${encodeURIComponent(newFeedMode)}; Path=/; HttpOnly; ${isSecure ? 'Secure;' : ''} SameSite=Lax`
   ]);
 
   return res.json({
     success: true,
     deviceId: user.deviceId,
-    username: user.username
+    username: user.username,
+    feedMode: newFeedMode
   });
 });
 
@@ -301,10 +310,19 @@ router.get('/api/ver/feed', (req, res) => {
     excludeIds = String(req.query.exclude).split(',').filter(Boolean);
   }
 
-  const block = getRecommendedFeedBlock(deviceId, { excludeMediaIds: excludeIds });
+  // Leer modo de la cookie o query param; por defecto el modo actual persistido del dispositivo
+  const cookies = req.headers.cookie ? req.headers.cookie.split(';').reduce((acc, c) => {
+    const [k, v] = c.trim().split('=');
+    if (k && v) acc[k] = decodeURIComponent(v);
+    return acc;
+  }, {}) : {};
+
+  const sessionMode = req.query.mode || cookies['ver_feed_mode'] || getCurrentFeedMode(deviceId);
+  const block = getRecommendedFeedBlock(deviceId, { excludeMediaIds: excludeIds, mode: sessionMode });
   return res.json({
     success: true,
     deviceId,
+    feedMode: block.feedMode,
     items: block.items,
     totalAvailable: block.totalAvailable,
     hasMore: block.hasMore
@@ -555,7 +573,8 @@ router.get('/api/ver/nlp/records', (req, res) => {
 // GET /expl/ver - Feed Principal Móvil Estilo Instagram
 router.get('/expl/ver', (req, res) => {
   const user = req.verUser;
-  const initialBlock = getRecommendedFeedBlock(user.deviceId);
+  const currentMode = getCurrentFeedMode(user.deviceId);
+  const initialBlock = getRecommendedFeedBlock(user.deviceId, { mode: currentMode });
 
   const contentHtml = renderVerFeedView({
     items: initialBlock.items

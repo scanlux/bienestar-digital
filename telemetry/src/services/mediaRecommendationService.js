@@ -103,9 +103,30 @@ function getViewHistory(safeDeviceId) {
     lastSeenMediaId: null,
     lastSeenPath: null,
     suggestedCounts: {}, // { [mediaId]: count }
+    feedMode: 'A',
     updatedAt: new Date().toISOString()
   };
   return safeReadJson(historyPath, defaultHist);
+}
+
+/**
+ * Obtiene el modo actual del feed ('A' o 'B')
+ */
+function getCurrentFeedMode(safeDeviceId) {
+  const history = getViewHistory(safeDeviceId);
+  return (history && history.feedMode === 'B') ? 'B' : 'A';
+}
+
+/**
+ * Conmuta el modo de ensamblado del feed entre 'A' y 'B' para la siguiente sesión
+ */
+function toggleFeedMode(safeDeviceId) {
+  const history = getViewHistory(safeDeviceId);
+  const current = (history && history.feedMode === 'B') ? 'B' : 'A';
+  const nextMode = current === 'A' ? 'B' : 'A';
+  history.feedMode = nextMode;
+  saveViewHistory(safeDeviceId, history);
+  return nextMode;
 }
 
 /**
@@ -446,8 +467,18 @@ function getRecommendedFeedBlock(safeDeviceId, options = {}) {
   const rawSubBlock = [...chosenPartB, ...chosenPartC, ...backfill];
   const randomizedSubBlock = shuffleArray(rawSubBlock);
 
-  // 5. Bloque final de 10 posts
-  const finalBlock = [...firstFour, ...randomizedSubBlock].slice(0, 10);
+  // 5. Bloque final de 10 posts según el modo (A o B)
+  const mode = (options.mode || history.feedMode || 'A').toUpperCase() === 'B' ? 'B' : 'A';
+  let finalBlock = [];
+
+  if (mode === 'B') {
+    // Modo B: Sub-bloque aleatorio Fisher-Yates primero (6 elementos) y novedades invertidas después (4 elementos)
+    const invertedFirstFour = [...firstFour].reverse();
+    finalBlock = [...randomizedSubBlock, ...invertedFirstFour].slice(0, 10);
+  } else {
+    // Modo A: Novedades recientes primero (4 elementos) y sub-bloque aleatorio Fisher-Yates después (6 elementos)
+    finalBlock = [...firstFour, ...randomizedSubBlock].slice(0, 10);
+  }
 
   // 6. Actualizar contadores de sugerencia
   finalBlock.forEach(item => {
@@ -459,7 +490,8 @@ function getRecommendedFeedBlock(safeDeviceId, options = {}) {
   return {
     items: finalBlock,
     totalAvailable: allMedia.length,
-    hasMore: allMedia.length > 10
+    hasMore: allMedia.length > 10,
+    feedMode: mode
   };
 }
 
@@ -526,6 +558,8 @@ module.exports = {
   recordMediaSeen,
   getMediaById,
   getViewHistory,
+  getCurrentFeedMode,
+  toggleFeedMode,
   getFavorites,
   toggleFavorite,
   getTags,
