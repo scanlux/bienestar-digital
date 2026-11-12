@@ -20,4 +20,11 @@ services:
       - "3000"    # Solo visible dentro de la red interna de Docker para Nginx
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=450
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --timeout=3 http://127.0.0.1:3000 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
