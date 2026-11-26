@@ -222,21 +222,34 @@ function getClientSocketScript({ deviceId }) {
       const modal = document.getElementById('mediaPreviewModal');
       const modalTitle = document.getElementById('mediaPreviewTitle');
       const modalBody = document.getElementById('mediaPreviewBody');
+      const modalMeta = document.getElementById('mediaPreviewMeta');
+      const downloadBtn = document.getElementById('mediaPreviewDownloadBtn');
       const url = btn.getAttribute('data-url');
       const title = decodeURIComponent(btn.getAttribute('data-title') || 'Archivo');
       const type = btn.getAttribute('data-type');
 
-      if (modalTitle) modalTitle.textContent = (type === 'audio' ? '🎵 Audio: ' : type === 'image' ? '🖼️ Imagen: ' : type === 'video' ? '🎬 Video: ' : '📄 Archivo: ') + title;
+      if (modalTitle) {
+        modalTitle.textContent = (type === 'audio' ? '🎵 Audio: ' : type === 'image' ? '🖼️ Imagen: ' : type === 'video' ? '🎬 Video: ' : '📄 Archivo: ') + title;
+      }
+
+      if (downloadBtn) {
+        downloadBtn.href = url;
+        downloadBtn.setAttribute('download', title);
+      }
 
       if (modalBody) {
         if (type === 'audio') {
-          modalBody.innerHTML = '<div style="width:100%; padding:20px; display:flex; flex-direction:column; gap:16px; align-items:center;"><div style="font-size:3.5rem;">🎵</div><audio controls autoplay style="width:100%; border-radius:8px;" src="' + url + '"></audio></div>';
+          if (modalMeta) modalMeta.textContent = '🎵 Audio con soporte de streaming instantáneo';
+          modalBody.innerHTML = '<div style="width:100%; max-width:520px; padding:24px; display:flex; flex-direction:column; gap:16px; align-items:center; background:#111827; border-radius:12px; border:1px solid #1f2937;"><div style="font-size:3.5rem;">🎵</div><div style="font-family:monospace; font-weight:700; color:#f3f4f6; text-align:center; word-break:break-all;">' + title + '</div><audio controls autoplay style="width:100%; border-radius:8px;" src="' + url + '">Tu navegador no soporta reproducción de audio HTML5.</audio></div>';
         } else if (type === 'image') {
-          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><img src="' + url + '" style="max-width:100%; max-height:60vh; object-fit:contain; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" alt="' + title + '" /></div>';
+          if (modalMeta) modalMeta.textContent = '🖼️ Previsualización de imagen';
+          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><img src="' + url + '" style="max-width:100%; max-height:68vh; object-fit:contain; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" alt="' + title + '" /></div>';
         } else if (type === 'video') {
-          modalBody.innerHTML = '<div style="width:100%; text-align:center; padding:10px;"><video controls autoplay style="max-width:100%; max-height:60vh; object-fit:contain; border-radius:10px; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.5);" src="' + url + '">Tu navegador no soporta reproducción de video HTML5.</video></div>';
+          if (modalMeta) modalMeta.textContent = '⚡ Streaming progresivo activo (HTTP 206) — Puedes adelantar/retroceder libremente';
+          modalBody.innerHTML = '<div style="width:100%; display:flex; justify-content:center; align-items:center;"><video controls autoplay playsinline preload="metadata" style="max-width:100%; max-height:68vh; object-fit:contain; border-radius:10px; background:#000; border:1px solid #1f2937; box-shadow:0 10px 25px rgba(0,0,0,0.6);" src="' + url + '">Tu navegador no soporta reproducción de video HTML5.</video></div>';
         } else {
-          modalBody.innerHTML = '<div style="padding:30px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:16px;"><div style="font-size:3.5rem;">📄</div><p style="color:#9ca3af;">Este archivo está disponible para descargar directamente a tu equipo.</p><a href="' + url + '" download="' + title + '" class="btn" style="background:#059669;">⬇ Descargar Archivo a PC</a></div>';
+          if (modalMeta) modalMeta.textContent = '📄 Archivo sin previsualización directa';
+          modalBody.innerHTML = '<div style="padding:30px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:16px;"><div style="font-size:3.5rem;">📄</div><div style="font-family:monospace; font-weight:700; color:#f3f4f6;">' + title + '</div><p style="color:#9ca3af; max-width:400px;">Este archivo no tiene previsualización multimedia directa. Puedes descargarlo directamente a tu equipo.</p></div>';
         }
       }
 
@@ -249,8 +262,8 @@ function getClientSocketScript({ deviceId }) {
       if (modalBody) {
         const audio = modalBody.querySelector('audio');
         const video = modalBody.querySelector('video');
-        if (audio) audio.pause();
-        if (video) video.pause();
+        if (audio) { audio.pause(); audio.src = ''; }
+        if (video) { video.pause(); video.src = ''; }
         modalBody.innerHTML = '';
       }
       if (modal) modal.classList.remove('active');

@@ -263,9 +263,9 @@ function renderFilesView({
                 const isPending = pendingPaths.has(f.path);
                 const isStandby = standbyPaths.has(f.path);
                 const statusCode = isDownloaded ? 1 : isPending ? 2 : isStandby ? 3 : 4;
-                const isAudio = Boolean(f.name && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
-                const isImage = Boolean(f.name && (/\\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
-                const videoRegex = /\\.(mp4|webm|mkv|mov|avi|3gp)$/i;
+                const isAudio = Boolean(f.name && (/\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
+                const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
+                const videoRegex = /\.(mp4|webm|mkv|mov|avi|3gp)$/i;
                 const isVideo = Boolean(f.name && videoRegex.test(f.name));
                 const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
                 const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
@@ -319,9 +319,9 @@ function renderFilesView({
             const isDownloaded = Boolean(downloadedMap[f.path]);
             const isPending = pendingPaths.has(f.path);
             const isStandby = standbyPaths.has(f.path);
-            const isAudio = Boolean(f.name && (/\\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
-            const isImage = Boolean(f.name && (/\\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
-            const isVideo = Boolean(f.name && (/\\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
+            const isAudio = Boolean(f.name && (/\.(opus|ogg|mp3|wav|m4a|aac|flac)$/i).test(f.name));
+            const isImage = Boolean(f.name && (/\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i).test(f.name));
+            const isVideo = Boolean(f.name && (/\.(mp4|webm|mkv|mov|avi|3gp)$/i).test(f.name));
             const fileIcon = isAudio ? '🎵' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
             const fileType = isAudio ? 'audio' : isImage ? 'image' : isVideo ? 'video' : 'other';
             const fileContentUrl = `/api/telemetry/file-content?deviceId=${encodeURIComponent(deviceId)}&path=${encodeURIComponent(f.path)}`;

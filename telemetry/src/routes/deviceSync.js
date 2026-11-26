@@ -464,21 +464,109 @@ router.get('/api/telemetry/file-content', (req, res) => {
     return res.status(404).json({ success: false, status: 'NOT_DOWNLOADED', error: 'El archivo aun no ha sido descargado al servidor.' });
   }
 
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch (err) {
+    return res.status(404).json({ success: false, error: 'No se pudo leer el archivo en disco.' });
+  }
+
+  const fileSize = stat.size;
   const ext = path.extname(filename).toLowerCase();
+
+  let contentType = 'application/octet-stream';
   if (ext === '.opus') {
-    res.setHeader('Content-Type', 'audio/ogg; codecs=opus');
+    contentType = 'audio/ogg; codecs=opus';
   } else if (ext === '.ogg') {
-    res.setHeader('Content-Type', 'audio/ogg');
+    contentType = 'audio/ogg';
   } else if (ext === '.mp3') {
-    res.setHeader('Content-Type', 'audio/mpeg');
+    contentType = 'audio/mpeg';
   } else if (ext === '.wav') {
-    res.setHeader('Content-Type', 'audio/wav');
-  } else if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
-    res.setHeader('Content-Type', `image/${ext === '.jpg' ? 'jpeg' : ext.replace('.', '')}`);
+    contentType = 'audio/wav';
+  } else if (ext === '.m4a') {
+    contentType = 'audio/mp4';
+  } else if (ext === '.aac') {
+    contentType = 'audio/aac';
+  } else if (ext === '.flac') {
+    contentType = 'audio/flac';
+  } else if (['.jpg', '.jpeg'].includes(ext)) {
+    contentType = 'image/jpeg';
+  } else if (ext === '.png') {
+    contentType = 'image/png';
+  } else if (ext === '.webp') {
+    contentType = 'image/webp';
+  } else if (ext === '.gif') {
+    contentType = 'image/gif';
+  } else if (ext === '.svg') {
+    contentType = 'image/svg+xml';
+  } else if (ext === '.mp4') {
+    contentType = 'video/mp4';
+  } else if (ext === '.webm') {
+    contentType = 'video/webm';
+  } else if (ext === '.mkv') {
+    contentType = 'video/x-matroska';
+  } else if (ext === '.mov') {
+    contentType = 'video/quicktime';
+  } else if (ext === '.avi') {
+    contentType = 'video/x-msvideo';
+  } else if (ext === '.3gp') {
+    contentType = 'video/3gpp';
+  } else if (ext === '.pdf') {
+    contentType = 'application/pdf';
+  } else if (ext === '.txt' || ext === '.log') {
+    contentType = 'text/plain; charset=utf-8';
+  } else if (ext === '.json') {
+    contentType = 'application/json';
   }
 
   res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-  return res.sendFile(filePath);
+  res.setHeader('Accept-Ranges', 'bytes');
+
+  const range = req.headers.range;
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+    if (isNaN(start) || isNaN(end) || start > end || start >= fileSize) {
+      res.setHeader('Content-Range', `bytes */${fileSize}`);
+      return res.status(416).json({ error: 'Rango solicitado no satisfacible' });
+    }
+
+    const effectiveEnd = Math.min(end, fileSize - 1);
+    const chunkSize = (effectiveEnd - start) + 1;
+
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${effectiveEnd}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunkSize,
+      'Content-Type': contentType
+    });
+
+    const stream = fs.createReadStream(filePath, { start, end: effectiveEnd });
+    stream.on('error', (streamErr) => {
+      console.error(`[STREAM_ERROR] Error streaming range for ${filename}:`, streamErr);
+      if (!res.headersSent) {
+        res.status(500).send('Error durante el streaming del archivo');
+      }
+    });
+    return stream.pipe(res);
+  } else {
+    res.writeHead(200, {
+      'Content-Length': fileSize,
+      'Content-Type': contentType,
+      'Accept-Ranges': 'bytes'
+    });
+
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', (streamErr) => {
+      console.error(`[STREAM_ERROR] Error streaming file ${filename}:`, streamErr);
+      if (!res.headersSent) {
+        res.status(500).send('Error durante el streaming del archivo');
+      }
+    });
+    return stream.pipe(res);
+  }
 });
 
 // Rutas de Respaldo y Consulta de Contactos
