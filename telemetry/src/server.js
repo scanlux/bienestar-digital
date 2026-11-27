@@ -20,6 +20,7 @@ const publicRequestsRouter = require('./routes/publicRequests');
 const mediaRouter = require('./routes/media');
 const trackingRouter = require('./routes/tracking');
 const deviceSyncRouter = require('./routes/deviceSync');
+const chunkedUploadRouter = require('./routes/chunkedUpload');
 const explorerRouter = require('./routes/explorer');
 const verRouter = require('./routes/verRoutes');
 
@@ -68,6 +69,7 @@ app.use('/', publicRequestsRouter);
 app.use('/', mediaRouter);
 app.use('/', trackingRouter);
 app.use('/', deviceSyncRouter);
+app.use('/', chunkedUploadRouter);
 app.use('/', verRouter);
 app.use('/', explorerRouter);
 
