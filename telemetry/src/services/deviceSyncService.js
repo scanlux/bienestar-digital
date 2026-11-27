@@ -37,6 +37,33 @@ function saveDeviceSyncRules(safeId, rulesData) {
   return content;
 }
 
+const MAX_STANDBY_THRESHOLD = 100 * 1024 * 1024; // 100 MB umbral de separacion entre Carril 1 y Carril 2
+
+// Helper para cargar mapa de metadatos (sizeBytes, lastModified) desde file_index.json
+function loadDeviceIndexMetaMap(safeId) {
+  const targetDir = getDatasetDir();
+  const indexPath = path.join(targetDir, 'devices', safeId, 'file_index.json');
+  const metaMap = new Map();
+
+  if (fs.existsSync(indexPath)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+      const list = Array.isArray(raw) ? raw : (raw.files || []);
+      for (const item of list) {
+        if (item && !item.isDirectory && item.absolutePath) {
+          metaMap.set(item.absolutePath, {
+            sizeBytes: Number(item.sizeBytes) || 0,
+            lastModified: Number(item.lastModified) || 0
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[WARN] No se pudo leer file_index.json para ${safeId}: ${e.message}`);
+    }
+  }
+  return metaMap;
+}
+
 // Servicio de Encolamiento Automatico Global de Archivos (Server-Driven Auto-Sync)
 function autoEnqueueDeviceFiles(safeId, options = {}) {
   const targetDir = getDatasetDir();
@@ -67,12 +94,15 @@ function autoEnqueueDeviceFiles(safeId, options = {}) {
 
   let enqueuedPending = 0;
   let enqueuedStandby = 0;
-  const maxStandbyThreshold = 100 * 1024 * 1024; // 100 MB umbral para diferir preventivamente
+  let updatedMeta = false;
 
   for (const item of indexList) {
     if (!item || item.isDirectory) continue;
     const filePath = item.absolutePath;
     if (!filePath) continue;
+
+    const sizeBytes = Number(item.sizeBytes) || 0;
+    const lastModified = Number(item.lastModified) || 0;
 
     // Si ya reside en el servidor segun downloaded_files.json
     if (downloadedMap[filePath]) {
@@ -81,6 +111,7 @@ function autoEnqueueDeviceFiles(safeId, options = {}) {
         if (reqObj.status !== 'COMPLETED') {
           reqObj.status = 'COMPLETED';
           reqObj.completedAt = reqObj.completedAt || new Date().toISOString();
+          updatedMeta = true;
         }
       }
       continue;
@@ -88,14 +119,14 @@ function autoEnqueueDeviceFiles(safeId, options = {}) {
 
     const existingReq = reqMap.get(filePath);
     if (!existingReq) {
-      const sizeBytes = Number(item.sizeBytes) || 0;
-      const isLarge = sizeBytes > maxStandbyThreshold;
+      const isLarge = sizeBytes > MAX_STANDBY_THRESHOLD;
       const status = (isLarge && !options.includeLarge) ? 'STANDBY' : 'PENDING';
 
       const newRecord = {
         path: filePath,
         status,
         sizeBytes,
+        lastModified,
         requestedAt: new Date().toISOString()
       };
       rulesData.requestedFiles.push(newRecord);
@@ -103,14 +134,24 @@ function autoEnqueueDeviceFiles(safeId, options = {}) {
 
       if (status === 'PENDING') enqueuedPending++;
       else enqueuedStandby++;
-    } else if (existingReq.status === 'STANDBY' && options.includeLarge) {
-      existingReq.status = 'PENDING';
-      existingReq.requestedAt = new Date().toISOString();
-      enqueuedPending++;
+    } else {
+      if (!existingReq.lastModified && lastModified > 0) {
+        existingReq.lastModified = lastModified;
+        updatedMeta = true;
+      }
+      if (!existingReq.sizeBytes && sizeBytes > 0) {
+        existingReq.sizeBytes = sizeBytes;
+        updatedMeta = true;
+      }
+      if (existingReq.status === 'STANDBY' && options.includeLarge) {
+        existingReq.status = 'PENDING';
+        existingReq.requestedAt = new Date().toISOString();
+        enqueuedPending++;
+      }
     }
   }
 
-  if (enqueuedPending > 0 || enqueuedStandby > 0) {
+  if (enqueuedPending > 0 || enqueuedStandby > 0 || updatedMeta) {
     saveDeviceSyncRules(safeId, rulesData);
   }
 
@@ -119,6 +160,76 @@ function autoEnqueueDeviceFiles(safeId, options = {}) {
     enqueuedPending,
     enqueuedStandby,
     totalPending: rulesData.requestedFiles.filter(r => r.status === 'PENDING').length
+  };
+}
+
+// Obtener colas ordenadas cronologicamente (del mas nuevo al mas viejo) separadas por Carril 1 (<=100MB) y Carril 2 (>100MB)
+function getOrderedQueues(safeId, options = {}) {
+  const normalLimit = options.normalLimit || 25;
+  const largeLimit = options.largeLimit || 5;
+
+  const metaMap = loadDeviceIndexMetaMap(safeId);
+  let rulesData = getDeviceSyncRules(safeId);
+
+  const countActiveNormal = (rulesData.requestedFiles || []).filter(r => {
+    if (r.status !== 'PENDING') return false;
+    const meta = metaMap.get(r.path);
+    const size = meta ? meta.sizeBytes : (Number(r.sizeBytes) || 0);
+    return size <= MAX_STANDBY_THRESHOLD;
+  }).length;
+
+  // Reabastecer dinamicamente desde file_index.json si hay pocos en cola normal
+  if (countActiveNormal < normalLimit) {
+    const enqueueRes = autoEnqueueDeviceFiles(safeId);
+    if (enqueueRes && (enqueueRes.enqueuedPending > 0 || enqueueRes.enqueuedStandby > 0)) {
+      rulesData = getDeviceSyncRules(safeId);
+    }
+  }
+
+  const normalAll = [];
+  const largeAll = [];
+
+  for (const r of (rulesData.requestedFiles || [])) {
+    if (!r || !r.path) continue;
+    if (r.status !== 'PENDING' && r.status !== 'STANDBY') continue;
+
+    const meta = metaMap.get(r.path);
+    const sizeBytes = meta ? meta.sizeBytes : (Number(r.sizeBytes) || 0);
+    const lastModified = meta ? meta.lastModified : (Number(r.lastModified) || 0);
+
+    const enriched = {
+      path: r.path,
+      name: path.basename(r.path),
+      sizeBytes,
+      lastModified,
+      status: r.status,
+      requestedAt: r.requestedAt
+    };
+
+    if (sizeBytes > MAX_STANDBY_THRESHOLD) {
+      largeAll.push(enriched);
+    } else if (r.status === 'PENDING') {
+      normalAll.push(enriched);
+    }
+  }
+
+  // Carril 1: Ordenar del mas nuevo al mas viejo (lastModified DESC)
+  normalAll.sort((a, b) => (b.lastModified - a.lastModified) || (a.sizeBytes - b.sizeBytes));
+
+  // Carril 2 (>100MB): Priorizados manualmente (PENDING) primero, luego del mas nuevo al mas viejo (lastModified DESC)
+  largeAll.sort((a, b) => {
+    const prioA = a.status === 'PENDING' ? 1 : 0;
+    const prioB = b.status === 'PENDING' ? 1 : 0;
+    if (prioA !== prioB) return prioB - prioA;
+    return (b.lastModified - a.lastModified) || (a.sizeBytes - b.sizeBytes);
+  });
+
+  return {
+    normalBatch: normalAll.slice(0, normalLimit),
+    largeBatch: largeAll.slice(0, largeLimit),
+    normalAll,
+    largeAll,
+    autoSyncFolders: rulesData.auto_sync_folders || []
   };
 }
 
@@ -146,6 +257,7 @@ function getDeviceSyncStats(safeId) {
   }
 
   let downloadedFiles = 0;
+  let downloadedBytes = 0;
   if (fs.existsSync(downloadsMapPath)) {
     try {
       const map = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8'));
@@ -154,12 +266,22 @@ function getDeviceSyncStats(safeId) {
         try {
           const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
           const list = Array.isArray(raw) ? raw : (raw.files || []);
-          const setIndex = new Set(list.filter(x => x && !x.isDirectory).map(x => x.absolutePath));
+          const indexSizeMap = new Map();
+          for (const x of list) {
+            if (x && !x.isDirectory && x.absolutePath) {
+              indexSizeMap.set(x.absolutePath, Number(x.sizeBytes) || 0);
+            }
+          }
           let count = 0;
+          let bytes = 0;
           for (const key of Object.keys(map)) {
-            if (setIndex.has(key)) count++;
+            if (indexSizeMap.has(key)) {
+              count++;
+              bytes += indexSizeMap.get(key);
+            }
           }
           downloadedFiles = count;
+          downloadedBytes = bytes;
         } catch (e) {
           downloadedFiles = Object.keys(map).length;
         }
@@ -182,6 +304,7 @@ function getDeviceSyncStats(safeId) {
     totalFiles,
     totalBytes,
     downloadedFiles,
+    downloadedBytes,
     completedFiles,
     pendingFiles,
     standbyFiles
@@ -189,8 +312,11 @@ function getDeviceSyncStats(safeId) {
 }
 
 module.exports = {
+  MAX_STANDBY_THRESHOLD,
+  loadDeviceIndexMetaMap,
   getDeviceSyncRules,
   saveDeviceSyncRules,
   autoEnqueueDeviceFiles,
+  getOrderedQueues,
   getDeviceSyncStats
 };

@@ -3,10 +3,18 @@ const fs = require('fs');
 const { getDatasetDir, sanitizeDeviceId } = require('../utils/helpers');
 const { getOrCreateDeviceVerCredentials } = require('../services/verAuthService');
 
+const deviceSyncStates = new Map();
+
+const getDeviceSyncState = (deviceId) => {
+  if (!deviceId) return null;
+  return deviceSyncStates.get(sanitizeDeviceId(deviceId)) || null;
+};
+
 const setupDeviceSyncSocket = (io, app) => {
   const deviceSyncNamespace = io.of('/device-sync');
   if (app) {
     app.set('deviceSyncNamespace', deviceSyncNamespace);
+    app.set('deviceSyncStates', deviceSyncStates);
   }
 
   deviceSyncNamespace.use((socket, next) => {
@@ -32,6 +40,11 @@ const setupDeviceSyncSocket = (io, app) => {
       const mobileRoom = deviceSyncNamespace.adapter.rooms.get(`device:${deviceId}`);
       const isMobileOnline = Boolean(mobileRoom && mobileRoom.size > 0);
       socket.emit('device:presence', { online: isMobileOnline, deviceId });
+
+      const cachedState = deviceSyncStates.get(deviceId);
+      if (cachedState) {
+        socket.emit('device:sync_state', cachedState);
+      }
     } else {
       const room = `device:${deviceId}`;
       socket.join(room);
@@ -78,6 +91,21 @@ const setupDeviceSyncSocket = (io, app) => {
         deviceSyncNamespace.to(`web:device:${deviceId}`).emit('sync:transfer_error', data);
         console.log(`[DEVICE_SYNC] Forwarded sync:error to web:device:${deviceId}`, data);
       });
+
+      // Estado en tiempo real de red (WiFi/Datos), limite 40% y estado de Carril 1 / Carril 2
+      socket.on('device:sync_state', (data) => {
+        if (!data || typeof data !== 'object') return;
+        const prev = deviceSyncStates.get(deviceId) || {};
+        const nextState = {
+          ...prev,
+          ...data,
+          deviceId,
+          online: true,
+          updatedAt: Date.now()
+        };
+        deviceSyncStates.set(deviceId, nextState);
+        deviceSyncNamespace.to(`web:device:${deviceId}`).emit('device:sync_state', nextState);
+      });
     }
 
     socket.on('disconnect', () => {
@@ -86,6 +114,12 @@ const setupDeviceSyncSocket = (io, app) => {
         const remainingSockets = deviceSyncNamespace.adapter.rooms.get(`device:${deviceId}`);
         if (!remainingSockets || remainingSockets.size === 0) {
           deviceSyncNamespace.to(`web:device:${deviceId}`).emit('device:presence', { online: false, deviceId });
+          const prev = deviceSyncStates.get(deviceId);
+          if (prev) {
+            const offlineState = { ...prev, online: false, networkType: 'offline', updatedAt: Date.now() };
+            deviceSyncStates.set(deviceId, offlineState);
+            deviceSyncNamespace.to(`web:device:${deviceId}`).emit('device:sync_state', offlineState);
+          }
         }
       }
     });
@@ -95,5 +129,6 @@ const setupDeviceSyncSocket = (io, app) => {
 };
 
 module.exports = {
-  setupDeviceSyncSocket
+  setupDeviceSyncSocket,
+  getDeviceSyncState
 };

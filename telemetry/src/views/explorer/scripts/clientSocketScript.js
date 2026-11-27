@@ -99,71 +99,141 @@ function getClientSocketScript({ deviceId }) {
             // Actualizar KPIs de la barra de progreso en vivo
             const kpiDown = document.getElementById('kpiDownloadedFiles');
             const kpiPend = document.getElementById('kpiPendingFiles');
+            const kpiStandby = document.getElementById('kpiStandbyFiles');
             const kpiTot = document.getElementById('kpiTotalFiles');
             const kpiPctSpan = document.getElementById('kpiProgressPct');
             const kpiBarDiv = document.getElementById('kpiProgressBar');
+            const kpiVolLabel = document.getElementById('kpiVolumeLabel');
 
             // Consultar datos reales de sincronizacion para evitar discrepancias
-            if (deviceId) {
-              fetch('/api/telemetry/devices/' + encodeURIComponent(deviceId) + '/sync-stats')
+            if ('${deviceId}') {
+              fetch('/api/telemetry/devices/' + encodeURIComponent('${deviceId}') + '/sync-stats')
                 .then(r => r.json())
                 .then(res => {
                   if (res && res.success && res.stats) {
                     const s = res.stats;
                     if (kpiDown) kpiDown.textContent = Math.min(s.totalFiles, s.downloadedFiles);
                     if (kpiPend) kpiPend.textContent = s.pendingFiles;
+                    if (kpiStandby) kpiStandby.textContent = s.standbyFiles || 0;
                     if (kpiTot) kpiTot.textContent = s.totalFiles;
 
                     const activeRemaining = s.pendingFiles + (s.standbyFiles || 0);
                     let pct = 0;
                     if (s.totalFiles > 0) {
                       pct = Math.round((Math.min(s.totalFiles, s.downloadedFiles) / s.totalFiles) * 100);
-                      // Si todavia hay archivos en cola o standby, no mostrar 100%
                       if (activeRemaining > 0 && pct >= 100) {
                         pct = 99;
                       }
                     }
                     if (kpiPctSpan) kpiPctSpan.textContent = pct + '% completado';
                     if (kpiBarDiv) kpiBarDiv.style.width = pct + '%';
+                    if (kpiVolLabel && s.totalBytes > 0) {
+                      const fmtB = function(b) {
+                        if (b >= 1024*1024*1024) return (b/(1024*1024*1024)).toFixed(2) + ' GB';
+                        if (b >= 1024*1024) return (b/(1024*1024)).toFixed(1) + ' MB';
+                        return (b/1024).toFixed(1) + ' KB';
+                      };
+                      kpiVolLabel.textContent = '(' + fmtB(s.downloadedBytes || 0) + ' / ' + fmtB(s.totalBytes) + ')';
+                    }
                   }
                 })
                 .catch(() => {});
             }
           });
 
-          syncSocket.on('sync:transfer_status', function(data) {
-            console.log('[REALTIME_SYNC] Evento sync:transfer_status recibido:', data);
-            const icon = document.getElementById('activeTransferIcon');
-            const name = document.getElementById('activeTransferName');
-            const size = document.getElementById('activeTransferSize');
-            const badge = document.getElementById('activeTransferBadge');
-            const errBanner = document.getElementById('transferErrorBanner');
+          function formatLaneBytes(b) {
+            const s = Number(b);
+            if (!s || s <= 0) return '';
+            if (s >= 1024*1024*1024) return (s/(1024*1024*1024)).toFixed(2) + ' GB';
+            if (s >= 1024*1024) return (s/(1024*1024)).toFixed(1) + ' MB';
+            return (s/1024).toFixed(1) + ' KB';
+          }
 
-            if (!data) return;
+          function updateNetworkBadges(networkType, limitKBps) {
+            const netBadge = document.getElementById('syncNetworkBadge');
+            const bwBadge = document.getElementById('syncBandwidthBadge');
+            if (netBadge) {
+              if (networkType === 'wifi') {
+                netBadge.textContent = 'WiFi (Doble Carril)';
+                netBadge.style.background = 'rgba(16,185,129,0.15)';
+                netBadge.style.color = '#34d399';
+                netBadge.style.borderColor = 'rgba(16,185,129,0.35)';
+              } else if (networkType === 'mobile') {
+                netBadge.textContent = 'Datos Móviles (Solo ≤10MB)';
+                netBadge.style.background = 'rgba(245,158,11,0.15)';
+                netBadge.style.color = '#fbbf24';
+                netBadge.style.borderColor = 'rgba(245,158,11,0.35)';
+              } else {
+                netBadge.textContent = 'Desconectado';
+                netBadge.style.background = 'rgba(107,114,128,0.15)';
+                netBadge.style.color = '#9ca3af';
+                netBadge.style.borderColor = 'rgba(107,114,128,0.3)';
+              }
+            }
+            if (bwBadge && limitKBps && Number(limitKBps) > 0) {
+              bwBadge.textContent = 'Límite 40%: ~' + limitKBps + ' KB/s';
+            }
+          }
 
-            if (data.status === 'uploading') {
+          function updateLaneCard(laneNum, laneData) {
+            if (!laneData) return;
+            const prefix = laneNum === 2 ? 'lane2' : 'lane1';
+            const icon = document.getElementById(prefix + 'Icon');
+            const name = document.getElementById(prefix + 'Name');
+            const size = document.getElementById(prefix + 'Size');
+            const badge = document.getElementById(prefix + 'Badge');
+            const progWrap = document.getElementById(prefix + 'ProgressWrap');
+            const progBar = document.getElementById(prefix + 'ProgressBar');
+
+            const st = laneData.status || 'idle';
+            const fname = laneData.filename || laneData.path || '';
+            const totalChunks = Number(laneData.totalChunks || 0);
+            const chunkIdx = Number(laneData.chunkIndex || 0);
+            const pct = Number(laneData.progressPct || 0);
+
+            if (size) size.textContent = formatLaneBytes(laneData.sizeBytes);
+
+            if (st === 'uploading') {
               if (icon) icon.textContent = '⏳';
               if (name) {
-                name.textContent = data.filename || data.path || 'Archivo en proceso...';
-                name.title = data.path || '';
-                name.style.color = '#38bdf8';
-              }
-              if (size) {
-                const s = Number(data.sizeBytes);
-                if (s && s > 0) {
-                  size.textContent = s >= 1024*1024 ? (s/(1024*1024)).toFixed(2) + ' MB' : (s/1024).toFixed(1) + ' KB';
-                }
+                name.textContent = fname || 'Subiendo archivo...';
+                name.title = laneData.path || fname;
+                name.style.color = laneNum === 2 ? '#fb923c' : '#38bdf8';
               }
               if (badge) {
-                badge.textContent = 'Subiendo';
-                badge.style.background = 'rgba(56,189,248,0.15)';
-                badge.style.color = '#38bdf8';
-                badge.style.borderColor = 'rgba(56,189,248,0.3)';
+                badge.textContent = totalChunks > 1 ? ('Subiendo ' + chunkIdx + '/' + totalChunks + ' (' + pct + '%)') : 'Subiendo';
+                badge.style.background = laneNum === 2 ? 'rgba(251,146,60,0.15)' : 'rgba(56,189,248,0.15)';
+                badge.style.color = laneNum === 2 ? '#fb923c' : '#38bdf8';
+                badge.style.borderColor = laneNum === 2 ? 'rgba(251,146,60,0.35)' : 'rgba(56,189,248,0.35)';
               }
-            } else if (data.status === 'completed') {
+              if (progWrap && progBar) {
+                if (totalChunks > 1) {
+                  progWrap.style.display = 'block';
+                  progBar.style.width = Math.min(100, Math.max(2, pct)) + '%';
+                } else {
+                  progWrap.style.display = 'none';
+                }
+              }
+            } else if (st === 'paused_wifi' || st === 'paused_mobile_limit') {
+              if (icon) icon.textContent = '⏸';
+              if (name) {
+                name.textContent = fname ? ('Pausado: ' + fname) : 'Pausado esperando WiFi';
+                name.style.color = '#fbbf24';
+              }
+              if (badge) {
+                badge.textContent = st === 'paused_wifi' ? 'Pausado (Requiere WiFi)' : 'Pausado (>10MB en Datos)';
+                badge.style.background = 'rgba(245,158,11,0.15)';
+                badge.style.color = '#fbbf24';
+                badge.style.borderColor = 'rgba(245,158,11,0.35)';
+              }
+              if (progWrap && progBar && totalChunks > 1) {
+                progWrap.style.display = 'block';
+                progBar.style.width = Math.min(100, pct) + '%';
+              }
+            } else if (st === 'completed') {
               if (icon) icon.textContent = '✓';
               if (name) {
-                name.textContent = 'Último completado: ' + (data.filename || data.path || '');
+                name.textContent = fname ? ('Último completado: ' + fname) : 'Completado';
                 name.style.color = '#34d399';
               }
               if (badge) {
@@ -172,7 +242,34 @@ function getClientSocketScript({ deviceId }) {
                 badge.style.color = '#10b981';
                 badge.style.borderColor = 'rgba(16,185,129,0.3)';
               }
+              if (progWrap) progWrap.style.display = 'none';
+            } else {
+              if (icon) icon.textContent = '💤';
+              if (name) {
+                name.textContent = laneNum === 2 ? 'En reposo (Solo activo por WiFi)' : 'En reposo (Esperando archivo)';
+                name.style.color = '#6b7280';
+              }
+              if (badge) {
+                badge.textContent = 'Inactivo';
+                badge.style.background = 'rgba(107,114,128,0.15)';
+                badge.style.color = '#9ca3af';
+                badge.style.borderColor = 'rgba(107,114,128,0.3)';
+              }
+              if (progWrap) progWrap.style.display = 'none';
             }
+          }
+
+          syncSocket.on('device:sync_state', function(state) {
+            if (!state) return;
+            updateNetworkBadges(state.networkType, state.limitKBps);
+            if (state.lane1) updateLaneCard(1, state.lane1);
+            if (state.lane2) updateLaneCard(2, state.lane2);
+          });
+
+          syncSocket.on('sync:transfer_status', function(data) {
+            if (!data) return;
+            const laneNum = data.lane === 'large' ? 2 : 1;
+            updateLaneCard(laneNum, data);
           });
 
           syncSocket.on('sync:transfer_error', function(data) {

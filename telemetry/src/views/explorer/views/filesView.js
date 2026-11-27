@@ -86,8 +86,15 @@ function renderFilesView({
   const parentPath = rawPathParts.length > 1 ? '/' + rawPathParts.slice(0, -1).join('/') : '/storage/emulated/0';
 
   const total = syncStats.totalFiles || allFiles.length || 1;
-  const downloaded = syncStats.downloadedFiles || Object.keys(downloadedMap).length || 0;
-  const pct = Math.min(100, Math.round((downloaded / total) * 100));
+  const downloaded = Math.min(total, syncStats.downloadedFiles || Object.keys(downloadedMap).length || 0);
+  const remainingCount = (syncStats.pendingFiles || pendingPaths.size || 0) + (syncStats.standbyFiles || standbyPaths.size || 0);
+  let pct = Math.min(100, Math.round((downloaded / total) * 100));
+  if (remainingCount > 0 && pct >= 100) {
+    pct = 99;
+  }
+  const volumeLabel = (syncStats.totalBytes > 0 && typeof formatFileSize === 'function')
+    ? `${formatFileSize(syncStats.downloadedBytes || 0)} / ${formatFileSize(syncStats.totalBytes)}`
+    : '';
 
   return `
     <div style="background:#111827; border:1px solid #1f2937; border-radius:14px; padding:16px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
@@ -159,12 +166,14 @@ function renderFilesView({
     <div class="sync-kpi-banner" style="background:#111827; border:1px solid #1f2937; border-radius:14px; padding:18px 22px; margin-bottom:24px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; margin-bottom:14px;">
         <div>
-          <div style="font-size:1.1rem; font-weight:800; color:#ffffff; display:flex; align-items:center; gap:8px;">
+          <div style="font-size:1.1rem; font-weight:800; color:#ffffff; display:flex; align-items:center; flex-wrap:wrap; gap:8px;">
             <span>⚡ Sincronización Global del Dispositivo</span>
             <span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.3); font-size:0.75rem;">Server-Driven</span>
+            <span id="syncNetworkBadge" class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.3); font-size:0.75rem;">Red: Esperando señal</span>
+            <span id="syncBandwidthBadge" class="badge" style="background:rgba(56,189,248,0.12); color:#38bdf8; border-color:rgba(56,189,248,0.28); font-size:0.75rem;">Límite 40%</span>
           </div>
-          <div style="font-size:0.84rem; color:#9ca3af; margin-top:2px;">
-            El servidor entrega continuamente archivos ordenados por menor tamaño al teléfono en segundo plano.
+          <div style="font-size:0.84rem; color:#9ca3af; margin-top:4px;">
+            Orden cronológico (más nuevo a más viejo) · Doble carril en WiFi al 40% de velocidad.
           </div>
         </div>
         <div>
@@ -174,22 +183,50 @@ function renderFilesView({
         </div>
       </div>
 
-      <!-- Barra de Control de Carga Actual y Diagnostico -->
-      <div id="activeTransferBar" style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:10px 14px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-        <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
-          <span id="activeTransferIcon" style="font-size:1.1rem; flex-shrink:0;">${activeTransferFile ? '⏳' : '💤'}</span>
-          <div style="min-width:0; flex:1;">
-            <div style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:#9ca3af; letter-spacing:0.5px;">Transferencia en Curso</div>
-            <div id="activeTransferName" style="font-family:monospace; font-size:0.88rem; font-weight:600; color:${activeTransferFile ? '#38bdf8' : '#6b7280'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${activeTransferFile ? activeTransferFile.path : 'En reposo / Esperando siguiente ciclo'}">
-              ${activeTransferFile ? activeTransferFile.name : 'En reposo (Dispositivo al día o esperando siguiente conexión)'}
+      <!-- Panel de Doble Carril en Vivo (Carril 1 Normal + Carril 2 Pesado >100MB) -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-bottom:14px;">
+        <!-- Carril 1: Archivos Normales (<=100MB) -->
+        <div id="lane1Card" style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+              <span id="lane1Icon" style="font-size:1rem; flex-shrink:0;">${activeTransferFile ? '⏳' : '💤'}</span>
+              <span style="font-size:0.74rem; text-transform:uppercase; font-weight:700; color:#9ca3af; letter-spacing:0.5px;">Carril 1 · Normal (&le;100MB)</span>
             </div>
+            <span id="lane1Badge" class="badge" style="background:${activeTransferFile ? 'rgba(56,189,248,0.15)' : 'rgba(107,114,128,0.15)'}; color:${activeTransferFile ? '#38bdf8' : '#9ca3af'}; border-color:${activeTransferFile ? 'rgba(56,189,248,0.3)' : 'rgba(107,114,128,0.3)'}; font-size:0.72rem;">
+              ${activeTransferFile ? 'Subiendo' : 'Inactivo'}
+            </span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div id="lane1Name" style="font-family:monospace; font-size:0.84rem; font-weight:600; color:${activeTransferFile ? '#38bdf8' : '#6b7280'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="${activeTransferFile ? activeTransferFile.path : 'En reposo'}">
+              ${activeTransferFile ? activeTransferFile.name : 'En reposo (Esperando archivo)'}
+            </div>
+            <span id="lane1Size" style="font-size:0.78rem; color:#9ca3af; font-family:monospace; flex-shrink:0;">${activeTransferFile && activeTransferFile.sizeBytes ? formatFileSize(activeTransferFile.sizeBytes) : ''}</span>
+          </div>
+          <div id="lane1ProgressWrap" style="display:none; width:100%; height:5px; background:#1f2937; border-radius:999px; overflow:hidden;">
+            <div id="lane1ProgressBar" style="width:0%; height:100%; background:#38bdf8; border-radius:999px; transition:width 0.3s ease;"></div>
           </div>
         </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-          <span id="activeTransferSize" style="font-size:0.82rem; color:#9ca3af; font-family:monospace;">${activeTransferFile && activeTransferFile.sizeBytes ? formatFileSize(activeTransferFile.sizeBytes) : ''}</span>
-          <span id="activeTransferBadge" class="badge" style="background:${activeTransferFile ? 'rgba(56,189,248,0.15)' : 'rgba(107,114,128,0.15)'}; color:${activeTransferFile ? '#38bdf8' : '#9ca3af'}; border-color:${activeTransferFile ? 'rgba(56,189,248,0.3)' : 'rgba(107,114,128,0.3)'};">
-            ${activeTransferFile ? 'Subiendo' : 'Inactivo'}
-          </span>
+
+        <!-- Carril 2: Archivos Pesados (>100MB - Chunks WiFi) -->
+        <div id="lane2Card" style="background:#0b0f19; border:1px solid #1f2937; border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+              <span id="lane2Icon" style="font-size:1rem; flex-shrink:0;">💤</span>
+              <span style="font-size:0.74rem; text-transform:uppercase; font-weight:700; color:#fb923c; letter-spacing:0.5px;">Carril 2 · Pesado (&gt;100MB WiFi)</span>
+            </div>
+            <span id="lane2Badge" class="badge" style="background:rgba(107,114,128,0.15); color:#9ca3af; border-color:rgba(107,114,128,0.3); font-size:0.72rem;">
+              Inactivo
+            </span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div id="lane2Name" style="font-family:monospace; font-size:0.84rem; font-weight:600; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="En reposo / Esperando WiFi">
+              En reposo (Solo activo por WiFi)
+            </div>
+            <span id="lane2Size" style="font-size:0.78rem; color:#fb923c; font-family:monospace; flex-shrink:0;"></span>
+          </div>
+          <div id="lane2ProgressWrap" style="display:none; width:100%; height:5px; background:#1f2937; border-radius:999px; overflow:hidden;">
+            <div id="lane2ProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, #f59e0b, #fb923c); border-radius:999px; transition:width 0.3s ease;"></div>
+          </div>
         </div>
       </div>
 
@@ -224,8 +261,8 @@ function renderFilesView({
 
       <!-- Barra de Progreso Porcentual -->
       <div>
-        <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#9ca3af; margin-bottom:4px;">
-          <span>Progreso de Respaldo Global</span>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.78rem; color:#9ca3af; margin-bottom:4px;">
+          <span>Progreso de Respaldo Global <span id="kpiVolumeLabel" style="color:#6b7280; font-family:monospace; margin-left:6px;">${volumeLabel ? '(' + volumeLabel + ')' : ''}</span></span>
           <span id="kpiProgressPct" style="font-weight:700; color:#10b981;">${pct}% completado</span>
         </div>
         <div style="width:100%; height:8px; background:#1f2937; border-radius:999px; overflow:hidden;">

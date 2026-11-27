@@ -8,7 +8,8 @@ const {
   getDeviceSyncRules,
   saveDeviceSyncRules,
   autoEnqueueDeviceFiles,
-  getDeviceSyncStats
+  getDeviceSyncStats,
+  getOrderedQueues
 } = require('../services/deviceSyncService');
 const {
   handleContactsBackup,
@@ -204,78 +205,44 @@ router.get('/api/telemetry/pending-downloads', (req, res) => {
   if (!deviceId) return res.status(400).json({ error: 'Falta parametro deviceId' });
 
   const safeId = sanitizeDeviceId(deviceId);
-  const rulesData = getDeviceSyncRules(safeId);
+  const {
+    normalBatch,
+    largeBatch,
+    normalAll,
+    largeAll,
+    autoSyncFolders
+  } = getOrderedQueues(safeId, { normalLimit: 25, largeLimit: 5 });
 
-  // Cargar indice del dispositivo para obtener el tamano real de cada archivo
-  const targetDir = getDatasetDir();
-  const indexPath = path.join(targetDir, 'devices', safeId, 'file_index.json');
-  const sizeMap = new Map();
-  if (fs.existsSync(indexPath)) {
-    try {
-      const idxContent = fs.readFileSync(indexPath, 'utf8');
-      const idxData = JSON.parse(idxContent);
-      const list = Array.isArray(idxData) ? idxData : (idxData.files || []);
-      for (const item of list) {
-        if (item && item.absolutePath) {
-          sizeMap.set(item.absolutePath, typeof item.sizeBytes === 'number' ? item.sizeBytes : 0);
-        }
-      }
-    } catch (e) {
-      console.warn(`[WARN] No se pudo leer file_index.json para ${safeId}: ${e.message}`);
-    }
-  }
+  const pendingBatch = normalBatch.map(item => item.path);
+  const pendingLargeBatch = largeBatch.map(item => item.path);
 
-  let allPending = (rulesData.requestedFiles || [])
-    .filter(r => r.status === 'PENDING')
-    .map(r => r.path);
-
-  // Si la cola activa es menor a 25, reabastecer dinamicamente desde file_index.json
-  if (allPending.length < 25) {
-    const enqueueRes = autoEnqueueDeviceFiles(safeId);
-    if (enqueueRes && enqueueRes.enqueuedPending > 0) {
-      const updatedRules = getDeviceSyncRules(safeId);
-      allPending = (updatedRules.requestedFiles || [])
-        .filter(r => r.status === 'PENDING')
-        .map(r => r.path);
-    }
-  }
-
-  // Ordenar de menor a mayor tamano para transferir primero archivos ligeros y evitar cuellos de botella
-  allPending.sort((a, b) => {
-    const sizeA = sizeMap.has(a) ? sizeMap.get(a) : 9999999999;
-    const sizeB = sizeMap.has(b) ? sizeMap.get(b) : 9999999999;
-    return sizeA - sizeB;
-  });
-
-  // Entregar en lotes controlados (maximo 25 a la vez) para no saturar memoria del loop movil
-  const BATCH_SIZE = 25;
-  const pendingBatch = allPending.slice(0, BATCH_SIZE);
-
-  if (pendingBatch.length > 0) {
-    const currentActivePath = pendingBatch[0];
+  if (normalBatch.length > 0) {
+    const currentActive = normalBatch[0];
     const deviceSyncNs = req.app.get('deviceSyncNamespace');
     if (deviceSyncNs) {
       deviceSyncNs.to(`web:device:${safeId}`).emit('sync:transfer_status', {
         status: 'uploading',
-        filename: path.basename(currentActivePath),
-        path: currentActivePath,
-        sizeBytes: sizeMap.get(currentActivePath) || null,
+        lane: 'normal',
+        filename: currentActive.name,
+        path: currentActive.path,
+        sizeBytes: currentActive.sizeBytes || null,
         timestamp: Date.now()
       });
     }
   }
 
   const requestedList = pendingBatch.map(p => ({ path: p, requested_at: new Date().toISOString() }));
-  const autoFolders = rulesData.auto_sync_folders || [];
 
-  return res.json({ 
-    success: true, 
-    pendingFiles: pendingBatch, 
+  return res.json({
+    success: true,
+    pendingFiles: pendingBatch,
+    pendingLargeFiles: pendingLargeBatch,
     requested_files: requestedList,
-    totalPending: allPending.length,
-    auto_sync_folders: autoFolders,
+    totalPending: normalAll.length,
+    totalPendingLarge: largeAll.length,
+    auto_sync_folders: autoSyncFolders,
     sync_rules: {
-      enabled_paths: autoFolders,
+      enabled_paths: autoSyncFolders,
       scan_interval_minutes: 20,
       file_extensions: []
     }
@@ -291,28 +258,29 @@ router.get('/api/telemetry/devices/:deviceId/sync-stats', (req, res) => {
   return res.json({ success: true, deviceId: safeId, stats });
 });
 
-// GET /api/telemetry/devices/:deviceId/sync-queue - Lista detallada de archivos en cola y en espera
+// GET /api/telemetry/devices/:deviceId/sync-queue - Lista detallada de archivos en cola y en espera (mas nuevo a mas viejo)
 router.get('/api/telemetry/devices/:deviceId/sync-queue', (req, res) => {
   const safeId = sanitizeDeviceId(req.params.deviceId);
   if (!safeId) return res.status(400).json({ error: 'Falta parametro deviceId' });
 
-  const rulesData = getDeviceSyncRules(safeId);
-  const pending = (rulesData.requestedFiles || []).filter(r => r.status === 'PENDING');
-  const standby = (rulesData.requestedFiles || []).filter(r => r.status === 'STANDBY');
+  const { normalAll, largeAll } = getOrderedQueues(safeId, { normalLimit: 25, largeLimit: 5 });
 
   return res.json({
     success: true,
     deviceId: safeId,
-    pending: pending.map(r => ({
+    pending: normalAll.map(r => ({
       path: r.path,
-      name: path.basename(r.path),
+      name: r.name,
       sizeBytes: r.sizeBytes || null,
+      lastModified: r.lastModified || 0,
       requestedAt: r.requestedAt
     })),
-    standby: standby.map(r => ({
+    standby: largeAll.map(r => ({
       path: r.path,
-      name: path.basename(r.path),
+      name: r.name,
       sizeBytes: r.sizeBytes || null,
+      lastModified: r.lastModified || 0,
+      status: r.status,
       requestedAt: r.requestedAt
     }))
   });

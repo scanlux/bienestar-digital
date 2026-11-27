@@ -67,7 +67,7 @@ setInterval(() => {
 
 // POST /api/telemetry/upload-init
 router.post('/api/telemetry/upload-init', (req, res) => {
-  const { deviceId, device_id, filePath, remotePath, path: reqPath, fileSize, totalChunks, fileHash } = req.body;
+  const { deviceId, device_id, filePath, remotePath, path: reqPath, fileSize, totalChunks, fileHash, lane } = req.body;
   const targetDeviceId = deviceId || device_id;
   const targetFilePath = filePath || remotePath || reqPath;
 
@@ -80,6 +80,8 @@ router.post('/api/telemetry/upload-init', (req, res) => {
   const sessionDir = path.join(getChunkStorageDir(), uploadId);
   fs.mkdirSync(sessionDir, { recursive: true });
 
+  const resolvedLane = lane || (Number(fileSize) > 100 * 1024 * 1024 ? 'large' : 'normal');
+
   const sessions = readSessions();
   sessions[uploadId] = {
     uploadId,
@@ -88,6 +90,7 @@ router.post('/api/telemetry/upload-init', (req, res) => {
     filename: path.basename(targetFilePath),
     fileSize: Number(fileSize),
     totalChunks: Number(totalChunks),
+    lane: resolvedLane,
     fileHash: fileHash || null,
     receivedChunks: [],
     status: 'in_progress',
@@ -185,14 +188,17 @@ router.post('/api/telemetry/upload-chunk', syncMulter.single('chunk'), async (re
 
   // Emitir progreso a web socket
   const deviceSyncNs = req.app.get('deviceSyncNamespace');
+  const effectiveLane = req.headers['x-upload-lane'] || req.body.lane || session.lane || (session.fileSize > 100 * 1024 * 1024 ? 'large' : 'normal');
   if (deviceSyncNs) {
     const progressPct = Math.round((session.receivedChunks.length / session.totalChunks) * 100);
     deviceSyncNs.to(`web:device:${session.deviceId}`).emit('sync:transfer_status', {
       status: 'uploading',
+      lane: effectiveLane,
       uploadId,
       filename: session.filename,
       path: session.filePath,
-      chunkIndex,
+      sizeBytes: session.fileSize || null,
+      chunkIndex: chunkIndex + 1,
       totalChunks: session.totalChunks,
       progressPct,
       timestamp: Date.now()
