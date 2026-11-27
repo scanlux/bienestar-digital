@@ -286,17 +286,6 @@ function getFilesClientScript({ deviceId, initialFilter }) {
 
       refreshSyncQueueModal(deviceId);
     }
-                  '</div>' +
-                '</div>';
-              }).join('');
-            }
-          }
-        })
-        .catch(err => {
-          if (pendingContainer) pendingContainer.innerHTML = '<div style="color:#ef4444; padding:16px; text-align:center;">Error al cargar: ' + err.message + '</div>';
-          if (standbyContainer) standbyContainer.innerHTML = '<div style="color:#ef4444; padding:16px; text-align:center;">Error al cargar: ' + err.message + '</div>';
-        });
-    }
 
     function closeSyncQueueModal() {
       const modal = document.getElementById('syncQueueModal');
