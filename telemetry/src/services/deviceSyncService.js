@@ -149,7 +149,23 @@ function getDeviceSyncStats(safeId) {
   if (fs.existsSync(downloadsMapPath)) {
     try {
       const map = JSON.parse(fs.readFileSync(downloadsMapPath, 'utf8'));
-      downloadedFiles = Object.keys(map).length;
+      // Contar solo las rutas que efectivamente pertenecen al indice del dispositivo
+      if (fs.existsSync(indexPath)) {
+        try {
+          const raw = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+          const list = Array.isArray(raw) ? raw : (raw.files || []);
+          const setIndex = new Set(list.filter(x => x && !x.isDirectory).map(x => x.absolutePath));
+          let count = 0;
+          for (const key of Object.keys(map)) {
+            if (setIndex.has(key)) count++;
+          }
+          downloadedFiles = count;
+        } catch (e) {
+          downloadedFiles = Object.keys(map).length;
+        }
+      } else {
+        downloadedFiles = Object.keys(map).length;
+      }
     } catch (e) {}
   } else if (fs.existsSync(downloadsDir)) {
     try {

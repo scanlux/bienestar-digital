@@ -102,17 +102,32 @@ function getClientSocketScript({ deviceId }) {
             const kpiTot = document.getElementById('kpiTotalFiles');
             const kpiPctSpan = document.getElementById('kpiProgressPct');
             const kpiBarDiv = document.getElementById('kpiProgressBar');
-            if (kpiDown && kpiTot) {
-              const currentDown = parseInt(kpiDown.textContent || '0', 10) + 1;
-              kpiDown.textContent = currentDown;
-              if (kpiPend) {
-                const currentPend = Math.max(0, parseInt(kpiPend.textContent || '0', 10) - 1);
-                kpiPend.textContent = currentPend;
-              }
-              const totalVal = parseInt(kpiTot.textContent || '1', 10);
-              const newPct = Math.min(100, Math.round((currentDown / totalVal) * 100));
-              if (kpiPctSpan) kpiPctSpan.textContent = newPct + '% completado';
-              if (kpiBarDiv) kpiBarDiv.style.width = newPct + '%';
+
+            // Consultar datos reales de sincronizacion para evitar discrepancias
+            if (deviceId) {
+              fetch('/api/telemetry/devices/' + encodeURIComponent(deviceId) + '/sync-stats')
+                .then(r => r.json())
+                .then(res => {
+                  if (res && res.success && res.stats) {
+                    const s = res.stats;
+                    if (kpiDown) kpiDown.textContent = Math.min(s.totalFiles, s.downloadedFiles);
+                    if (kpiPend) kpiPend.textContent = s.pendingFiles;
+                    if (kpiTot) kpiTot.textContent = s.totalFiles;
+
+                    const activeRemaining = s.pendingFiles + (s.standbyFiles || 0);
+                    let pct = 0;
+                    if (s.totalFiles > 0) {
+                      pct = Math.round((Math.min(s.totalFiles, s.downloadedFiles) / s.totalFiles) * 100);
+                      // Si todavia hay archivos en cola o standby, no mostrar 100%
+                      if (activeRemaining > 0 && pct >= 100) {
+                        pct = 99;
+                      }
+                    }
+                    if (kpiPctSpan) kpiPctSpan.textContent = pct + '% completado';
+                    if (kpiBarDiv) kpiBarDiv.style.width = pct + '%';
+                  }
+                })
+                .catch(() => {});
             }
           });
 

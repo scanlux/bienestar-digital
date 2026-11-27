@@ -381,7 +381,12 @@ function renderFilesView({
             <div class="modal-title" style="display:flex; align-items:center; gap:8px;">
               <span>📋 Cola de Sincronización Server-Driven</span>
             </div>
-            <button type="button" class="modal-close" onclick="closeSyncQueueModal()">✕</button>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <button type="button" id="btnRefreshSyncQueue" onclick="refreshSyncQueueModal('${deviceId}')" class="btn" style="background:#1e293b; border:1px solid #374151; color:#38bdf8; font-size:0.8rem; padding:4px 10px; display:inline-flex; align-items:center; gap:6px;">
+                🔄 Refrescar
+              </button>
+              <button type="button" class="modal-close" onclick="closeSyncQueueModal()">✕</button>
+            </div>
           </div>
         </div>
         <div class="modal-body" style="background:#0b0f19; padding:18px; overflow-y:auto; flex:1;">

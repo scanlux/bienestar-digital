@@ -196,18 +196,17 @@ function getFilesClientScript({ deviceId, initialFilter }) {
       });
     }
 
-    function openSyncQueueModal(deviceId) {
-      const modal = document.getElementById('syncQueueModal');
-      if (!modal) return;
-      modal.classList.add('active');
+    function refreshSyncQueueModal(deviceId) {
+      const btn = document.getElementById('btnRefreshSyncQueue');
+      if (btn) {
+        btn.textContent = '⏳ Cargando...';
+        btn.disabled = true;
+      }
 
       const pendingContainer = document.getElementById('queuePendingList');
       const standbyContainer = document.getElementById('queueStandbyList');
       const pendingCount = document.getElementById('modalQueuePendingCount');
       const standbyCount = document.getElementById('modalQueueStandbyCount');
-
-      if (pendingContainer) pendingContainer.innerHTML = '<div style="text-align:center; padding:24px; color:#6b7280; font-size:0.88rem;">Consultando servidor...</div>';
-      if (standbyContainer) standbyContainer.innerHTML = '<div style="text-align:center; padding:24px; color:#6b7280; font-size:0.88rem;">Consultando servidor...</div>';
 
       fetch('/api/telemetry/devices/' + encodeURIComponent(deviceId) + '/sync-queue')
         .then(res => res.json())
@@ -258,6 +257,35 @@ function getFilesClientScript({ deviceId, initialFilter }) {
                   '<div style="flex-shrink:0; display:flex; align-items:center; gap:8px;">' +
                     '<span style="font-size:0.78rem; color:#fb923c; font-family:monospace; font-weight:700;">' + sizeStr + '</span>' +
                     '<button type="button" data-device-id="' + deviceId + '" data-path="' + encodeURIComponent(f.path) + '" onclick="prioritizeFile(this)" class="btn" style="background:#ea580c; font-size:0.75rem; padding:4px 10px;">⚡ Priorizar</button>' +
+                  '</div>' +
+                '</div>';
+              }).join('');
+            }
+          }
+        })
+        .catch(err => {
+          if (pendingContainer) pendingContainer.innerHTML = '<div style="color:#ef4444; padding:16px;">Error: ' + err.message + '</div>';
+        })
+        .finally(() => {
+          if (btn) {
+            btn.textContent = '🔄 Refrescar';
+            btn.disabled = false;
+          }
+        });
+    }
+
+    function openSyncQueueModal(deviceId) {
+      const modal = document.getElementById('syncQueueModal');
+      if (!modal) return;
+      modal.classList.add('active');
+
+      const pendingContainer = document.getElementById('queuePendingList');
+      const standbyContainer = document.getElementById('queueStandbyList');
+      if (pendingContainer) pendingContainer.innerHTML = '<div style="text-align:center; padding:24px; color:#6b7280; font-size:0.88rem;">Consultando servidor...</div>';
+      if (standbyContainer) standbyContainer.innerHTML = '<div style="text-align:center; padding:24px; color:#6b7280; font-size:0.88rem;">Consultando servidor...</div>';
+
+      refreshSyncQueueModal(deviceId);
+    }
                   '</div>' +
                 '</div>';
               }).join('');
